@@ -89,7 +89,7 @@ public partial class PlayerController
 
         float yaw = State == PlayerState.Walking
             ? GlobalRotation.Y
-            : (CurrentVehicle != null ? CurrentVehicle.GlobalRotation.Y : GlobalRotation.Y);
+            : (CurrentVehicle != null ? CurrentVehicle.GlobalRotation.Y + _head.Rotation.Y : GlobalRotation.Y);
         float pitch = Mathf.Clamp(_head.Rotation.X, -0.55f, 0.55f);
         Vector3 targetPosition = GlobalPosition + Vector3.Up * ComfortCameraHeight;
         Transform3D target = new(Basis.FromEuler(new Vector3(pitch, yaw, 0f)), targetPosition);
