@@ -159,7 +159,7 @@ jobs:
           VER=${{ steps.ver.outputs.version }}
           (cd build/windows && zip -qr "../../DeadFrequency-v${VER}-windows.zip" .)
           (cd build/linux && zip -qr "../../DeadFrequency-v${VER}-linux.zip" .)
-          sha256sum DeadFrequency-v${VER}-windows.zip DeadFrequency-v${VER}-linux.zip DeadFrequencyLauncher-windows.exe DeadFrequencyLauncher-linux CHANGELOG.md > SHA256SUMS.txt
+          sha256sum DeadFrequency-v${VER}-windows.zip DeadFrequency-v${VER}-linux.zip DeadFrequencyLauncher-windows.exe DeadFrequencyLauncher-linux > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Atestado de build (prova que os arquivos saíram deste repositório)
