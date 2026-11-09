@@ -28,6 +28,14 @@ public partial class GameHud : CanvasLayer
     private LineEdit _debugPassword;
     private Label _debugAuthMessage;
     private Button _debugAuthButton;
+    private PanelContainer _debugToolsPanel;
+
+    private bool _developerUiBlocking;
+    private bool _previousInputEnabled;
+    private Input.MouseModeEnum _previousMouseMode;
+    private Viewport.DebugDrawEnum _originalDebugDraw;
+    private Viewport.DebugDrawEnum _activeDebugDraw;
+    private bool _debugDrawChanged;
     private PanelContainer _jobPanel;
     private Label _jobTitle;
     private Label _jobBody;
@@ -153,10 +161,41 @@ public partial class GameHud : CanvasLayer
         _debugAuthButton.Pressed += SubmitDebugPassword;
         authButtons.AddChild(_debugAuthButton);
         var authClose = new Button { Text = "FECHAR", CustomMinimumSize = new Vector2(100, 38) };
-        authClose.Pressed += () => _debugAuthPanel.Visible = false;
+        authClose.Pressed += CloseDeveloperPanels;
         authButtons.AddChild(authClose);
         authStack.AddChild(authButtons);
         root.AddChild(_debugAuthPanel);
+
+        // Ferramentas extras: somente após autenticação válida.
+        _debugToolsPanel = new PanelContainer { Visible = false, MouseFilter = Control.MouseFilterEnum.Stop };
+        _debugToolsPanel.AddThemeStyleboxOverride("panel", UiStyle.Box(UiStyle.PanelBackground, UiStyle.PhosphorDim, 2, 12));
+        Place(_debugToolsPanel, 0.5f, 0.5f, 0.5f, 0.5f, -235, -190, 235, 190);
+        var toolsStack = new VBoxContainer { Theme = UiStyle.Theme };
+        _debugToolsPanel.AddChild(toolsStack);
+        toolsStack.AddChild(UiStyle.MakeLabel("DEVELOPER TOOLS", 20, HorizontalAlignment.Center));
+        toolsStack.AddChild(UiStyle.MakeLabel("Ferramentas locais e experimentais", 13, HorizontalAlignment.Center, UiStyle.PhosphorDim));
+
+        var wireframeButton = new Button { Text = "WIREFRAME", CustomMinimumSize = new Vector2(420, 36) };
+        wireframeButton.Pressed += () => ToggleDebugDraw(Viewport.DebugDrawEnum.Wireframe);
+        toolsStack.AddChild(wireframeButton);
+
+        var noTexturesButton = new Button { Text = "SEM TEXTURAS", CustomMinimumSize = new Vector2(420, 36) };
+        noTexturesButton.Pressed += () => ToggleDebugDraw(Viewport.DebugDrawEnum.Lighting);
+        toolsStack.AddChild(noTexturesButton);
+
+        var spawnButton = new Button { Text = "SPAWN DE ITENS · INDISPONÍVEL", Disabled = true, CustomMinimumSize = new Vector2(420, 36) };
+        toolsStack.AddChild(spawnButton);
+        var flyButton = new Button { Text = "FLY · INDISPONÍVEL", Disabled = true, CustomMinimumSize = new Vector2(420, 36) };
+        toolsStack.AddChild(flyButton);
+        var spectatorButton = new Button { Text = "SPECTATOR · INDISPONÍVEL", Disabled = true, CustomMinimumSize = new Vector2(420, 36) };
+        toolsStack.AddChild(spectatorButton);
+        var collisionButton = new Button { Text = "CAIXAS DE COLISÃO · INDISPONÍVEL", Disabled = true, CustomMinimumSize = new Vector2(420, 36) };
+        toolsStack.AddChild(collisionButton);
+
+        var toolsClose = new Button { Text = "FECHAR", CustomMinimumSize = new Vector2(420, 36) };
+        toolsClose.Pressed += CloseDeveloperPanels;
+        toolsStack.AddChild(toolsClose);
+        root.AddChild(_debugToolsPanel);
 
         // Minimapa (só com o radar equipado), canto superior esquerdo.
         _minimap = new MinimapView { Player = Player, City = City, Delivery = Delivery, Visible = false };
@@ -206,6 +245,7 @@ public partial class GameHud : CanvasLayer
     public override void _ExitTree()
     {
         // O SceneTree sobrevive à troca de cena: precisa desconectar.
+        CloseDeveloperPanels();
         GetTree().NodeAdded -= WatchCargo;
         if (NetClient.Instance != null)
         {
@@ -224,25 +264,105 @@ public partial class GameHud : CanvasLayer
         if (key.Keycode == Key.F3)
         {
             _debug.Visible = !_debug.Visible;
+            if (!_debug.Visible)
+                CloseDeveloperPanels();
             GetViewport().SetInputAsHandled();
             return;
         }
 
-        // F10 controla exclusivamente a janela de autenticação, e só com F3 aberto.
+        // F10 abre login ou ferramentas, sem alterar o overlay público F3.
         if (key.Keycode == Key.F10 && _debug.Visible)
         {
-            _debugAuthPanel.Visible = !_debugAuthPanel.Visible;
-            if (_debugAuthPanel.Visible)
-            {
-                _debugPassword.Clear();
-                _debugAuthMessage.Text = NetClient.Instance?.IsDebugAuthorized == true
-                    ? "Acesso autorizado · ferramentas extras liberadas"
-                    : "Acesso protegido · validade de 30 minutos";
-                _debugPassword.CallDeferred(Control.MethodName.GrabFocus);
-                Input.MouseMode = Input.MouseModeEnum.Visible;
-            }
+            if (_debugAuthPanel.Visible || _debugToolsPanel.Visible)
+                CloseDeveloperPanels();
+            else if (NetClient.Instance?.IsDebugAuthorized == true)
+                OpenDeveloperTools();
+            else
+                OpenDeveloperAuth();
             GetViewport().SetInputAsHandled();
         }
+    }
+
+    private void BeginDeveloperUi()
+    {
+        if (_developerUiBlocking)
+            return;
+        _developerUiBlocking = true;
+        _previousInputEnabled = Player?.InputEnabled ?? true;
+        _previousMouseMode = Input.MouseMode;
+        if (Player != null)
+            Player.InputEnabled = false;
+        Input.MouseMode = Input.MouseModeEnum.Visible;
+    }
+
+    private void EndDeveloperUi()
+    {
+        if (!_developerUiBlocking)
+            return;
+        _developerUiBlocking = false;
+        if (Player != null && IsInstanceValid(Player))
+            Player.InputEnabled = _previousInputEnabled;
+        Input.MouseMode = _previousMouseMode;
+    }
+
+    private void OpenDeveloperAuth()
+    {
+        _debugToolsPanel.Visible = false;
+        _debugAuthPanel.Visible = true;
+        _debugPassword.Clear();
+        _debugAuthButton.Disabled = false;
+        _debugAuthMessage.Text = "Acesso protegido · validade de 30 minutos";
+        _debugAuthMessage.RemoveThemeColorOverride("font_color");
+        BeginDeveloperUi();
+        _debugPassword.CallDeferred(Control.MethodName.GrabFocus);
+    }
+
+    private void OpenDeveloperTools()
+    {
+        if (NetClient.Instance?.IsDebugAuthorized != true)
+        {
+            OpenDeveloperAuth();
+            return;
+        }
+        _debugAuthPanel.Visible = false;
+        _debugToolsPanel.Visible = true;
+        BeginDeveloperUi();
+    }
+
+    private void CloseDeveloperPanels()
+    {
+        if (_debugAuthPanel != null)
+            _debugAuthPanel.Visible = false;
+        if (_debugToolsPanel != null)
+            _debugToolsPanel.Visible = false;
+        RestoreDebugDraw();
+        EndDeveloperUi();
+    }
+
+    private void ToggleDebugDraw(Viewport.DebugDrawEnum mode)
+    {
+        if (!_debugDrawChanged)
+        {
+            _originalDebugDraw = GetViewport().DebugDraw;
+            _debugDrawChanged = true;
+        }
+
+        if (_activeDebugDraw == mode && GetViewport().DebugDraw == mode)
+        {
+            RestoreDebugDraw();
+            return;
+        }
+
+        _activeDebugDraw = mode;
+        GetViewport().DebugDraw = mode;
+    }
+
+    private void RestoreDebugDraw()
+    {
+        if (!_debugDrawChanged)
+            return;
+        GetViewport().DebugDraw = _originalDebugDraw;
+        _debugDrawChanged = false;
     }
 
     private void SubmitDebugPassword()
@@ -272,11 +392,23 @@ public partial class GameHud : CanvasLayer
         _debugAuthMessage.Text = message;
         _debugAuthMessage.AddThemeColorOverride("font_color", success ? UiStyle.Phosphor : UiStyle.Warning);
         if (success)
+        {
             ShowToast("Ferramentas de desenvolvedor autorizadas por 30 minutos.", UiStyle.Phosphor, 4.0);
+            if (_debug.Visible)
+                OpenDeveloperTools();
+            else
+                CloseDeveloperPanels();
+        }
     }
 
     public override void _Process(double delta)
     {
+        if (_debugToolsPanel.Visible && NetClient.Instance?.IsDebugAuthorized != true)
+        {
+            CloseDeveloperPanels();
+            ShowToast("A autorização das ferramentas expirou.", UiStyle.Warning, 4.0);
+        }
+
         if (_toastTimeLeft > 0)
         {
             _toastTimeLeft -= delta;
@@ -512,7 +644,11 @@ public partial class GameHud : CanvasLayer
         }
     }
 
-    private void OnNetDisconnected(string message) => ShowToast(message + " Voltando ao menu...", UiStyle.Danger, 5.0);
+    private void OnNetDisconnected(string message)
+    {
+        CloseDeveloperPanels();
+        ShowToast(message + " Voltando ao menu...", UiStyle.Danger, 5.0);
+    }
 
     public const string GroupName = "game_hud";
 
