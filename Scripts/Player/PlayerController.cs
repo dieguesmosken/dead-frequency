@@ -186,7 +186,7 @@ public partial class PlayerController : CharacterBody3D
             ShadowEnabled = true,
             Position = new Vector3(0.15f, -0.1f, 0f),
         };
-        _camera.AddChild(_flashlight);
+        GetAimCamera().AddChild(_flashlight);
 
         Input.MouseMode = Input.MouseModeEnum.Captured;
     }
