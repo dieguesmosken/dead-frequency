@@ -98,24 +98,64 @@ for name, cols in (("mercearia", [(200, 150, 20), (200, 30, 30), (30, 120, 60), 
         x += w
     img.save(f"{MK}/shelf_{name}.png")
 
-# Anúncios do autor
-img = Image.new("RGB", (600, 800), (255, 250, 240)); d = ImageDraw.Draw(img)
-d.rounded_rectangle((70, 90, 530, 420), radius=60, fill=(255, 120, 60)); d.polygon([(160, 410), (240, 410), (150, 500)], fill=(255, 120, 60))
-for i, y in enumerate((170, 240, 310)): d.rounded_rectangle((130, y, 470 - i * 70, y + 34), radius=16, fill=WHITE)
-f, b = fit(d, "recadin.com.br", D + "DejaVuSans-Bold.ttf", 540, 90)
-d.text(((600 - (b[2] - b[0])) // 2 - b[0], 560 - b[1]), "recadin.com.br", font=f, fill=(40, 40, 40))
-f, b = fit(d, "acesse: recadin.com.br", D + "DejaVuSansCondensed.ttf", 500, 40)
-d.text(((600 - (b[2] - b[0])) // 2 - b[0], 690 - b[1]), "acesse: recadin.com.br", font=f, fill=(255, 120, 60))
-d.rectangle((0, 0, 599, 799), outline=(40, 40, 40), width=8)
-img.filter(ImageFilter.SMOOTH).save(f"{ADS}/ad_recadin.png")
+# Anúncios do autor — SVG vetorial para cartaz e outdoor.
+# Mantém o cartaz do Recadin sem chamada clicável e cria o outdoor horizontal
+# do Teuzin. A arte do outdoor não é aplicada ao ônibus.
+def write_svg(name, source):
+    with open(f"{ADS}/{name}.svg", "w", encoding="utf-8") as f:
+        f.write(source.strip() + "\n")
 
-img = Image.new("RGB", (1200, 400), (60, 20, 110)); d = ImageDraw.Draw(img)
-for i in range(0, 1200, 40): d.line((i, 400, i + 200, 0), fill=(75, 30, 135), width=14)
-f, b = fit(d, "siga twitch.tv/teuzin0dev", D + "DejaVuSans-Bold.ttf", 1100, 120)
-d.text(((1200 - (b[2] - b[0])) // 2 - b[0] + 5, 70 - b[1] + 5), "siga twitch.tv/teuzin0dev", font=f, fill=(0, 0, 0))
-d.text(((1200 - (b[2] - b[0])) // 2 - b[0], 70 - b[1]), "siga twitch.tv/teuzin0dev", font=f, fill=WHITE)
-f, b = fit(d, "github.com/dieguesmosken", D + "DejaVuSansMono-Bold.ttf", 900, 70)
-d.text(((1200 - (b[2] - b[0])) // 2 - b[0], 250 - b[1]), "github.com/dieguesmosken", font=f, fill=(190, 255, 200))
-d.rectangle((0, 0, 1199, 399), outline=(240, 240, 240), width=10)
-img.filter(ImageFilter.SMOOTH).save(f"{ADS}/ad_teuzin.png")
+recadin_svg = r'''<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800">
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#0f1115"/><stop offset="1" stop-color="#191d24"/></linearGradient>
+    <linearGradient id="lime" x2="1" y2="1"><stop stop-color="#d8ff55"/><stop offset="1" stop-color="#a9db20"/></linearGradient>
+    <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.2" fill="#c6f432" opacity=".13"/></pattern>
+  </defs>
+  <rect width="600" height="800" fill="url(#bg)"/>
+  <rect width="600" height="800" fill="url(#dots)"/>
+  <rect x="28" y="28" width="544" height="744" rx="24" fill="none" stroke="#2f3440" stroke-width="3"/>
+  <path d="M0 0H600V18H0Z" fill="#c6f432"/>
+  <g transform="translate(300 290)">
+    <path d="M-184 -112 Q-184 -146 -150 -146 H150 Q184 -146 184 -112 V62 Q184 96 150 96 H-46 L-126 164 L-110 96 H-150 Q-184 96 -184 62Z" fill="url(#lime)"/>
+    <circle cx="-112" cy="-26" r="13" fill="#15191f"/>
+    <circle cx="-54" cy="-26" r="13" fill="#15191f"/>
+    <circle cx="4" cy="-26" r="13" fill="#15191f"/>
+    <path d="M58 -42H130 M58 -10H130 M58 22H108" stroke="#15191f" stroke-width="12" stroke-linecap="round"/>
+  </g>
+  <text x="300" y="520" fill="#f2f3f5" font-family="DejaVu Sans, Arial, sans-serif" font-size="78" font-weight="800" text-anchor="middle" letter-spacing="-3">recadin</text>
+  <rect x="188" y="546" width="224" height="5" rx="2.5" fill="#c6f432"/>
+  <text x="300" y="612" fill="#c6f432" font-family="DejaVu Sans, Arial, sans-serif" font-size="25" font-weight="700" text-anchor="middle" letter-spacing="4">A VOZ DA CIDADE</text>
+  <text x="300" y="668" fill="#aeb4bf" font-family="DejaVu Sans, Arial, sans-serif" font-size="19" text-anchor="middle">Recados, avisos e novidades</text>
+  <text x="300" y="704" fill="#aeb4bf" font-family="DejaVu Sans, Arial, sans-serif" font-size="19" text-anchor="middle">da comunidade.</text>
+  <text x="300" y="748" fill="#596170" font-family="DejaVu Sans, Arial, sans-serif" font-size="16" text-anchor="middle">recadin.com.br</text>
+</svg>'''
+teuzin_svg = r'''<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400">
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#090910"/><stop offset=".55" stop-color="#241044"/><stop offset="1" stop-color="#090910"/></linearGradient>
+    <linearGradient id="purple" x2="1" y2="0"><stop stop-color="#7136c9"/><stop offset="1" stop-color="#b35cff"/></linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0V32" fill="none" stroke="#a76cff" stroke-width="1" opacity=".12"/></pattern>
+  </defs>
+  <rect width="1200" height="400" fill="url(#bg)"/><rect width="1200" height="400" fill="url(#grid)"/>
+  <path d="M0 0H22V400H0Z M1178 0H1200V400H1178Z" fill="#c6f432"/>
+  <path d="M0 330L330 0H420L90 400H0Z M970 400L1200 170V260L1060 400Z" fill="url(#purple)" opacity=".28"/>
+  <g transform="translate(95 80)">
+    <path d="M80 0L145 38L190 110L174 202L105 244L31 210L0 130L28 48Z" fill="#171321" stroke="#a76cff" stroke-width="7"/>
+    <path d="M44 92L77 58L102 92L129 58L160 92L145 150L105 180L62 150Z" fill="none" stroke="#c6f432" stroke-width="8" stroke-linejoin="round"/>
+    <circle cx="78" cy="119" r="8" fill="#f2f3f5"/><circle cx="128" cy="119" r="8" fill="#f2f3f5"/>
+  </g>
+  <text x="350" y="164" fill="#f2f3f5" font-family="DejaVu Sans, Arial, sans-serif" font-size="82" font-weight="900" letter-spacing="-3">TEUZIN0DEV</text>
+  <text x="356" y="220" fill="#c6f432" font-family="DejaVu Sans, Arial, sans-serif" font-size="27" font-weight="700" letter-spacing="7">GAMES  •  CÓDIGO  •  CRIAÇÃO</text>
+  <path d="M356 254H1080" stroke="#6d4b91" stroke-width="3"/>
+  <g font-family="DejaVu Sans, Arial, sans-serif" font-size="29" font-weight="700">
+    <rect x="356" y="284" width="350" height="66" rx="12" fill="#7136c9"/>
+    <text x="531" y="327" fill="#fff" text-anchor="middle">TWITCH.TV/TEUZIN0DEV</text>
+    <rect x="730" y="284" width="370" height="66" rx="12" fill="#1a1d24" stroke="#a76cff" stroke-width="2"/>
+    <text x="915" y="327" fill="#f2f3f5" text-anchor="middle">GITHUB.COM/DIEGUESMOSKEN</text>
+  </g>
+</svg>'''
+
+write_svg("ad_recadin", recadin_svg)
+write_svg("ad_teuzin", teuzin_svg)
 print("ok")
