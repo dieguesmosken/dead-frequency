@@ -184,7 +184,7 @@ public partial class GameHud : CanvasLayer
         noTexturesButton.Pressed += () => ToggleDebugDraw(Viewport.DebugDrawEnum.Lighting);
         toolsStack.AddChild(noTexturesButton);
 
-        _debugMoneyAmount = new LineEdit { PlaceholderText = "Valor (1 a 1.000.000)", CustomMinimumSize = new Vector2(420, 36), KeyboardType = LineEdit.KeyboardTypeEnum.Number };
+        _debugMoneyAmount = new LineEdit { PlaceholderText = "Valor (1 a 1.000.000)", CustomMinimumSize = new Vector2(420, 36) };
         toolsStack.AddChild(_debugMoneyAmount);
         var addMoneyButton = new Button { Text = "ADICIONAR DINHEIRO", CustomMinimumSize = new Vector2(420, 36) };
         addMoneyButton.Pressed += SubmitDebugAddMoney;
@@ -424,7 +424,7 @@ public partial class GameHud : CanvasLayer
 
     public override void _Process(double delta)
     {
-        if (_debugDrawChanged && NetClient.Instance?.IsDebugAuthorized != true)
+        if ((_debugDrawChanged || _debugToolsPanel.Visible) && NetClient.Instance?.IsDebugAuthorized != true)
         {
             RevokeDeveloperTools();
             ShowToast("A autorização das ferramentas expirou.", UiStyle.Warning, 4.0);
