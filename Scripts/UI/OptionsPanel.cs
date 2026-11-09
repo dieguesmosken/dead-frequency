@@ -176,6 +176,7 @@ public partial class OptionsPanel : VBoxContainer
         Slider(p, "Sensibilidade", 0.1, 3.0, 0.05, s.MouseSensitivity, v => s.MouseSensitivity = (float)v, v => $"{v:0.00}x");
         Slider(p, "Sensibilidade na van", 0.2, 2.0, 0.05, s.VehicleSensitivity, v => s.VehicleSensitivity = (float)v, v => $"{v:0.00}x", "Multiplica a sensibilidade quando você está dirigindo.");
         Toggle(p, "Inverter eixo Y", s.InvertY, b => s.InvertY = b);
+        p.AddChild(Hint("Pressione V durante a partida para alternar entre primeira e terceira pessoa. A terceira pessoa é ativada por padrão."));
         Toggle(p, "Balanço da câmera ao andar", s.HeadBob, b => s.HeadBob = b, "Desativado por padrão para reduzir movimentos visuais. Ative apenas se preferir esse efeito.");
 
         Section(p, "TECLAS");
