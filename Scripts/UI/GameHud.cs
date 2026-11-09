@@ -29,6 +29,7 @@ public partial class GameHud : CanvasLayer
     private Label _debugAuthMessage;
     private Button _debugAuthButton;
     private PanelContainer _debugToolsPanel;
+    private LineEdit _debugMoneyAmount;
 
     private bool _developerUiBlocking;
     private bool _previousInputEnabled;
@@ -183,6 +184,11 @@ public partial class GameHud : CanvasLayer
         noTexturesButton.Pressed += () => ToggleDebugDraw(Viewport.DebugDrawEnum.Lighting);
         toolsStack.AddChild(noTexturesButton);
 
+        _debugMoneyAmount = new LineEdit { PlaceholderText = "Valor (1 a 1.000.000)", CustomMinimumSize = new Vector2(420, 36), KeyboardType = LineEdit.KeyboardTypeEnum.Number };
+        toolsStack.AddChild(_debugMoneyAmount);
+        var addMoneyButton = new Button { Text = "ADICIONAR DINHEIRO", CustomMinimumSize = new Vector2(420, 36) };
+        addMoneyButton.Pressed += SubmitDebugAddMoney;
+        toolsStack.AddChild(addMoneyButton);
         var spawnButton = new Button { Text = "SPAWN DE ITENS · INDISPONÍVEL", Disabled = true, CustomMinimumSize = new Vector2(420, 36) };
         toolsStack.AddChild(spawnButton);
         var flyButton = new Button { Text = "FLY · INDISPONÍVEL", Disabled = true, CustomMinimumSize = new Vector2(420, 36) };
@@ -245,7 +251,7 @@ public partial class GameHud : CanvasLayer
     public override void _ExitTree()
     {
         // O SceneTree sobrevive à troca de cena: precisa desconectar.
-        CloseDeveloperPanels();
+        RevokeDeveloperTools();
         GetTree().NodeAdded -= WatchCargo;
         if (NetClient.Instance != null)
         {
@@ -335,8 +341,14 @@ public partial class GameHud : CanvasLayer
             _debugAuthPanel.Visible = false;
         if (_debugToolsPanel != null)
             _debugToolsPanel.Visible = false;
-        RestoreDebugDraw();
         EndDeveloperUi();
+    }
+
+    private void RevokeDeveloperTools()
+    {
+        CloseDeveloperPanels();
+        RestoreDebugDraw();
+        _activeDebugDraw = Viewport.DebugDrawEnum.Disabled;
     }
 
     private void ToggleDebugDraw(Viewport.DebugDrawEnum mode)
@@ -363,6 +375,15 @@ public partial class GameHud : CanvasLayer
             return;
         GetViewport().DebugDraw = _originalDebugDraw;
         _debugDrawChanged = false;
+    }
+
+    private void SubmitDebugAddMoney()
+    {
+        if (NetClient.Instance?.IsDebugAuthorized != true) { ShowToast("Autorização expirada.", UiStyle.Warning); return; }
+        if (!int.TryParse(_debugMoneyAmount?.Text, out int amount) || amount < 1 || amount > 1_000_000)
+        { ShowToast("Informe um valor entre 1 e 1.000.000.", UiStyle.Warning); return; }
+        NetClient.Instance.RequestDebugAddMoney(amount);
+        _debugMoneyAmount.Clear();
     }
 
     private void SubmitDebugPassword()
@@ -403,9 +424,9 @@ public partial class GameHud : CanvasLayer
 
     public override void _Process(double delta)
     {
-        if (_debugToolsPanel.Visible && NetClient.Instance?.IsDebugAuthorized != true)
+        if (_debugDrawChanged && NetClient.Instance?.IsDebugAuthorized != true)
         {
-            CloseDeveloperPanels();
+            RevokeDeveloperTools();
             ShowToast("A autorização das ferramentas expirou.", UiStyle.Warning, 4.0);
         }
 
@@ -506,7 +527,7 @@ public partial class GameHud : CanvasLayer
 
         double frameMs = Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000.0;
         double physMs = Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000.0;
-        _debug.Text = $"Dead Frequency {GameVersion.Current}  ·  FPS {Engine.GetFramesPerSecond()}  ({frameMs:0.0} ms lógica · {physMs:0.0} ms física)\n" +
+        _debug.Text = $"Dead Frequency {GameVersion.Display}  ·  FPS {Engine.GetFramesPerSecond()}  ({frameMs:0.0} ms lógica · {physMs:0.0} ms física)\n" +
                       $"Posição X {p.X:0.0}  Y {p.Y:0.0}  Z {p.Z:0.0}  ·  olhando {facing} ({yaw:0}°)\n" +
                       where +
                       _debugStats + "\n" +
@@ -641,12 +662,18 @@ public partial class GameHud : CanvasLayer
             case "claimFail":
                 ShowToast("Outro entregador está usando isso", UiStyle.Warning);
                 break;
+            case "debug_add_money_result":
+                if (m.TryGetProperty("ok", out var moneyOk) && moneyOk.ValueKind == System.Text.Json.JsonValueKind.True)
+                    ShowToast($"+{m.GetProperty("added").GetInt32():N0} adicionados · saldo: {m.GetProperty("money").GetInt32():N0}", UiStyle.Phosphor, 5.0);
+                else
+                    ShowToast(m.TryGetProperty("msg", out var moneyMsg) ? moneyMsg.GetString() : "Não foi possível adicionar dinheiro.", UiStyle.Warning, 4.0);
+                break;
         }
     }
 
     private void OnNetDisconnected(string message)
     {
-        CloseDeveloperPanels();
+        RevokeDeveloperTools();
         ShowToast(message + " Voltando ao menu...", UiStyle.Danger, 5.0);
     }
 
