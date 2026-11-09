@@ -1,0 +1,31 @@
+name: Internal — Pré-release
+on:
+  push:
+    branches: [Internal]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preparar versão exclusiva
+        id: ver
+        run: |
+          VER=$(grep -oP 'Current = "\K[0-9.]+' Scripts/Core/GameVersion.cs)
+          TAG="internal-v${VER}-prealpha.${GITHUB_RUN_NUMBER}"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - name: Build C# (validação)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet build DeadFrequency.csproj -c Release
+      - name: Criar pré-release de código
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.ver.outputs.tag }}"
+          VER="${{ steps.ver.outputs.version }}"
+          gh release create "$TAG" --title "v$VER — Pre-alpha Internal #${GITHUB_RUN_NUMBER}" --notes "Pré-release automática da branch Internal. Build de validação C#; use os artefatos de compilação do workflow." --target "$GITHUB_SHA" --prerelease
