@@ -8,6 +8,7 @@ namespace DeadFrequency;
 public static class GameVersion
 {
     public const string Current = "0.9.6";
+    public const string Display = Current + "-Internal";
 
     public readonly record struct Release(string Version, string Date, string Title, string[] Changes);
 
