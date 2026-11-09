@@ -1,0 +1,185 @@
+# Compila o jogo e publica uma pré-release automática exclusiva da branch Internal.
+name: Internal — Pré-release
+
+on:
+  push:
+    branches: [Internal]
+    paths: [Scripts/Core/GameVersion.cs]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write      # atestado de build (provenance)
+  attestations: write
+
+env:
+  GODOT_VERSION: 4.7.2
+  GODOT_STATUS: stable
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/Internal'
+    runs-on: ubuntu-latest
+    env:
+      SIGNPATH_ON: ${{ secrets.SIGNPATH_API_TOKEN != '' && 'true' || 'false' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - name: Versão do jogo
+        id: ver
+        run: |
+          VER=$(grep -oP 'Current = "\K[0-9.]+' Scripts/Core/GameVersion.cs)
+          TITLE=$(grep -oP "new\\(\"$VER\", \"[^\"]+\", \"\\K[^\"]+" Scripts/Core/GameVersion.cs | head -1)
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "title=$TITLE" >> "$GITHUB_OUTPUT"
+          TAG="internal-v${VER}-prealpha.${GITHUB_RUN_NUMBER}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "exists=false" >> "$GITHUB_OUTPUT"
+          echo "Versão $VER — $TITLE"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - uses: actions/setup-dotnet@v4
+        if: steps.ver.outputs.exists == 'false'
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Baixar Godot .NET e templates de exportação
+        if: steps.ver.outputs.exists == 'false'
+        run: |
+          set -e
+          TAG="${GODOT_VERSION}-${GODOT_STATUS}"
+          BASE="https://github.com/godotengine/godot/releases/download/${TAG}"
+          ALT="https://github.com/godotengine/godot-builds/releases/download/${TAG}"
+          EDITOR="Godot_v${TAG}_mono_linux_x86_64.zip"
+          TPZ="Godot_v${TAG}_mono_export_templates.tpz"
+          curl -fsSL --retry 6 --retry-delay 15 --retry-all-errors -o editor.zip "$BASE/$EDITOR" || curl -fsSL --retry 6 --retry-delay 15 --retry-all-errors -o editor.zip "$ALT/$EDITOR"
+          curl -fsSL --retry 6 --retry-delay 15 --retry-all-errors -o templates.tpz "$BASE/$TPZ" || curl -fsSL --retry 6 --retry-delay 15 --retry-all-errors -o templates.tpz "$ALT/$TPZ"
+          unzip -q editor.zip -d godot
+          GODOT_BIN=$(find godot -type f -name "Godot_v*_mono_linux.x86_64" | head -1)
+          chmod +x "$GODOT_BIN"
+          echo "GODOT=$PWD/$GODOT_BIN" >> "$GITHUB_ENV"
+          DEST="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_STATUS}.mono"
+          mkdir -p "$DEST"
+          unzip -q templates.tpz -d tpl
+          mv tpl/templates/* "$DEST/"
+          ls "$DEST" | head
+
+      - name: Versão nos executáveis (Propriedades → Detalhes no Windows)
+        if: steps.ver.outputs.exists == 'false'
+        run: |
+          VER=${{ steps.ver.outputs.version }}
+          for f in export_presets.cfg launcher/app/export_presets.cfg; do
+            sed -i "s|^application/file_version=.*|application/file_version=\"$VER.0\"|; s|^application/product_version=.*|application/product_version=\"$VER.0\"|" "$f"
+          done
+
+      - name: Importar assets e compilar o C#
+        if: steps.ver.outputs.exists == 'false'
+        run: |
+          "$GODOT" --headless --import --path . || true
+          dotnet build DeadFrequency.csproj -c ExportRelease || dotnet build DeadFrequency.csproj -c Release
+
+      - name: Exportar Windows e Linux
+        if: steps.ver.outputs.exists == 'false'
+        run: |
+          set -e
+          mkdir -p build/windows build/linux
+          "$GODOT" --headless --path . --export-release "Windows Desktop" build/windows/DeadFrequency.exe
+          "$GODOT" --headless --path . --export-release "Linux" build/linux/DeadFrequency.x86_64
+          chmod +x build/linux/DeadFrequency.x86_64
+
+      - name: Compilar o launcher (Godot padrão, só GDScript)
+        if: steps.ver.outputs.exists == 'false'
+        run: |
+          set -e
+          TAG="${GODOT_VERSION}-${GODOT_STATUS}"
+          BASE="https://github.com/godotengine/godot/releases/download/${TAG}"
+          ALT="https://github.com/godotengine/godot-builds/releases/download/${TAG}"
+          ED="Godot_v${TAG}_linux.x86_64.zip"
+          TPZ="Godot_v${TAG}_export_templates.tpz"
+          curl -fsSL --retry 6 --retry-delay 15 --retry-all-errors -o std.zip "$BASE/$ED" || curl -fsSL --retry 6 --retry-delay 15 --retry-all-errors -o std.zip "$ALT/$ED"
+          curl -fsSL --retry 6 --retry-delay 15 --retry-all-errors -o std.tpz "$BASE/$TPZ" || curl -fsSL --retry 6 --retry-delay 15 --retry-all-errors -o std.tpz "$ALT/$TPZ"
+          unzip -q std.zip -d godot_std
+          STD=$(find godot_std -type f -name "Godot_v*_linux.x86_64" | head -1)
+          chmod +x "$STD"
+          DEST="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_STATUS}"
+          mkdir -p "$DEST"
+          unzip -q std.tpz -d tpl_std
+          mv tpl_std/templates/* "$DEST/"
+          mkdir -p out
+          "$STD" --headless --path launcher/app --import || true
+          "$STD" --headless --path launcher/app --export-release "Windows Desktop" ../../out/DeadFrequencyLauncher.exe
+          "$STD" --headless --path launcher/app --export-release "Linux" ../../out/DeadFrequencyLauncher.x86_64
+          cp out/DeadFrequencyLauncher.exe DeadFrequencyLauncher-windows.exe
+          cp out/DeadFrequencyLauncher.x86_64 DeadFrequencyLauncher-linux
+          chmod +x DeadFrequencyLauncher-linux
+          ls -la DeadFrequencyLauncher-*
+
+      # ---------- Assinatura de código (SignPath Foundation). Só roda depois de configurar:
+      #   Settings → Secrets: SIGNPATH_API_TOKEN · Settings → Variables: SIGNPATH_ORGANIZATION_ID,
+      #   SIGNPATH_PROJECT_SLUG e SIGNPATH_POLICY_SLUG (ver docs/CODE_SIGNING.md). Sem isso, pula.
+      - name: Separar os .exe para assinar
+        id: unsigned
+        if: steps.ver.outputs.exists == 'false' && env.SIGNPATH_ON == 'true'
+        run: |
+          mkdir -p unsigned
+          cp build/windows/DeadFrequency.exe unsigned/
+          cp DeadFrequencyLauncher-windows.exe unsigned/
+      - name: Enviar para o SignPath
+        id: upload-unsigned
+        if: steps.unsigned.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-windows
+          path: unsigned/
+      - name: Assinar (SignPath — aguarda a aprovação manual)
+        if: steps.unsigned.outcome == 'success'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed
+      - name: Usar os .exe assinados
+        if: steps.unsigned.outcome == 'success'
+        run: |
+          cp signed/DeadFrequency.exe build/windows/DeadFrequency.exe
+          cp signed/DeadFrequencyLauncher-windows.exe DeadFrequencyLauncher-windows.exe
+
+      - name: Empacotar, SHA256SUMS
+        if: steps.ver.outputs.exists == 'false'
+        run: |
+          set -e
+          VER=${{ steps.ver.outputs.version }}
+          (cd build/windows && zip -qr "../../DeadFrequency-v${VER}-windows.zip" .)
+          (cd build/linux && zip -qr "../../DeadFrequency-v${VER}-linux.zip" .)
+          sha256sum DeadFrequency-v${VER}-windows.zip DeadFrequency-v${VER}-linux.zip DeadFrequencyLauncher-windows.exe DeadFrequencyLauncher-linux > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Atestado de build (prova que os arquivos saíram deste repositório)
+        if: steps.ver.outputs.exists == 'false'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            DeadFrequency-v${{ steps.ver.outputs.version }}-windows.zip
+            DeadFrequency-v${{ steps.ver.outputs.version }}-linux.zip
+            DeadFrequencyLauncher-windows.exe
+            DeadFrequencyLauncher-linux
+
+      - name: Publicar release
+        if: steps.ver.outputs.exists == 'false'
+        run: |
+          VER=${{ steps.ver.outputs.version }}
+          TAG=${{ steps.ver.outputs.tag }}
+          python3 site/release_notes.py "$VER" Internal > notes.md || echo "Pré-release interna do Dead Frequency." > notes.md
+          gh release create "$TAG" DeadFrequency-v${VER}-windows.zip DeadFrequency-v${VER}-linux.zip \\
+            DeadFrequencyLauncher-windows.exe DeadFrequencyLauncher-linux SHA256SUMS.txt \\
+            --title "v$VER — Pre-alpha Internal #${GITHUB_RUN_NUMBER}" --notes-file notes.md --target "$GITHUB_SHA" --prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
