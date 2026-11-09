@@ -105,7 +105,7 @@ public partial class PlayerController : CharacterBody3D
     public bool IsHolding => _heldItem != null && IsInstanceValid(_heldItem);
     public CargoItem HeldItem => IsHolding ? _heldItem : null;
     public VanController CurrentVehicle { get; private set; }
-    public Camera3D Camera => _camera;
+    public Camera3D Camera => GetAimCamera();
     public string CurrentPrompt { get; private set; } = "";
     public bool HasTarget => _currentTarget != null;
     /// <summary>Nome do que o raio de interação está tocando (overlay F3).</summary>
