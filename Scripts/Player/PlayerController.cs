@@ -119,7 +119,7 @@ public partial class PlayerController : CharacterBody3D
     private float _gravity;
     private float _sensitivityMultiplier = 1f;
     private float _vehicleSensitivity = 1f;
-    private bool _headBob = true;
+    private bool _headBob = false;
     private float _bobTime;
     private Vector3 _cameraBase;
     private bool _invertY;
