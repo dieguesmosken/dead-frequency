@@ -65,7 +65,7 @@ public partial class GameSettings : Node
     /// <summary>Perguntar ao GitHub se há versão nova ao abrir o menu.</summary>
     public bool CheckUpdates { get; set; } = true;
     public float VehicleSensitivity { get; set; } = 1f;
-    public bool HeadBob { get; set; } = true;
+    public bool HeadBob { get; set; } = false;
     public bool ShowFps { get; set; }
     public float UiScale { get; set; } = 1f;
     public bool Scanlines { get; set; } = true;
