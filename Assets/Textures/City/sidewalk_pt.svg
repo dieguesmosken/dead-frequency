@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <pattern id="tiles" width="64" height="64" patternUnits="userSpaceOnUse">
+      <rect width="64" height="64" fill="#b8b7ae"/>
+      <path id="dark-wave" d="M0 0 C16 30 48 30 64 0 L64 32 C48 62 16 62 0 32 Z" fill="#45494f"/>
+      <clipPath id="dark-clip">
+        <use href="#dark-wave"/>
+      </clipPath>
+      <clipPath id="light-clip">
+        <path d="M0 32 C16 2 48 2 64 32 L64 64 C48 34 16 34 0 64 Z"/>
+      </clipPath>
+      <!-- Relevos horizontais no concreto escuro. -->
+      <g clip-path="url(#dark-clip)" stroke-linecap="round">
+        <path d="M-2 4 H66 M-2 10 H66 M-2 16 H66 M-2 22 H66 M-2 28 H66 M-2 36 H66 M-2 42 H66 M-2 48 H66 M-2 54 H66 M-2 60 H66"
+              stroke="#25282d" stroke-width="1.6" opacity=".72"/>
+        <path d="M-2 3 H66 M-2 9 H66 M-2 15 H66 M-2 21 H66 M-2 27 H66 M-2 35 H66 M-2 41 H66 M-2 47 H66 M-2 53 H66 M-2 59 H66"
+              stroke="#777b80" stroke-width=".65" opacity=".65"/>
+      </g>
+      <!-- Relevos verticais no concreto claro. -->
+      <g clip-path="url(#light-clip)">
+        <path d="M4 -2 V66 M10 -2 V66 M16 -2 V66 M22 -2 V66 M28 -2 V66 M36 -2 V66 M42 -2 V66 M48 -2 V66 M54 -2 V66 M60 -2 V66"
+              stroke="#85847d" stroke-width="1.2" opacity=".55"/>
+        <path d="M3 -2 V66 M9 -2 V66 M15 -2 V66 M21 -2 V66 M27 -2 V66 M35 -2 V66 M41 -2 V66 M47 -2 V66 M53 -2 V66 M59 -2 V66"
+              stroke="#e0ded4" stroke-width=".7" opacity=".72"/>
+      </g>
+      <!-- Juntas e chanfros suaves nas bordas das peças. -->
+      <path d="M0 0 C16 30 48 30 64 0 M0 32 C16 62 48 62 64 32"
+            fill="none" stroke="#303238" stroke-width="2" opacity=".78"/>
+      <path d="M0 1 C16 31 48 31 64 1 M0 33 C16 63 48 63 64 33"
+            fill="none" stroke="#d5d3c9" stroke-width=".8" opacity=".7"/>
+    </pattern>
+  </defs>
+  <rect width="128" height="128" fill="url(#tiles)"/>
+</svg>
