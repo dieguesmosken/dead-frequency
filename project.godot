@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="Dead Frequency"
+config/name="Dead Frequency Internal-Pre Alpha"
 config/description="Simulador de entrega e sobrevivência em 1ª pessoa — van anos 90, física tátil, UI diegética."
 run/main_scene="res://Scenes/UI/main_menu.tscn"
 config/features=PackedStringArray("4.7", "C#", "Forward Plus")
