@@ -61,7 +61,7 @@ public partial class CityGenerator
         return _runAds;
     }
 
-    public static string AdTexturePath(string id) => $"res://Assets/Textures/Ads/ad_{id}.png";
+    public static string AdTexturePath(string id) => id == "teuzin" ? "res://Assets/Textures/Ads/ad_teuzin.svg" : $"res://Assets/Textures/Ads/ad_{id}.png";
 
     /// <summary>Material com textura (opcionalmente acesa), com cache por arquivo.</summary>
     private StandardMaterial3D TexMaterial(string path, float glow = 0f)
