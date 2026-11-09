@@ -178,8 +178,6 @@ jobs:
           VER=${{ steps.ver.outputs.version }}
           TAG=${{ steps.ver.outputs.tag }}
           python3 site/release_notes.py "$VER" Internal > notes.md || echo "Pré-release interna do Dead Frequency." > notes.md
-          gh release create "$TAG" DeadFrequency-v${VER}-windows.zip DeadFrequency-v${VER}-linux.zip \\
-            DeadFrequencyLauncher-windows.exe DeadFrequencyLauncher-linux SHA256SUMS.txt \\
-            --title "v$VER — Pre-alpha Internal #${GITHUB_RUN_NUMBER}" --notes-file notes.md --target "$GITHUB_SHA" --prerelease
+          gh release create "$TAG" DeadFrequency-v${VER}-windows.zip DeadFrequency-v${VER}-linux.zip DeadFrequencyLauncher-windows.exe DeadFrequencyLauncher-linux SHA256SUMS.txt --title "v$VER — Pre-alpha Internal #${GITHUB_RUN_NUMBER}" --notes-file notes.md --target "$GITHUB_SHA" --prerelease
         env:
           GH_TOKEN: ${{ github.token }}
