@@ -157,9 +157,6 @@ jobs:
         run: |
           set -e
           VER=${{ steps.ver.outputs.version }}
-          # Inclui o histórico completo em ambos os pacotes e como anexo separado da release.
-          cp CHANGELOG.md build/windows/CHANGELOG.md
-          cp CHANGELOG.md build/linux/CHANGELOG.md
           (cd build/windows && zip -qr "../../DeadFrequency-v${VER}-windows.zip" .)
           (cd build/linux && zip -qr "../../DeadFrequency-v${VER}-linux.zip" .)
           sha256sum DeadFrequency-v${VER}-windows.zip DeadFrequency-v${VER}-linux.zip DeadFrequencyLauncher-windows.exe DeadFrequencyLauncher-linux CHANGELOG.md > SHA256SUMS.txt
@@ -181,6 +178,6 @@ jobs:
           VER=${{ steps.ver.outputs.version }}
           TAG=${{ steps.ver.outputs.tag }}
           python3 site/release_notes.py "$VER" Internal "$TAG" > notes.md
-          gh release create "$TAG" DeadFrequency-v${VER}-windows.zip DeadFrequency-v${VER}-linux.zip DeadFrequencyLauncher-windows.exe DeadFrequencyLauncher-linux CHANGELOG.md SHA256SUMS.txt --title "v$VER — Pre-alpha Internal #${GITHUB_RUN_NUMBER}" --notes-file notes.md --target "$GITHUB_SHA" --prerelease
+          gh release create "$TAG" DeadFrequency-v${VER}-windows.zip DeadFrequency-v${VER}-linux.zip DeadFrequencyLauncher-windows.exe DeadFrequencyLauncher-linux SHA256SUMS.txt --title "v$VER — Pre-alpha Internal #${GITHUB_RUN_NUMBER}" --notes-file notes.md --target "$GITHUB_SHA" --prerelease
         env:
           GH_TOKEN: ${{ github.token }}
