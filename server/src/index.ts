@@ -770,6 +770,20 @@ export class GameRoom extends DurableObject<Env> {
         }));
         return;
       }
+      case "debug_add_money": {
+        const amount = Number(msg.amount);
+        if (!me.joined || !me.debugAuthorizedUntil || me.debugAuthorizedUntil <= Date.now()) {
+          ws.send(JSON.stringify({ t: "debug_add_money_result", ok: false, msg: "Autorização de desenvolvedor expirada." })); return;
+        }
+        if (!Number.isInteger(amount) || amount < 1 || amount > 1_000_000) {
+          ws.send(JSON.stringify({ t: "debug_add_money_result", ok: false, msg: "Valor inválido. Use de 1 a 1.000.000." })); return;
+        }
+        this.room.money += amount;
+        await this.save();
+        this.broadcast({ t: "money", money: this.room.money });
+        ws.send(JSON.stringify({ t: "debug_add_money_result", ok: true, added: amount, money: this.room.money }));
+        return;
+      }
       case "hello":
         return this.onHello(ws, me, msg);
       case "tick":
