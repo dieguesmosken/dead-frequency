@@ -162,6 +162,12 @@ public partial class NetClient : Node
         Send(new { t = "debug_auth", password = password ?? "" });
     }
 
+    public void RequestDebugAddMoney(int amount)
+    {
+        if (!IsOnline || !IsDebugAuthorized) return;
+        Send(new { t = "debug_add_money", amount });
+    }
+
     public readonly record struct RoomListing(string Code, int Players, int Max, string Level, string Host, int Shift, bool AutoProfession);
 
     /// <summary>Lista as salas públicas abertas no servidor (GET /api/rooms). callback(salas, erro).</summary>
