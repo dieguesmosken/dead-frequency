@@ -141,6 +141,7 @@ public partial class PlayerController : CharacterBody3D
         _head = GetNode<Node3D>("Head");
         _camera = GetNode<Camera3D>("Head/Camera3D");
         _cameraBase = _camera.Position;
+        InitializeComfortCamera();
         _carryMarker = GetNode<Marker3D>("Head/CarryMarker");
         _collisionShape = GetNode<CollisionShape3D>("CollisionShape3D");
 
@@ -212,6 +213,7 @@ public partial class PlayerController : CharacterBody3D
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        HandleComfortCameraInput(@event);
         if (!InputEnabled)
             return;
 
@@ -259,6 +261,7 @@ public partial class PlayerController : CharacterBody3D
     {
         if (_camera == null)
             return;
+        UpdateComfortCamera((float)delta);
         float speed = new Vector2(Velocity.X, Velocity.Z).Length();
         bool bob = _headBob && State == PlayerState.Walking && IsOnFloor() && speed > 0.5f;
         Vector3 target = _cameraBase;
@@ -312,6 +315,7 @@ public partial class PlayerController : CharacterBody3D
 
         UpdateInteractionTarget();
         UpdateHeldItem();
+        UpdateLocalCharacter(dt);
         if (!InputEnabled)
             return;
 
@@ -457,10 +461,11 @@ public partial class PlayerController : CharacterBody3D
     private GodotObject CastInteractionRay()
     {
         PhysicsDirectSpaceState3D space = GetWorld3D().DirectSpaceState;
-        Vector3 from = _camera.GlobalPosition;
-        if (!from.IsFinite() || !_camera.GlobalTransform.Basis.Z.IsFinite())
+        Camera3D aimCamera = GetAimCamera();
+        Vector3 from = aimCamera.GlobalPosition;
+        if (!from.IsFinite() || !aimCamera.GlobalTransform.Basis.Z.IsFinite())
             return null;
-        Vector3 to = from - _camera.GlobalTransform.Basis.Z * InteractReach;
+        Vector3 to = from - aimCamera.GlobalTransform.Basis.Z * InteractReach;
 
         PhysicsRayQueryParameters3D query = PhysicsRayQueryParameters3D.Create(from, to, InteractionMask);
         query.CollideWithAreas = true;
@@ -580,7 +585,7 @@ public partial class PlayerController : CharacterBody3D
 
         CargoItem item = _heldItem;
         DropHeld();
-        Vector3 forward = -_camera.GlobalTransform.Basis.Z;
+        Vector3 forward = -GetAimCamera().GlobalTransform.Basis.Z;
         item.ApplyCentralImpulse(forward * ThrowImpulse * (Has(ItemCatalog.Gloves) ? 1.3f : 1f));
     }
 
