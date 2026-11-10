@@ -69,6 +69,8 @@ assert(welcomeA && welcomeA.code === code && welcomeA.jobs.length >= 3, "welcome
 assert(Array.isArray(welcomeA.items) && welcomeA.items.length === 0, "inventário local enviado no hello é ignorado");
 a.send({ t: "inventory", items: ["guarana", "tape"], eq: "" });
 assert(await waitFor(a, "itemsState", (m) => m.items.length === 0), "servidor rejeita criação de itens pelo cliente");
+a.send({ t: "inventory", items: [], eq: "backpack" });
+assert(await waitFor(a, "itemsState", (m) => m.items.length === 0 && m.equipment === ""), "servidor rejeita equipamento inventado");
 a.send({ t: "sell", item: "guarana", req: 1 });
 assert(await waitFor(a, "sellFail", (m) => m.req === 1), "item inventado não pode ser vendido");
 assert(welcomeA.level === "city", "sala sem fase = cidade");
@@ -129,6 +131,10 @@ a.send({ t: "tick", p: [1, 0, 2], ry: 0, hp: 0, st: 0, held: null, eq: "", objs:
 await sleep(100);
 a.send({ t: "itemDrop", item: "cafe", p: [100, 0, 100], q: [0, 0, 0, 1] });
 assert(await waitFor(a, "itemDropFail"), "descarte distante do jogador é recusado");
+a.send({ t: "itemDrop", item: "cafe", p: [1, null, 2], q: [0, 0, 0, 1] });
+assert(await waitFor(a, "itemDropFail"), "coordenada não numérica é recusada");
+a.send({ t: "itemDrop", item: "cafe", p: [1, 0, 2], q: [0, 0, 0, 0] });
+assert(await waitFor(a, "itemDropFail"), "rotação inválida é recusada");
 a.send({ t: "itemDrop", item: "cafe", p: [1, 0, 2], q: [0, 0, 0, 1] });
 const droppedItem = await waitFor(b, "itemSpawn", (m) => m.item === "cafe");
 const dropInventory = await waitFor(a, "itemsState", (m) => !m.items.includes("cafe"));
