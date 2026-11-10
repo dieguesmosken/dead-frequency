@@ -154,7 +154,7 @@ public partial class PlayerInventory : Node
             if (ItemCatalog.Get(id) == null || ItemCatalog.Get(id).Car)
                 continue;
             _items.Add(id);
-            if (_items.Count >= Capacity)
+            if (_items.Count >= BackpackCapacity)
                 break;
         }
 
