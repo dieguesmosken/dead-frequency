@@ -406,12 +406,15 @@ public partial class CityGenerator : Node3D
             height = Mathf.Max(4f, Mathf.Round(height / 3.2f) * 3.2f + 0.4f);
 
             Vector3 lotCenter = center + new Vector3(lot.Position.X + lot.Size.X * 0.5f, CurbHeight, lot.Position.Y + lot.Size.Y * 0.5f);
-            BuildBuilding(block, lotCenter, w, d, height);
-            DecorateBuilding(block, lotCenter, w, d, height, center);
+            Vector3 front = GetBuildingFront(lotCenter, center);
+            bool hasStorefront = _decoRng.Randf() < StorefrontChance;
+            float buildingHeight = hasStorefront ? 4.4f : height;
+            BuildBuilding(block, lotCenter, w, d, buildingHeight, hasStorefront);
+            DecorateBuilding(block, lotCenter, w, d, buildingHeight, center, front, hasStorefront);
         }
     }
 
-    private void BuildBuilding(Node3D parent, Vector3 baseCenter, float width, float depth, float height)
+    private void BuildBuilding(Node3D parent, Vector3 baseCenter, float width, float depth, float height, bool isStorefront = false)
     {
         Color wall = WallPalette[_rng.RandiRange(0, WallPalette.Length - 1)];
         float lightSeed = _rng.Randf() * 100f;
@@ -442,24 +445,27 @@ public partial class CityGenerator : Node3D
         AddBox(parent, roofCenter + new Vector3(width * 0.5f, 0f, 0f), new Vector3(0.25f, 0.8f, depth), _concrete, false);
         AddBox(parent, roofCenter - new Vector3(width * 0.5f, 0f, 0f), new Vector3(0.25f, 0.8f, depth), _concrete, false);
 
-        // Ar-condicionados e caixas d'água.
-        int props = _rng.RandiRange(0, 3);
-        for (int i = 0; i < props; i++)
+        if (!isStorefront)
         {
-            var offset = new Vector3(_rng.RandfRange(-width * 0.35f, width * 0.35f), 0f, _rng.RandfRange(-depth * 0.35f, depth * 0.35f));
-            if (_rng.Randf() < 0.6f)
-                AddBox(parent, new Vector3(baseCenter.X, roofY + 0.6f, baseCenter.Z) + offset, new Vector3(1.6f, 1.2f, 1.2f), _darkMetal, false);
-            else
-                AddCylinder(parent, new Vector3(baseCenter.X, roofY + 1.5f, baseCenter.Z) + offset, 1.1f, 3f, _darkMetal);
-        }
+            // Ar-condicionados e caixas d'água.
+            int props = _rng.RandiRange(0, 3);
+            for (int i = 0; i < props; i++)
+            {
+                var offset = new Vector3(_rng.RandfRange(-width * 0.35f, width * 0.35f), 0f, _rng.RandfRange(-depth * 0.35f, depth * 0.35f));
+                if (_rng.Randf() < 0.6f)
+                    AddBox(parent, new Vector3(baseCenter.X, roofY + 0.6f, baseCenter.Z) + offset, new Vector3(1.6f, 1.2f, 1.2f), _darkMetal, false);
+                else
+                    AddCylinder(parent, new Vector3(baseCenter.X, roofY + 1.5f, baseCenter.Z) + offset, 1.1f, 3f, _darkMetal);
+            }
 
-        // Antena com luz vermelha.
-        if (_rng.Randf() < 0.3f)
-        {
-            float antennaH = _rng.RandfRange(4f, 9f);
-            Vector3 pos = new(baseCenter.X + width * 0.25f, roofY + antennaH * 0.5f, baseCenter.Z - depth * 0.25f);
-            AddCylinder(parent, pos, 0.08f, antennaH, _darkMetal);
-            AddBox(parent, pos + new Vector3(0f, antennaH * 0.5f + 0.15f, 0f), new Vector3(0.3f, 0.3f, 0.3f), _redBeacon, false);
+            // Antena com luz vermelha.
+            if (_rng.Randf() < 0.3f)
+            {
+                float antennaH = _rng.RandfRange(4f, 9f);
+                Vector3 pos = new(baseCenter.X + width * 0.25f, roofY + antennaH * 0.5f, baseCenter.Z - depth * 0.25f);
+                AddCylinder(parent, pos, 0.08f, antennaH, _darkMetal);
+                AddBox(parent, pos + new Vector3(0f, antennaH * 0.5f + 0.15f, 0f), new Vector3(0.3f, 0.3f, 0.3f), _redBeacon, false);
+            }
         }
     }
 
