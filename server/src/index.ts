@@ -38,7 +38,7 @@ export interface Env {
 /** Momento em que esta instância do Worker atendeu a primeira requisição (Date.now() no escopo global vale 0). */
 let SERVER_STARTED = 0;
 
-const PROTOCOL_VERSION = 6;
+const PROTOCOL_VERSION = 7;
 /** Veículos da fase (VanController.NetId no Godot): a van e, desde a v0.9.3, a moto e os caminhões do pátio. */
 const VEHICLES = ["van", "moto", "truck_yellow", "truck_red", "car_gou", "car_fusca", "car_opalinha"];
 /** Carros da concessionária (v0.9.7): comprados uma vez por sala, com o dinheiro do grupo. */
@@ -49,6 +49,9 @@ const CODE_LENGTH = 5;
 const MAX_MESSAGE_BYTES = 8 * 1024;
 const MAX_INVENTORY_ITEMS = 10;
 const MAX_WORLD_ITEMS = 64;
+const MAX_WORLD_COORDINATE = 10000;
+const MAX_DROP_DISTANCE = 3.5;
+const MAX_PICKUP_DISTANCE = 3.5;
 const BUYBACK_PERCENT = 50;
 const CHAT_WINDOW_MS = 5000;
 const CHAT_MAX_MESSAGES = 3;
@@ -84,6 +87,15 @@ const CARGO_CATALOG = [
 ];
 
 /** Preços da loja — mesmos de ItemCatalog.cs no Godot. */
+const ITEM_SLOTS: Record<string, string> = {
+  radar: "wrist",
+  nightvision: "head",
+  gloves: "hands",
+  backpack: "back",
+  chinelos: "feet",
+  chinelos_quebrados: "feet",
+};
+
 const SHOP_PRICES: Record<string, number> = {
   radar: 400,
   nightvision: 350,
@@ -746,6 +758,8 @@ interface Attachment {
   debugAuthorizedUntil?: number;
   /** HMAC-SHA-256 do IP de origem; nunca contém o IP original. */
   debugClientId?: string;
+  lastBuyReq?: number;
+  lastSellReq?: number;
 }
 
 interface PlayerSnapshot {
@@ -1059,11 +1073,7 @@ export class GameRoom extends DurableObject<Env> {
       case "sell":
         return this.onSell(ws, me, String(msg.item ?? ""), Number(msg.req) || 0);
       case "inventory":
-        if (me.joined) {
-          me.inventory = sanitizeInventory(msg.items);
-          ws.serializeAttachment(me);
-        }
-        return;
+        return this.onInventory(ws, me, msg.items, msg.eq);
       case "itemDrop":
         return this.onDropWorldItem(ws, me, msg);
       case "itemPickup":
@@ -1107,8 +1117,10 @@ export class GameRoom extends DurableObject<Env> {
         return;
       }
     }
-    me.inventory = sanitizeInventory(msg.items);
-    me.equipment = sanitizeEquipment(msg.eq);
+    // O inventário online começa vazio: dados locais enviados pelo cliente não são confiáveis.
+    // Itens comprados/coletados durante esta sessão passam a ser controlados pelo servidor.
+    me.inventory = [];
+    me.equipment = "";
     me.joined = true;
     me.prof = room.autoProfession ? this.assignProfession(me.id) : this.validProfession(String(msg.prof ?? ""));
     ws.serializeAttachment(me);
@@ -1142,6 +1154,8 @@ export class GameRoom extends DurableObject<Env> {
         owners: room.owners,
         cars: room.cars ?? [],
         worldItems: room.worldItems ?? [],
+        items: me.inventory,
+        equipment: me.equipment,
         objects: Array.from(this.objects.values()),
       }),
     );
@@ -1152,10 +1166,11 @@ export class GameRoom extends DurableObject<Env> {
   private onTick(ws: WebSocket, me: Attachment, msg: any): void {
     if (!me.joined) return;
     const room = this.room!;
-    const equipment = sanitizeEquipment(msg.eq);
-    me.equipment = equipment;
+    const position = strictVector(msg.p, 3, MAX_WORLD_COORDINATE);
+    if (!position) return;
+    const equipment = sanitizeEquipment(me.equipment);
     const snapshot: PlayerSnapshot = {
-      p: vec(msg.p, 3),
+      p: position,
       ry: num(msg.ry),
       hp: num(msg.hp),
       st: msg.st === 1 ? 1 : msg.st === 2 ? 2 : 0,
@@ -1183,7 +1198,7 @@ export class GameRoom extends DurableObject<Env> {
 
   private async onClaim(ws: WebSocket, me: Attachment, id: string): Promise<void> {
     const room = this.room!;
-    if (!this.isKnownObject(id)) return;
+    if (!me.joined || !this.isKnownObject(id)) return;
     const owner = room.owners[id] ?? null;
     const ownerOnline = owner !== null && this.connected().some((s) => attachmentOf(s).id === owner);
     const ownerBusy = ownerOnline && owner !== me.id && this.isUsing(owner!, id);
@@ -1200,6 +1215,7 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private async onRelease(me: Attachment, id: string): Promise<void> {
+    if (!me.joined) return;
     const room = this.room!;
     // Caixas continuam com o último dono (ele segue simulando a física); só os veículos são liberados.
     if (!VEHICLES.includes(id) || room.owners[id] !== me.id) return;
@@ -1209,6 +1225,7 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private async onDeliver(me: Attachment, cargoId: string, integrity: number): Promise<void> {
+    if (!me.joined) return;
     const room = this.room!;
     const job = room.jobs.find((j) => j.id === cargoId);
     if (!job || job.status !== "pending" || room.owners[cargoId] !== me.id) return;
@@ -1226,20 +1243,56 @@ export class GameRoom extends DurableObject<Env> {
     await this.checkShiftDone();
   }
 
-  /** Compra na barraca: confere o preço e desconta do dinheiro do grupo. */
+  /** Compra na barraca: o servidor valida saldo, posse, capacidade e registra o item. */
   private async onBuy(ws: WebSocket, me: Attachment, item: string, req: number): Promise<void> {
     const room = this.room!;
-    const price = SHOP_PRICES[item];
-    const isCar = CARS.includes(item);
-    if (price === undefined || room.money < price || (isCar && (room.cars ?? []).includes(item))) {
+    if (!me.joined || !Number.isSafeInteger(req) || req <= 0 || req <= (me.lastBuyReq ?? 0)) {
       ws.send(JSON.stringify({ t: "buyFail", item, req }));
       return;
     }
+    me.lastBuyReq = req;
+    ws.serializeAttachment(me);
+
+    const price = SHOP_PRICES[item];
+    const isCar = CARS.includes(item);
+    if (price === undefined || room.money < price || (isCar && (room.cars ?? []).includes(item)) ||
+      (!isCar && !canPurchaseItem(me, item))) {
+      ws.send(JSON.stringify({ t: "buyFail", item, req }));
+      return;
+    }
+
     room.money -= price;
-    if (isCar) room.cars = [...(room.cars ?? []), item];
+    if (isCar) {
+      room.cars = [...(room.cars ?? []), item];
+    } else {
+      const slot = ITEM_SLOTS[item];
+      const equipped = equipmentItems(me.equipment);
+      if (slot && !equipped.some((id) => ITEM_SLOTS[id] === slot)) {
+        me.equipment = sanitizeEquipment([...equipped, item].join(","));
+      } else {
+        me.inventory = [...(me.inventory ?? []), item];
+      }
+      ws.serializeAttachment(me);
+      ws.send(JSON.stringify({ t: "itemsState", items: me.inventory, equipment: me.equipment }));
+    }
     await this.save();
     this.broadcast({ t: "money", money: room.money, by: me.id, name: me.name, item, req });
     this.report("update");
+  }
+
+  /** Aceita apenas remoções e movimentações entre mochila/equipamento; nunca criação de itens. */
+  private onInventory(ws: WebSocket, me: Attachment, rawItems: unknown, rawEquipment: unknown): void {
+    if (!me.joined) return;
+    const inventory = sanitizeInventory(rawItems);
+    const equipment = sanitizeEquipment(rawEquipment);
+    const capacity = equipmentItems(equipment).includes("backpack") ? MAX_INVENTORY_ITEMS : 4;
+    if (inventory.length > capacity || !isAllowedInventoryTransition(me.inventory ?? [], me.equipment ?? "", inventory, equipment)) {
+      ws.send(JSON.stringify({ t: "itemsState", items: me.inventory ?? [], equipment: me.equipment ?? "" }));
+      return;
+    }
+    me.inventory = inventory;
+    me.equipment = equipment;
+    ws.serializeAttachment(me);
   }
 
   private onChat(ws: WebSocket, me: Attachment, raw: unknown): void {
@@ -1261,14 +1314,20 @@ export class GameRoom extends DurableObject<Env> {
     this.report("chat", 1);
   }
 
-  /** Recompra apenas itens presentes na mochila sincronizada pelo jogador. */
+  /** Recompra apenas itens presentes no inventário autoritativo do jogador. */
   private async onSell(ws: WebSocket, me: Attachment, item: string, req: number): Promise<void> {
     const room = this.room!;
-    const inventory = me.inventory ?? [];
+    if (!me.joined || !Number.isSafeInteger(req) || req <= 0 || req <= (me.lastSellReq ?? 0)) {
+      ws.send(JSON.stringify({ t: "sellFail", item, req }));
+      return;
+    }
+    me.lastSellReq = req;
+    const inventory = [...(me.inventory ?? [])];
     const index = inventory.indexOf(item);
     const itemPrice = SHOP_PRICES[item];
     const price = itemPrice === undefined ? 0 : Math.floor(itemPrice * BUYBACK_PERCENT / 100);
-    if (!me.joined || index < 0 || itemPrice === undefined || CARS.includes(item) || price <= 0) {
+    if (index < 0 || itemPrice === undefined || CARS.includes(item) || price <= 0) {
+      ws.serializeAttachment(me);
       ws.send(JSON.stringify({ t: "sellFail", item, req }));
       return;
     }
@@ -1278,6 +1337,7 @@ export class GameRoom extends DurableObject<Env> {
     ws.serializeAttachment(me);
     room.money += price;
     await this.save();
+    ws.send(JSON.stringify({ t: "itemsState", items: me.inventory, equipment: me.equipment ?? "" }));
     this.broadcast({ t: "sold", money: room.money, by: me.id, name: me.name, item, price, req });
     this.report("update");
   }
@@ -1285,9 +1345,15 @@ export class GameRoom extends DurableObject<Env> {
   private async onDropWorldItem(ws: WebSocket, me: Attachment, msg: any): Promise<void> {
     const room = this.room!;
     const item = String(msg.item ?? "");
-    const inventory = me.inventory ?? [];
+    const inventory = [...(me.inventory ?? [])];
     const index = inventory.indexOf(item);
-    if (!me.joined || !Object.prototype.hasOwnProperty.call(SHOP_PRICES, item) || CARS.includes(item) || index < 0 || (room.worldItems ?? []).length >= MAX_WORLD_ITEMS) {
+    const player = this.players.get(me.id);
+    const position = strictVector(msg.p, 3, MAX_WORLD_COORDINATE);
+    const rotation = strictQuaternion(msg.q);
+    if (!me.joined || !player || !position || !rotation ||
+      distanceSquared(player.p, position) > MAX_DROP_DISTANCE * MAX_DROP_DISTANCE ||
+      !Object.prototype.hasOwnProperty.call(SHOP_PRICES, item) || CARS.includes(item) ||
+      index < 0 || (room.worldItems ?? []).length >= MAX_WORLD_ITEMS) {
       ws.send(JSON.stringify({ t: "itemDropFail", msg: "Nao foi possivel largar esse item." }));
       return;
     }
@@ -1298,12 +1364,12 @@ export class GameRoom extends DurableObject<Env> {
     const worldItem: WorldItemState = {
       id: crypto.randomUUID(),
       item,
-      p: vec(msg.p, 3),
-      q: vec(msg.q, 4),
+      p: position,
+      q: rotation,
     };
     room.worldItems = [...(room.worldItems ?? []), worldItem];
     await this.save();
-    ws.send(JSON.stringify({ t: "itemsState", items: inventory }));
+    ws.send(JSON.stringify({ t: "itemsState", items: inventory, equipment: me.equipment ?? "" }));
     this.broadcast({ t: "itemSpawn", ...worldItem });
   }
 
@@ -1311,24 +1377,33 @@ export class GameRoom extends DurableObject<Env> {
     const room = this.room!;
     const worldItems = room.worldItems ?? [];
     const index = worldItems.findIndex((item) => item.id === id);
-    if (!me.joined || index < 0) return;
-    const [worldItem] = worldItems.splice(index, 1);
-    const inventory = me.inventory ?? [];
+    const player = this.players.get(me.id);
+    if (!me.joined || index < 0 || !player) {
+      ws.send(JSON.stringify({ t: "itemPickupFail", msg: "Nao foi possivel pegar esse item." }));
+      return;
+    }
+    const worldItem = worldItems[index];
+    if (distanceSquared(player.p, worldItem.p) > MAX_PICKUP_DISTANCE * MAX_PICKUP_DISTANCE) {
+      ws.send(JSON.stringify({ t: "itemPickupFail", msg: "Voce esta longe demais desse item." }));
+      return;
+    }
+    const inventory = [...(me.inventory ?? [])];
     if (!canReceiveItem(me, worldItem.item, inventory.length)) {
-      worldItems.splice(index, 0, worldItem);
       ws.send(JSON.stringify({ t: "itemPickupFail", msg: "Mochila cheia." }));
       return;
     }
     inventory.push(worldItem.item);
+    worldItems.splice(index, 1);
     me.inventory = inventory;
     room.worldItems = worldItems;
     ws.serializeAttachment(me);
     await this.save();
-    ws.send(JSON.stringify({ t: "itemsState", items: inventory }));
+    ws.send(JSON.stringify({ t: "itemsState", items: inventory, equipment: me.equipment ?? "" }));
     this.broadcast({ t: "itemRemove", id });
   }
 
   private async onTransferItem(ws: WebSocket, me: Attachment, targetId: number, item: string): Promise<void> {
+    if (!me.joined) return;
     const targetSocket = this.connected().find((socket) => {
       const attachment = attachmentOf(socket);
       return attachment.joined && attachment.id === targetId;
@@ -1350,8 +1425,8 @@ export class GameRoom extends DurableObject<Env> {
     target.inventory = targetInventory;
     ws.serializeAttachment(me);
     targetSocket.serializeAttachment(target);
-    ws.send(JSON.stringify({ t: "itemsState", items: inventory }));
-    targetSocket.send(JSON.stringify({ t: "itemsState", items: targetInventory }));
+    ws.send(JSON.stringify({ t: "itemsState", items: inventory, equipment: me.equipment ?? "" }));
+    targetSocket.send(JSON.stringify({ t: "itemsState", items: targetInventory, equipment: target.equipment ?? "" }));
     this.broadcast({ t: "itemTransferred", from: me.id, to: target.id, item });
   }
 
@@ -1424,6 +1499,7 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private async onLost(me: Attachment, cargoId: string): Promise<void> {
+    if (!me.joined) return;
     const room = this.room!;
     const job = room.jobs.find((j) => j.id === cargoId);
     if (!job || job.status !== "pending" || room.owners[cargoId] !== me.id) return;
@@ -1628,7 +1704,53 @@ function sanitizeInventory(raw: unknown): string[] {
 }
 
 function sanitizeEquipment(raw: unknown): string {
-  return typeof raw === "string" ? raw.replace(/[^a-z_,]/g, "").slice(0, 80) : "";
+  if (typeof raw !== "string") return "";
+  const ids = raw.split(",").filter(Boolean);
+  const slots = new Set<string>();
+  const unique = new Set<string>();
+  for (const id of ids) {
+    const slot = ITEM_SLOTS[id];
+    if (!slot || unique.has(id) || slots.has(slot)) return "";
+    unique.add(id);
+    slots.add(slot);
+  }
+  return Array.from(unique).sort().join(",");
+}
+
+function equipmentItems(raw: string): string[] {
+  return sanitizeEquipment(raw).split(",").filter(Boolean);
+}
+
+function canPurchaseItem(attachment: Attachment, item: string): boolean {
+  const slot = ITEM_SLOTS[item];
+  const equipped = equipmentItems(attachment.equipment ?? "");
+  if (slot && !equipped.some((id) => ITEM_SLOTS[id] === slot)) return true;
+  return canReceiveItem(attachment, item, (attachment.inventory ?? []).length);
+}
+
+function isAllowedInventoryTransition(currentItems: string[], currentEquipment: string, nextItems: string[], nextEquipment: string): boolean {
+  const before = new Map<string, number>();
+  const after = new Map<string, number>();
+  const add = (map: Map<string, number>, id: string) => map.set(id, (map.get(id) ?? 0) + 1);
+  for (const id of [...currentItems, ...equipmentItems(currentEquipment)]) add(before, id);
+  for (const id of [...nextItems, ...equipmentItems(nextEquipment)]) add(after, id);
+
+  const oldFeet = equipmentItems(currentEquipment).find((id) => ITEM_SLOTS[id] === "feet") ?? "";
+  const newFeet = equipmentItems(nextEquipment).find((id) => ITEM_SLOTS[id] === "feet") ?? "";
+  const repairsSlippers = oldFeet === "chinelos_quebrados" && newFeet === "chinelos";
+  const breaksSlippers = oldFeet === "chinelos" && newFeet === "chinelos_quebrados";
+  if (repairsSlippers || breaksSlippers) {
+    const nailsBefore = before.get("prego") ?? 0;
+    const nailsAfter = after.get("prego") ?? 0;
+    if (nailsAfter >= nailsBefore) return false;
+    before.delete(oldFeet);
+    after.delete(newFeet);
+  }
+
+  for (const [id, count] of after) {
+    if (count > (before.get(id) ?? 0)) return false;
+  }
+  return true;
 }
 
 function canReceiveItem(attachment: Attachment | null, item: string, count: number): boolean {
@@ -1636,6 +1758,32 @@ function canReceiveItem(attachment: Attachment | null, item: string, count: numb
     return false;
   const capacity = (attachment.equipment ?? "").split(",").includes("backpack") ? MAX_INVENTORY_ITEMS : 4;
   return count < capacity;
+}
+
+function strictVector(value: unknown, length: number, limit: number): number[] | null {
+  if (!Array.isArray(value) || value.length < length) return null;
+  const result: number[] = [];
+  for (let i = 0; i < length; i++) {
+    const component = value[i];
+    if (typeof component !== "number" || !Number.isFinite(component) || Math.abs(component) > limit) return null;
+    result.push(Math.round(component * 1000) / 1000);
+  }
+  return result;
+}
+
+function strictQuaternion(value: unknown): number[] | null {
+  const q = strictVector(value, 4, 1.001);
+  if (!q) return null;
+  const magnitude = Math.hypot(q[0], q[1], q[2], q[3]);
+  if (!Number.isFinite(magnitude) || magnitude < 0.0001) return null;
+  return q.map((component) => Math.round((component / magnitude) * 1000) / 1000);
+}
+
+function distanceSquared(a: number[], b: number[]): number {
+  const dx = a[0] - b[0];
+  const dy = a[1] - b[1];
+  const dz = a[2] - b[2];
+  return dx * dx + dy * dy + dz * dz;
 }
 
 function num(value: unknown): number {
