@@ -33,7 +33,7 @@ public static class GameVersion
             "Salas permanentes: ADMNA e ADMNB são privadas; SERVA e SERVB são públicas e não expiram nem podem ser encerradas.",
             "Lojas organizadas por vendedor e Auto Center Dois Mil com carros compráveis, compartilhados pela sala no online.",
             "Cidade com novas texturas, capim animado e otimizações de visibilidade.",
-            "Online: protocolo 6. Atualize o servidor com npm run deploy.",
+            "Online: protocolo 7 (hotfix de segurança multiplayer). Atualize o servidor com npm run deploy.",
         }),
         new("0.9.6", "08/11/2026", "Oficina", new[]
         {
