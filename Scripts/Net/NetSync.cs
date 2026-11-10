@@ -99,12 +99,13 @@ public partial class NetSync : Node
     {
         if (Instance == this)
             Instance = null;
-        if (!_active || Net == null)
-            return;
-        if (PlayerInventory.Instance != null)
-            PlayerInventory.Instance.Changed -= SyncInventory;
-        Net.MessageReceived -= OnMessage;
-        Net.Disconnected -= OnDisconnected;
+        if (_active && Net != null)
+        {
+            if (PlayerInventory.Instance != null)
+                PlayerInventory.Instance.Changed -= SyncInventory;
+            Net.MessageReceived -= OnMessage;
+            Net.Disconnected -= OnDisconnected;
+        }
         if (_onlineInventorySession)
         {
             PlayerInventory.Instance?.EndOnlineSession();
