@@ -5,7 +5,7 @@ using Godot;
 
 namespace DeadFrequency;
 
-public partial class RemotePlayer : Node3D
+public partial class RemotePlayer : Node3D, IInteractable
 {
     public int PlayerId { get; private set; }
     public string PlayerName { get; private set; } = "";
@@ -21,6 +21,9 @@ public partial class RemotePlayer : Node3D
     private int _seat; // 0 a pé, 1 motorista, 2 carona
     private string _look = "";
     private Color _color;
+    private Area3D _interactionArea;
+    private MeshInstance3D _heldVisual;
+    private string _heldValue = "";
 
     public void Setup(int id, string name, Color color)
     {
@@ -47,15 +50,36 @@ public partial class RemotePlayer : Node3D
             NoDepthTest = true,
         };
         AddChild(_nameLabel);
+
+        _interactionArea = new Area3D { CollisionLayer = 4, CollisionMask = 0, Monitoring = false, Monitorable = true };
+        _interactionArea.AddChild(new CollisionShape3D
+        {
+            Shape = new CapsuleShape3D { Radius = 0.35f, Height = 1.7f },
+            Position = new Vector3(0f, 0.9f, 0f),
+        });
+        AddChild(_interactionArea);
     }
 
-    public void ApplyState(Vector3 position, float yaw, float pitch, int seat, string equipment, string look = "")
+    public void ApplyState(Vector3 position, float yaw, float pitch, int seat, string equipment, string look = "", string held = "")
     {
         _targetPosition = position;
         _targetYaw = yaw;
         _targetPitch = pitch;
         _seat = seat;
         _driving = seat == 1;
+        if (_heldValue != held)
+        {
+            _heldValue = held ?? "";
+            _heldVisual?.QueueFree();
+            _heldVisual = null;
+            if (!string.IsNullOrEmpty(_heldValue))
+            {
+                string visualValue = _heldValue.StartsWith("item:") ? _heldValue : "cargo";
+                _heldVisual = WorldItem.CreateVisual(visualValue);
+                _heldVisual.Position = new Vector3(0.34f, 1.12f, -0.22f);
+                AddChild(_heldVisual);
+            }
+        }
         if (!string.IsNullOrEmpty(look) && look != _look && CharacterLook.TryDecode(look, out CharacterLook l))
         {
             // O jogador escolheu a aparência (v0.9.6): troca o boneco.
@@ -66,6 +90,7 @@ public partial class RemotePlayer : Node3D
             AddChild(_model);
             _model.SetEquipment(eq);
         }
+
         _model.SetEquipment(equipment);
         if (!_hasState)
         {
@@ -75,6 +100,19 @@ public partial class RemotePlayer : Node3D
             _hasState = true;
         }
     }
+
+    public string GetInteractionPrompt(PlayerController player)
+    {
+        string itemId = PlayerInventory.Instance?.SelectedHotbarItemId;
+        if (string.IsNullOrEmpty(itemId))
+            return "";
+        return $"[E] Entregar {ItemCatalog.Get(itemId)?.Name ?? "item"} para {PlayerName}";
+    }
+
+    public bool CanInteract(PlayerController player) =>
+        player != null && player.HasSelectedItem && player.State == PlayerState.Walking;
+
+    public void Interact(PlayerController player) => player.TransferSelectedItem(PlayerId);
 
     public override void _Process(double delta)
     {

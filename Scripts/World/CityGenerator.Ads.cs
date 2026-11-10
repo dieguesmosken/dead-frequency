@@ -8,7 +8,7 @@ namespace DeadFrequency;
 
 public partial class CityGenerator
 {
-    public const string RecadinPoster = "res://Assets/Textures/Ads/ad_recadin.png";
+    public const string RecadinPoster = "res://Assets/Textures/Ads/ad_recadin.svg";
     public const string TeuzinAd = "teuzin";
 
     private static StandardMaterial3D _posterMat;

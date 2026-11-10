@@ -148,7 +148,7 @@ public partial class MainMenu : Control
         string save = SaveManager.Summary();
         var footerRow = new HBoxContainer();
         footerRow.AddThemeConstantOverride("separation", 8);
-        footerRow.AddChild(UiStyle.MakeLabel($"v{GameVersion.Current}", 14, HorizontalAlignment.Left, UiStyle.PhosphorDim));
+        footerRow.AddChild(UiStyle.MakeLabel($"v{GameVersion.Display}", 14, HorizontalAlignment.Left, UiStyle.PhosphorDim));
         footerRow.AddChild(UiStyle.AlphaBadge());
         if (save.Length > 0)
             footerRow.AddChild(UiStyle.MakeLabel("·   " + save, 14, HorizontalAlignment.Left, UiStyle.PhosphorDim));
@@ -198,7 +198,7 @@ public partial class MainMenu : Control
         string text = GameVersion.ChangelogBbcode(justUpdated && !firstRun ? previousVersion : null);
         if (string.IsNullOrWhiteSpace(text))
             text = GameVersion.ChangelogBbcode();
-        _info.Display($"NOVIDADES · v{GameVersion.Current}", subtitle, text);
+        _info.Display($"NOVIDADES · v{GameVersion.Display}", subtitle, text);
     }
 
     private void ShowCredits()

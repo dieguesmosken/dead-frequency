@@ -210,7 +210,7 @@ public partial class CityGenerator : Node3D
         _groundMaterial.SetShaderParameter("asphalt_tex", GD.Load<Texture2D>("res://Assets/Textures/City/asphalt.png"));
         _sidewalkMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/sidewalk.gdshader") };
         _sidewalkMaterial.SetShaderParameter("slab_tex", GD.Load<Texture2D>("res://Assets/Textures/City/sidewalk.png"));
-        _sidewalkMaterial.SetShaderParameter("pt_tex", GD.Load<Texture2D>("res://Assets/Textures/City/sidewalk_pt.png"));
+        _sidewalkMaterial.SetShaderParameter("pt_tex", GD.Load<Texture2D>("res://Assets/Textures/City/sidewalk_pt.svg"));
         _sidewalkMaterial.SetShaderParameter("block_period", Period);
 
         _darkMetal = Flat(new Color(0.12f, 0.12f, 0.13f), 0.6f);

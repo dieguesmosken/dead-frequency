@@ -11,9 +11,9 @@ public enum ShopStock { Ze, Churrasco, Market, Dealer }
 public partial class ShopScreen : ModalScreen
 {
     /// <summary>Abas da loja: equipamento, consertos e comida/bebida.</summary>
-    private enum Tab { Gear, Repair, Food, Cars }
+    private enum Tab { Gear, Repair, Food, Cars, Sell }
 
-    private static readonly string[] TabNames = { "Equipamentos", "Consertos", "Comida e bebida", "Carros" };
+    private static readonly string[] TabNames = { "Equipamentos", "Consertos", "Comida e bebida", "Carros", "Vender" };
 
     private static Tab TabOf(ItemDef def) => def.Car ? Tab.Cars : def.IsGear ? Tab.Gear : def.Food || def.Id == ItemCatalog.EnergyDrink ? Tab.Food : Tab.Repair;
 
@@ -29,6 +29,7 @@ public partial class ShopScreen : ModalScreen
 
     private ShopStock _stock;
     private Tab _tab;
+    private bool _salePending;
     private HBoxContainer _tabs;
     private Label _tagline;
 
@@ -94,6 +95,7 @@ public partial class ShopScreen : ModalScreen
     public void OpenFor(string vendorName, ShopStock stock = ShopStock.Ze)
     {
         _stock = stock;
+        _salePending = false;
         _tab = stock switch { ShopStock.Ze => Tab.Gear, ShopStock.Dealer => Tab.Cars, _ => Tab.Food };
         _title.Text = vendorName.ToUpperInvariant();
         _tagline.Text = stock switch
@@ -127,6 +129,8 @@ public partial class ShopScreen : ModalScreen
 
         // Abas: só as que este vendedor tem; com uma só, nem mostra.
         var tabs = ItemCatalog.All.Where(d => !d.Hidden && Sells(_stock, d)).Select(TabOf).Distinct().OrderBy(t => t).ToList();
+        if (_stock == ShopStock.Ze)
+            tabs.Add(Tab.Sell);
         if (!tabs.Contains(_tab) && tabs.Count > 0)
             _tab = tabs[0];
         if (tabs.Count > 1)
@@ -138,6 +142,12 @@ public partial class ShopScreen : ModalScreen
                 b.Disabled = t == _tab;
                 _tabs.AddChild(b);
             }
+        }
+
+        if (_tab == Tab.Sell)
+        {
+            RefreshSellList();
+            return;
         }
 
         foreach (ItemDef def in ItemCatalog.All)
@@ -163,6 +173,104 @@ public partial class ShopScreen : ModalScreen
             row.AddChild(buy);
             _list.AddChild(row);
         }
+    }
+
+    private void RefreshSellList()
+    {
+        PlayerInventory inv = PlayerInventory.Instance;
+        if (inv == null || inv.Items.Count == 0)
+        {
+            _list.AddChild(UiStyle.MakeLabel("A mochila está vazia.", 17, color: UiStyle.PhosphorDim));
+            return;
+        }
+
+        bool hasSellableItem = false;
+        foreach (string itemId in inv.Items)
+        {
+            ItemDef def = ItemCatalog.Get(itemId);
+            if (def == null || def.Hidden || def.Car)
+                continue;
+
+            int price = def.Price / 2;
+            if (price <= 0)
+                continue;
+            hasSellableItem = true;
+            var row = new HBoxContainer();
+            row.AddThemeConstantOverride("separation", 12);
+            Label name = UiStyle.MakeLabel(def.Name, 18, HorizontalAlignment.Left, def.Color);
+            name.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+            row.AddChild(name);
+            Button sell = UiStyle.MakeButton($"+ $ {price}", () => Sell(itemId), 120);
+            sell.Disabled = _salePending;
+            row.AddChild(sell);
+            _list.AddChild(row);
+        }
+        if (!hasSellableItem)
+            _list.AddChild(UiStyle.MakeLabel("Não há itens disponíveis para venda.", 17, color: UiStyle.PhosphorDim));
+    }
+
+    private void Sell(string itemId)
+    {
+        PlayerInventory inv = PlayerInventory.Instance;
+        ItemDef def = ItemCatalog.Get(itemId);
+        if (_salePending || _stock != ShopStock.Ze || inv == null || Delivery == null
+            || def == null || def.Hidden || def.Car || def.Price <= 0 || !inv.Items.Contains(itemId))
+            return;
+
+        int expectedPrice = def.Price / 2;
+        if (Online)
+        {
+            if (NetSync.Instance == null)
+            {
+                _feedback.Text = "Não foi possível contatar o servidor.";
+                return;
+            }
+            _salePending = true;
+            _feedback.Text = "Vendendo...";
+            Refresh();
+            NetSync.Instance.RequestSale(itemId, (ok, price) => CompleteSale(itemId, ok, price));
+            return;
+        }
+
+        if (!Delivery.TryCreditLocal(expectedPrice))
+        {
+            _feedback.Text = "Não foi possível receber o pagamento da venda.";
+            Refresh();
+            return;
+        }
+        if (!inv.TryRemoveItem(itemId))
+        {
+            if (!Delivery.TrySpendLocal(expectedPrice))
+                GD.PushError("ShopScreen: não foi possível estornar uma venda local sem item.");
+            _feedback.Text = "Esse item não está mais na mochila.";
+            Refresh();
+            return;
+        }
+        _feedback.Text = $"{def.Name} vendido por $ {expectedPrice}.";
+        Refresh();
+    }
+
+    private void CompleteSale(string itemId, bool ok, int price)
+    {
+        _salePending = false;
+        if (!IsInsideTree())
+            return;
+        if (!ok)
+        {
+            _feedback.Text = "O servidor recusou a venda.";
+            Refresh();
+            return;
+        }
+        PlayerInventory inv = PlayerInventory.Instance;
+        if (price <= 0 || inv == null || !inv.TryRemoveItem(itemId))
+        {
+            GD.PushError("ShopScreen: venda confirmada sem item correspondente no inventário local.");
+            _feedback.Text = "Venda concluída, mas o item não foi encontrado na mochila.";
+            Refresh();
+            return;
+        }
+        _feedback.Text = $"{ItemCatalog.Get(itemId)?.Name ?? "Item"} vendido por $ {price}.";
+        Refresh();
     }
 
     private bool HasSpaceFor(ItemDef def)

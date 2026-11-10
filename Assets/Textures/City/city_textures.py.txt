@@ -139,19 +139,37 @@ def sidewalk():
 
 
 def sidewalk_pt():
-    """Pedra portuguesa: ondas pretas e brancas, cada pedrinha um quadradinho irregular."""
+    """Pedra portuguesa em placas onduladas intercaladas, com relevos direcionais."""
     n = 128
     yy, xx = np.mgrid[0:n, 0:n]
-    wave = np.sin((xx / n) * 2 * np.pi * 2) * 10
-    band = ((yy + wave) / (n / 4)) % 1.0
-    dark = band < 0.5
-    g = grain(n, 12)
-    v = np.where(dark, 0.18, 0.78) + (g - 0.5) * 0.1
-    # Rejunte entre pedrinhas de 4 px.
-    stone = (xx % 4 == 0) | ((yy + (xx // 4) % 2 * 2) % 4 == 0)
-    v = np.where(stone, 0.45, v)
-    to_img(v).save(os.path.join(OUT, "sidewalk_pt.png"))
 
+    # Quatro períodos horizontais e quatro faixas verticais por tile.
+    # A fase é periódica nos dois eixos para evitar emendas ao repetir no Godot.
+    deslocamento = np.sin((xx / 64.0) * 2.0 * np.pi) * 10.0
+    fase = np.mod(yy + deslocamento, 32.0) / 32.0
+    dark = fase < 0.5
+
+    # Base de concreto com variação discreta e de baixa frequência.
+    base = np.where(dark, 0.22, 0.72)
+    detalhe = (noise(n, 8, 2, 12) - 0.5) * 0.055
+    v = base + detalhe
+
+    # Relevos: horizontais nas placas escuras e verticais nas claras.
+    ranhura_h = (yy % 6 == 0)
+    ranhura_v = (xx % 6 == 0)
+    v = np.where(dark & ranhura_h, v - 0.10, v)
+    v = np.where((~dark) & ranhura_v, v - 0.085, v)
+    v = np.where(dark & ((yy % 6) == 1), v + 0.035, v)
+    v = np.where((~dark) & ((xx % 6) == 1), v + 0.035, v)
+
+    # Juntas/chanfros discretos nas bordas curvas.
+    distancia_borda = np.minimum(fase, np.abs(fase - 0.5))
+    junta = distancia_borda < 0.025
+    v = np.where(junta, v * 0.72, v)
+    luz_borda = (distancia_borda >= 0.025) & (distancia_borda < 0.05)
+    v = np.where(luz_borda & (~junta), v + 0.035, v)
+
+    to_img(v).save(os.path.join(OUT, "sidewalk_pt.png"))
 
 def asphalt():
     n = T

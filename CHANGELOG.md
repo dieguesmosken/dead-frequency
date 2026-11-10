@@ -2,6 +2,18 @@
 
 Todas as atualizações do Dead Frequency. O jogo mostra a mesma lista em **Novidades** no menu.
 
+## v0.9.7 — Mãos ocupadas  (10/11/2026)
+
+- Barra rápida 1–4: selecione um item para segurá-lo; clique esquerdo usa ou equipa.
+- G larga itens no chão para qualquer jogador pegar; E entrega o item selecionado ao jogador mirado.
+- No multiplayer, os itens na mão e no chão são sincronizados e validados pelo servidor.
+- O Zé recompra itens por metade do preço, arredondado para baixo; a transação é validada pelo servidor.
+- Chat da sala na tecla T, com limite de três mensagens por jogador a cada cinco segundos.
+- Salas permanentes: ADMNA e ADMNB são privadas; SERVA e SERVB são públicas e não expiram nem podem ser encerradas.
+- Lojas organizadas por vendedor e Auto Center Dois Mil com carros compráveis, compartilhados pela sala no online.
+- Cidade com novas texturas, capim animado e otimizações de visibilidade.
+- Online: protocolo 6. Atualize o servidor com npm run deploy.
+
 ## v0.9.6 — Oficina  (08/11/2026)
 
 - Personagem: novo menu para escolher homem ou mulher e as cores da pele, do cabelo, da camisa e da calça. No online todo mundo vê você do seu jeito.

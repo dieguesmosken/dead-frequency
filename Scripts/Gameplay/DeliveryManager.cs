@@ -346,6 +346,14 @@ public partial class DeliveryManager : Node3D
         return true;
     }
 
+    public bool TryCreditLocal(int amount)
+    {
+        if (NetworkMode || amount <= 0)
+            return false;
+        AddLocalMoney(amount);
+        return true;
+    }
+
     private void AddLocalMoney(int amount)
     {
         if (PlayerInventory.Instance != null)

@@ -1,0 +1,22 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" path="res://Assets/splash_screen.png" id="1_splash"]
+[ext_resource type="Script" path="res://Scripts/UI/SplashScreen.cs" id="2_script"]
+
+[node name="SplashScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_script")
+
+[node name="TextureRect" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("1_splash")

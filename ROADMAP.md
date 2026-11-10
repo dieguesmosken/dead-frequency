@@ -53,7 +53,7 @@ Tudo que apareceu jogando a v0.9.5. Vem antes de qualquer conteúdo novo.
 | 9 | Feedback | **Modelo do botijão** melhor (corpo, alça e válvula). |
 | 10 | Visual | **Ícone novo** do jogo e do launcher, e a etiqueta amarela **ALPHA** ao lado do número da versão (menu, launcher, site e ícone). |
 
-### v0.9.7 — Mãos ocupadas (itens e online) ← próxima build
+### v0.9.7 — Mãos ocupadas (itens e online) ← pronta para PR
 Já feito nesta build (feedback de 08/11):
 - ✅ Texturas da cidade: fachadas (reboco, tijolo, pastilha, chapisco), calçada, pedra portuguesa, asfalto.
 - ✅ Mochila virou bag quadrada de entregador, presa às costas dos bonecos novos.
@@ -63,17 +63,17 @@ Já feito nesta build (feedback de 08/11):
 - ✅ Grama: textura nos gramados e no sítio + capim pixel art balançando (some além de 45 m).
 - ✅ Otimização: peças pequenas somem na neblina, luz de poste apaga longe.
 - ✅ Auto Center Dois Mil (ao lado do depósito): Gou, Fuska e Opalinha a $ 2000; online o carro é da sala.
-- ⏳ Menu inicial novo (3 propostas em prints, esperando escolha).
-- ⏳ Sons do Pixabay (com créditos).
+- ✅ Menu inicial: manter o menu atual; o redesign foi retirado desta versão.
+- ⏭ Sons do Pixabay com créditos adiados para uma versão futura.
 
 | Ideia | Como funciona no jogo |
 |---|---|
-| **Barra rápida 1–4** | Os 4 primeiros espaços do inventário viram atalhos (teclas 1–4): segurar o item na mão ou usar. A mochila aumenta o inventário, a barra continua de 1 a 4. |
-| **Largar e entregar itens** | **G** larga o item no chão (qualquer um pega). Mirando em outro jogador com o item na mão: **[E] Entregar item**. |
-| **Ver o que os outros seguram** | O servidor repassa o item na mão / a caixa que cada jogador está carregando. |
-| **Vender para o Zé** | Na barraca do Zé, aba **Vender**: ele compra seus itens por uma parte do preço. |
-| **Chat da sala (T)** | Mensagens de texto na sala, com limite anti-spam no servidor. No painel admin: mensagens enviadas por dia/sala (sem guardar o conteúdo). |
-| **Salas permanentes do admin** | No painel admin: criar salas fixas, públicas ou com senha (ex.: "ADMIN 1", código `ADMIN0`, senha gerada na hora e mostrada uma vez). Já nasce com 4: duas de admin (cidade e sítio) e duas do servidor (cidade e sítio), que nunca fecham. Precisa de protocolo novo (senha na entrada). |
+| ✅ **Barra rápida 1–4** | Os 4 primeiros espaços do inventário viram atalhos (teclas 1–4): selecionar mostra o item na mão; clique esquerdo usa ou equipa. A mochila aumenta o inventário, a barra continua de 1 a 4. |
+| ✅ **Largar e entregar itens** | **G** larga o item no chão (qualquer um pega). Mirando em outro jogador com o item selecionado: **[E] Entregar item**. |
+| ✅ **Ver o que os outros seguram** | O servidor repassa o item selecionado na mão / a caixa que cada jogador está carregando. |
+| ✅ **Vender para o Zé** | Na barraca do Zé, aba **Vender**: ele recompra itens da mochila por 50% do preço, arredondado para baixo; o servidor valida a transação. |
+| ✅ **Chat da sala (T)** | Mensagens de texto na sala, com limite de 3 mensagens a cada 5 s no servidor. O painel admin mostra totais por dia UTC/sala (retenção de 30 dias), sem guardar o conteúdo. |
+| ✅ **Salas permanentes do admin** | No painel admin: criar salas fixas, públicas ou com senha; senhas são geradas na criação e mostradas uma vez. Já existem `ADMNA`/`ADMNB` (privadas) e `SERVA`/`SERVB` (públicas); salas permanentes não expiram nem podem ser encerradas. Protocolo 6 valida a senha na entrada. |
 
 ### v0.9.8 — Rua de verdade
 | Ideia | Como funciona no jogo |

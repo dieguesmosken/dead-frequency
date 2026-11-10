@@ -20,6 +20,7 @@ env:
 
 jobs:
   build:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
       SIGNPATH_ON: ${{ secrets.SIGNPATH_API_TOKEN != '' && 'true' || 'false' }}

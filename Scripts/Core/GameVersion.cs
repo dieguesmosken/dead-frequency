@@ -7,12 +7,25 @@ namespace DeadFrequency;
 
 public static class GameVersion
 {
-    public const string Current = "0.9.6";
+    public const string Current = "0.9.7";
+    public const string Display = Current;
 
     public readonly record struct Release(string Version, string Date, string Title, string[] Changes);
 
     public static readonly Release[] Changelog =
     {
+        new("0.9.7", "10/11/2026", "Mãos ocupadas", new[]
+        {
+            "Barra rápida 1–4: selecione um item para segurá-lo; clique esquerdo usa ou equipa.",
+            "G larga itens no chão para qualquer jogador pegar; E entrega o item selecionado ao jogador mirado.",
+            "No multiplayer, os itens na mão e no chão são sincronizados e validados pelo servidor.",
+            "O Zé recompra itens por metade do preço, arredondado para baixo; a transação é validada pelo servidor.",
+            "Chat da sala na tecla T, com limite de três mensagens por jogador a cada cinco segundos.",
+            "Salas permanentes: ADMNA e ADMNB são privadas; SERVA e SERVB são públicas e não expiram nem podem ser encerradas.",
+            "Lojas organizadas por vendedor e Auto Center Dois Mil com carros compráveis, compartilhados pela sala no online.",
+            "Cidade com novas texturas, capim animado e otimizações de visibilidade.",
+            "Online: protocolo 6. Atualize o servidor com npm run deploy.",
+        }),
         new("0.9.6", "08/11/2026", "Oficina", new[]
         {
             "Personagem: novo menu para escolher homem ou mulher e as cores da pele, do cabelo, da camisa e da calça. No online todo mundo vê você do seu jeito.",

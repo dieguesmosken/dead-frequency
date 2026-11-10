@@ -27,6 +27,9 @@ public partial class PlayerInventory : Node
     public int Capacity => IsEquipped(ItemCatalog.Backpack) ? BackpackCapacity : BaseCapacity;
     public bool IsFull => _items.Count >= Capacity;
     public int ItemCount => _items.Count;
+    public int SelectedHotbarIndex { get; private set; } = -1;
+    public string SelectedHotbarItemId =>
+        SelectedHotbarIndex >= 0 && SelectedHotbarIndex < _items.Count ? _items[SelectedHotbarIndex] : null;
 
     private readonly List<string> _items = new();
     private readonly Dictionary<ItemSlot, string> _equipped = new();
@@ -46,6 +49,80 @@ public partial class PlayerInventory : Node
     public override void _Ready() => Load();
 
     public bool IsEquipped(string itemId) => _equipped.Values.Contains(itemId);
+
+    public string HotbarItem(int index) => index >= 0 && index < 4 && index < _items.Count ? _items[index] : null;
+
+    public bool SelectHotbar(int index)
+    {
+        if (index < 0 || index >= 4 || index >= _items.Count)
+        {
+            ClearHotbarSelection();
+            return false;
+        }
+        if (SelectedHotbarIndex == index)
+            return true;
+        SelectedHotbarIndex = index;
+        Changed?.Invoke();
+        return true;
+    }
+
+    public void ClearHotbarSelection()
+    {
+        if (SelectedHotbarIndex < 0)
+            return;
+        SelectedHotbarIndex = -1;
+        Changed?.Invoke();
+    }
+
+    public bool CanAddToBag(string itemId) =>
+        ItemCatalog.Get(itemId) is { Car: false } && !IsFull;
+
+    public bool TryTakeSelected(out string itemId)
+    {
+        itemId = SelectedHotbarItemId;
+        if (itemId == null)
+            return false;
+        RemoveAt(SelectedHotbarIndex);
+        return true;
+    }
+
+    public string UseSelected(PlayerController player)
+    {
+        int index = SelectedHotbarIndex;
+        if (index < 0 || index >= _items.Count || player == null)
+            return "";
+        ItemDef def = ItemCatalog.Get(_items[index]);
+        if (def == null)
+            return "";
+        if (def.IsGear)
+        {
+            SelectedHotbarIndex = -1;
+            bool equipped = Equip(index);
+            return equipped ? $"{def.Name} equipado." : "Não deu para equipar.";
+        }
+        string result = Use(index, player);
+        if (!string.IsNullOrEmpty(result))
+            SelectedHotbarIndex = -1;
+        return result;
+    }
+
+    public void ApplyNetworkItems(IEnumerable<string> items)
+    {
+        string selectedItemId = SelectedHotbarItemId;
+        _items.Clear();
+        foreach (string id in items)
+        {
+            if (ItemCatalog.Get(id) == null)
+                continue;
+            _items.Add(id);
+            if (_items.Count >= Capacity)
+                break;
+        }
+        SelectedHotbarIndex = string.IsNullOrEmpty(selectedItemId) ? -1 : _items.IndexOf(selectedItemId);
+        if (SelectedHotbarIndex >= 4)
+            SelectedHotbarIndex = -1;
+        NotifyAndSave();
+    }
 
     /// <summary>Lista curta para mandar pela rede ("radar,gloves").</summary>
     public string EquipmentCsv() => string.Join(",", _equipped.Values.OrderBy(v => v));
@@ -110,7 +187,20 @@ public partial class PlayerInventory : Node
         if (index < 0 || index >= _items.Count)
             return;
         _items.RemoveAt(index);
+        if (SelectedHotbarIndex == index)
+            SelectedHotbarIndex = -1;
+        else if (SelectedHotbarIndex > index)
+            SelectedHotbarIndex--;
         NotifyAndSave();
+    }
+
+    public bool TryRemoveItem(string itemId)
+    {
+        int index = _items.IndexOf(itemId);
+        if (index < 0)
+            return false;
+        RemoveAt(index);
+        return true;
     }
 
     /// <summary>Usa um consumível. Retorna a mensagem para o HUD (vazia = não usou).</summary>

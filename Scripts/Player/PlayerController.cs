@@ -96,6 +96,7 @@ public partial class PlayerController : CharacterBody3D
     public event Action<CargoItem> CargoGrabbed;
     public event Action<VanController> VehicleEntered;
     public event Action<VanController> VehicleExited;
+    public event Action<string> ItemActionMessage;
 
     // ---------------- Estado público (lido pelo HUD) ----------------
 
@@ -104,8 +105,9 @@ public partial class PlayerController : CharacterBody3D
     public bool InputEnabled { get; set; } = true;
     public bool IsHolding => _heldItem != null && IsInstanceValid(_heldItem);
     public CargoItem HeldItem => IsHolding ? _heldItem : null;
+    public bool HasSelectedItem => !string.IsNullOrEmpty(PlayerInventory.Instance?.SelectedHotbarItemId);
     public VanController CurrentVehicle { get; private set; }
-    public Camera3D Camera => _camera;
+    public Camera3D Camera => GetAimCamera();
     public string CurrentPrompt { get; private set; } = "";
     public bool HasTarget => _currentTarget != null;
     /// <summary>Nome do que o raio de interação está tocando (overlay F3).</summary>
@@ -119,7 +121,7 @@ public partial class PlayerController : CharacterBody3D
     private float _gravity;
     private float _sensitivityMultiplier = 1f;
     private float _vehicleSensitivity = 1f;
-    private bool _headBob = true;
+    private bool _headBob = false;
     private float _bobTime;
     private Vector3 _cameraBase;
     private bool _invertY;
@@ -129,6 +131,8 @@ public partial class PlayerController : CharacterBody3D
 
     private AudioStreamPlayer3D _footsteps;
     private SpotLight3D _flashlight;
+    private MeshInstance3D _handItemVisual;
+    private string _handItemVisualId = "";
     private float _stepAccumulator;
     private int _lastStep = -1;
 
@@ -141,6 +145,7 @@ public partial class PlayerController : CharacterBody3D
         _head = GetNode<Node3D>("Head");
         _camera = GetNode<Camera3D>("Head/Camera3D");
         _cameraBase = _camera.Position;
+        InitializeComfortCamera();
         _carryMarker = GetNode<Marker3D>("Head/CarryMarker");
         _collisionShape = GetNode<CollisionShape3D>("CollisionShape3D");
 
@@ -185,7 +190,7 @@ public partial class PlayerController : CharacterBody3D
             ShadowEnabled = true,
             Position = new Vector3(0.15f, -0.1f, 0f),
         };
-        _camera.AddChild(_flashlight);
+        GetAimCamera().AddChild(_flashlight);
 
         Input.MouseMode = Input.MouseModeEnum.Captured;
     }
@@ -212,6 +217,7 @@ public partial class PlayerController : CharacterBody3D
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        HandleComfortCameraInput(@event);
         if (!InputEnabled)
             return;
 
@@ -259,6 +265,7 @@ public partial class PlayerController : CharacterBody3D
     {
         if (_camera == null)
             return;
+        UpdateComfortCamera((float)delta);
         float speed = new Vector2(Velocity.X, Velocity.Z).Length();
         bool bob = _headBob && State == PlayerState.Walking && IsOnFloor() && speed > 0.5f;
         Vector3 target = _cameraBase;
@@ -312,6 +319,8 @@ public partial class PlayerController : CharacterBody3D
 
         UpdateInteractionTarget();
         UpdateHeldItem();
+        UpdateHandItemVisual();
+        UpdateLocalCharacter(dt);
         if (!InputEnabled)
             return;
 
@@ -327,8 +336,30 @@ public partial class PlayerController : CharacterBody3D
 
         if (Input.IsActionJustPressed("interact"))
             HandleInteract();
-        else if (Input.IsActionJustPressed("throw") && Input.MouseMode == Input.MouseModeEnum.Captured)
-            ThrowHeld();
+
+        for (int i = 0; i < 4; i++)
+        {
+            if (!Input.IsActionJustPressed($"hotbar_{i + 1}"))
+                continue;
+            if (PlayerInventory.Instance?.SelectHotbar(i) != true)
+                ItemActionMessage?.Invoke($"Espaço {i + 1} vazio.");
+        }
+
+        if (Input.IsActionJustPressed("drop_item"))
+        {
+            if (IsHolding)
+                DropHeld();
+            else
+                DropSelectedItem();
+        }
+
+        if (Input.IsActionJustPressed("throw") && Input.MouseMode == Input.MouseModeEnum.Captured)
+        {
+            if (IsHolding)
+                ThrowHeld();
+            else
+                UseSelectedItem();
+        }
     }
 
     private float _knockbackLeft;
@@ -457,10 +488,11 @@ public partial class PlayerController : CharacterBody3D
     private GodotObject CastInteractionRay()
     {
         PhysicsDirectSpaceState3D space = GetWorld3D().DirectSpaceState;
-        Vector3 from = _camera.GlobalPosition;
-        if (!from.IsFinite() || !_camera.GlobalTransform.Basis.Z.IsFinite())
+        Camera3D aimCamera = GetAimCamera();
+        Vector3 from = aimCamera.GlobalPosition;
+        if (!from.IsFinite() || !aimCamera.GlobalTransform.Basis.Z.IsFinite())
             return null;
-        Vector3 to = from - _camera.GlobalTransform.Basis.Z * InteractReach;
+        Vector3 to = from - aimCamera.GlobalTransform.Basis.Z * InteractReach;
 
         PhysicsRayQueryParameters3D query = PhysicsRayQueryParameters3D.Create(from, to, InteractionMask);
         query.CollideWithAreas = true;
@@ -487,7 +519,7 @@ public partial class PlayerController : CharacterBody3D
 
         if (IsHolding)
         {
-            prompt = "[E] Soltar    [Clique] Arremessar";
+            prompt = "[G] Soltar    [Clique] Arremessar";
         }
         else
         {
@@ -506,6 +538,11 @@ public partial class PlayerController : CharacterBody3D
             else if (State == PlayerState.Riding && CurrentVehicle != null)
             {
                 prompt = CurrentVehicle.SpeedKmh < 12f ? "[E] Descer (carona)" : "Carona: espere o veículo parar para descer";
+            }
+            else if (PlayerInventory.Instance?.SelectedHotbarItemId is string selected)
+            {
+                string itemName = ItemCatalog.Get(selected)?.Name ?? selected;
+                prompt = $"[Clique] Usar/equipar {itemName}    [G] Largar";
             }
         }
 
@@ -580,8 +617,103 @@ public partial class PlayerController : CharacterBody3D
 
         CargoItem item = _heldItem;
         DropHeld();
-        Vector3 forward = -_camera.GlobalTransform.Basis.Z;
+        Vector3 forward = -GetAimCamera().GlobalTransform.Basis.Z;
         item.ApplyCentralImpulse(forward * ThrowImpulse * (Has(ItemCatalog.Gloves) ? 1.3f : 1f));
+    }
+
+    public bool CanPickUpWorldItem(string itemId) =>
+        State == PlayerState.Walking && !IsHolding && PlayerInventory.Instance?.CanAddToBag(itemId) == true;
+
+    public void PickUpWorldItem(WorldItem item)
+    {
+        if (item == null || !CanPickUpWorldItem(item.ItemId))
+            return;
+        if (NetClient.Instance?.IsOnline == true && NetSync.Instance != null)
+        {
+            NetSync.Instance.RequestWorldItemPickup(item);
+            return;
+        }
+        if (NetClient.Instance?.IsOnline == true)
+        {
+            ItemActionMessage?.Invoke("A sincronização de itens ainda está iniciando.");
+            return;
+        }
+        if (PlayerInventory.Instance.TryAdd(item.ItemId))
+        {
+            ItemActionMessage?.Invoke($"{ItemCatalog.Get(item.ItemId)?.Name ?? "Item"} guardado.");
+            item.QueueFree();
+        }
+    }
+
+    public void TransferSelectedItem(int playerId)
+    {
+        string itemId = PlayerInventory.Instance?.SelectedHotbarItemId;
+        if (string.IsNullOrEmpty(itemId))
+            return;
+        if (NetClient.Instance?.IsOnline == true)
+        {
+            if (NetSync.Instance != null)
+            {
+                NetSync.Instance.RequestItemTransfer(playerId, itemId);
+                return;
+            }
+            ItemActionMessage?.Invoke("A sincronização de itens ainda está iniciando.");
+            return;
+        }
+        ItemActionMessage?.Invoke("A entrega de itens exige uma sala multiplayer.");
+    }
+
+    private void UseSelectedItem()
+    {
+        string result = PlayerInventory.Instance?.UseSelected(this) ?? "";
+        if (!string.IsNullOrEmpty(result))
+            ItemActionMessage?.Invoke(result);
+    }
+
+    private void DropSelectedItem()
+    {
+        PlayerInventory inventory = PlayerInventory.Instance;
+        string itemId = inventory?.SelectedHotbarItemId;
+        if (string.IsNullOrEmpty(itemId))
+            return;
+        if (NetClient.Instance?.IsOnline == true && NetSync.Instance != null)
+        {
+            NetSync.Instance.RequestWorldItemDrop(itemId, _carryMarker.GlobalPosition, _camera.GlobalBasis.GetRotationQuaternion());
+            return;
+        }
+        if (NetClient.Instance?.IsOnline == true)
+        {
+            ItemActionMessage?.Invoke("A sincronização de itens ainda está iniciando.");
+            return;
+        }
+        if (!inventory.TryTakeSelected(out itemId))
+            return;
+        WorldItem worldItem = WorldItem.Create("local_" + Guid.NewGuid().ToString("N"), itemId, _carryMarker.GlobalPosition, _camera.GlobalBasis.GetRotationQuaternion());
+        if (worldItem == null)
+            return;
+        Node parent = GetTree().CurrentScene ?? GetTree().Root;
+        parent.AddChild(worldItem);
+        worldItem.GlobalPosition = _carryMarker.GlobalPosition;
+        worldItem.GlobalBasis = new Basis(_camera.GlobalBasis.GetRotationQuaternion());
+        worldItem.ApplyCentralImpulse(-_camera.GlobalBasis.Z * 1.5f + Vector3.Up * 0.8f);
+        ItemActionMessage?.Invoke($"{ItemCatalog.Get(itemId)?.Name ?? "Item"} largado.");
+    }
+
+    private void UpdateHandItemVisual()
+    {
+        string itemId = IsHolding || State != PlayerState.Walking ? "" : PlayerInventory.Instance?.SelectedHotbarItemId ?? "";
+        if (_handItemVisualId == itemId)
+            return;
+        _handItemVisual?.QueueFree();
+        _handItemVisual = null;
+        _handItemVisualId = itemId;
+        if (string.IsNullOrEmpty(itemId))
+            return;
+        _handItemVisual = WorldItem.CreateVisual("item:" + itemId);
+        _handItemVisual.Position = new Vector3(0.38f, -0.32f, -0.62f);
+        _handItemVisual.RotationDegrees = new Vector3(-8f, -12f, 0f);
+        _handItemVisual.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+        _camera.AddChild(_handItemVisual);
     }
 
     private void UpdateHeldItem()

@@ -55,6 +55,9 @@ public partial class LocalServer : Node
         public bool Closed;
         public Dictionary<string, object> Snapshot;
         public string Held;
+        public List<string> Inventory = new();
+        public string Equipment = "";
+        public readonly List<double> ChatTimes = new();
         public int Seat;
         public string Prof = Professions.Entregador;
         public double LastEarn = -1e9;
@@ -76,6 +79,7 @@ public partial class LocalServer : Node
     private TcpServer _tcp;
     private readonly List<Peer> _peers = new();
     private readonly Dictionary<string, Dictionary<string, object>> _objects = new();
+    private readonly Dictionary<string, Dictionary<string, object>> _worldItems = new();
     private readonly Dictionary<string, int?> _owners = new();
     private List<Job> _jobs = new();
     private readonly RandomNumberGenerator _rng = new();
@@ -135,6 +139,7 @@ public partial class LocalServer : Node
         _nextPlayerId = 1;
         _hostId = null;
         _owners.Clear();
+        _worldItems.Clear();
         _owners["van"] = null;
         _objects.Clear();
         _gameOver = false;
@@ -254,6 +259,11 @@ public partial class LocalServer : Node
                 case "deliver": OnDeliver(me, Str(msg, "cargoId"), Num(msg, "integ")); break;
                 case "lost": OnLost(me, Str(msg, "cargoId")); break;
                 case "buy": OnBuy(me, Str(msg, "item"), (int)Num(msg, "req")); break;
+                case "sell": OnSell(me, Str(msg, "item"), (int)Num(msg, "req")); break;
+                case "inventory": OnInventory(me, msg); break;
+                case "itemDrop": OnDropWorldItem(me, msg); break;
+                case "itemPickup": OnPickupWorldItem(me, Str(msg, "id")); break;
+                case "itemTransfer": OnTransferItem(me, (int)Num(msg, "to"), Str(msg, "item")); break;
                 case "earn": OnEarn(me, msg); break;
                 case "prof": OnProf(me, Str(msg, "prof")); break;
                 case "chat":
@@ -261,7 +271,16 @@ public partial class LocalServer : Node
                     string chat = Str(msg, "msg");
                     chat = chat.Length > 120 ? chat[..120].Trim() : chat.Trim();
                     if (chat.Length > 0 && me.Joined)
-                        Broadcast(new { t = "chat", id = me.Id, name = me.Name, msg = chat });
+                    {
+                        me.ChatTimes.RemoveAll(time => me.Age - time >= 5.0);
+                        if (me.ChatTimes.Count >= 3)
+                            Send(me, new { t = "chatFail", msg = "Aguarde antes de enviar outra mensagem." });
+                        else
+                        {
+                            me.ChatTimes.Add(me.Age);
+                            Broadcast(new { t = "chat", id = me.Id, name = me.Name, msg = chat });
+                        }
+                    }
                     break;
                 }
                 case "ping":
@@ -284,6 +303,8 @@ public partial class LocalServer : Node
         string name = SanitizeName(Str(msg, "name"));
         if (name.Length > 0)
             me.Name = name;
+        me.Inventory = SanitizeInventory(msg.TryGetProperty("items", out JsonElement items) ? items : default);
+        me.Equipment = SanitizeEquipment(Str(msg, "eq"));
         me.Joined = true;
         me.Prof = _autoProfession ? AssignProfession(me) : ValidProfession(Str(msg, "prof"));
 
@@ -312,6 +333,7 @@ public partial class LocalServer : Node
             ["owners"] = _owners,
             ["cars"] = _cars,
             ["objects"] = _objects.Values.ToList(),
+            ["worldItems"] = _worldItems.Values.ToList(),
         });
         Broadcast(new { t = "join", player = new { id = me.Id, name = me.Name, color = me.Color, prof = me.Prof } }, me);
     }
@@ -323,6 +345,7 @@ public partial class LocalServer : Node
         string held = msg.TryGetProperty("held", out JsonElement h) && h.ValueKind == JsonValueKind.String ? Clip(h.GetString(), 24) : null;
         string eq = Str(msg, "eq");
         eq = new string(eq.Where(c => (c >= 'a' && c <= 'z') || c == ',' || c == '_').ToArray());
+        me.Equipment = eq;
         me.Held = held;
         int st = (int)Num(msg, "st");
         me.Seat = st is 1 or 2 ? st : 0;
@@ -422,6 +445,106 @@ public partial class LocalServer : Node
         if (def.Car)
             _cars.Add(item);
         Broadcast(new { t = "money", money = _money, by = me.Id, name = me.Name, item, req });
+    }
+
+    private void OnSell(Peer me, string item, int req)
+    {
+        ItemDef def = ItemCatalog.Get(item);
+        int index = me.Inventory.IndexOf(item);
+        int price = def == null || def.Car ? 0 : def.Price / 2;
+        if (!me.Joined || def == null || def.Hidden || def.Car || index < 0 || price <= 0)
+        {
+            Send(me, new { t = "sellFail", item, req });
+            return;
+        }
+
+        me.Inventory.RemoveAt(index);
+        _money += price;
+        Broadcast(new { t = "sold", money = _money, by = me.Id, name = me.Name, item, price, req });
+    }
+
+    private void OnInventory(Peer me, JsonElement msg)
+    {
+        if (!me.Joined || !msg.TryGetProperty("items", out JsonElement items))
+            return;
+        me.Inventory = SanitizeInventory(items);
+    }
+
+    private void OnDropWorldItem(Peer me, JsonElement msg)
+    {
+        string item = Str(msg, "item");
+        ItemDef def = ItemCatalog.Get(item);
+        int index = me.Inventory.IndexOf(item);
+        if (!me.Joined || def == null || def.Car || index < 0 || _worldItems.Count >= 64)
+        {
+            Send(me, new { t = "itemDropFail", msg = "Nao foi possivel largar esse item." });
+            return;
+        }
+
+        me.Inventory.RemoveAt(index);
+        string id = Guid.NewGuid().ToString("N");
+        var state = new Dictionary<string, object>
+        {
+            ["id"] = id,
+            ["item"] = item,
+            ["p"] = Vec(msg, "p", 3),
+            ["q"] = Vec(msg, "q", 4),
+        };
+        _worldItems[id] = state;
+        Send(me, new { t = "itemsState", items = me.Inventory });
+        Broadcast(new Dictionary<string, object>(state) { ["t"] = "itemSpawn" });
+    }
+
+    private void OnPickupWorldItem(Peer me, string id)
+    {
+        if (!me.Joined || !_worldItems.TryGetValue(id, out Dictionary<string, object> state))
+            return;
+        string item = state["item"] as string ?? "";
+        if (!CanReceiveItem(me, item))
+        {
+            Send(me, new { t = "itemPickupFail", msg = "Mochila cheia." });
+            return;
+        }
+        _worldItems.Remove(id);
+        me.Inventory.Add(item);
+        Send(me, new { t = "itemsState", items = me.Inventory });
+        Broadcast(new { t = "itemRemove", id });
+    }
+
+    private void OnTransferItem(Peer me, int targetId, string item)
+    {
+        Peer target = _peers.FirstOrDefault(p => p.Joined && p.Id == targetId);
+        int index = me.Inventory.IndexOf(item);
+        if (!me.Joined || target == null || target == me || index < 0 || !CanReceiveItem(target, item))
+        {
+            Send(me, new { t = "itemTransferFail", msg = "Nao foi possivel entregar o item." });
+            return;
+        }
+        me.Inventory.RemoveAt(index);
+        target.Inventory.Add(item);
+        Send(me, new { t = "itemsState", items = me.Inventory });
+        Send(target, new { t = "itemsState", items = target.Inventory });
+        Broadcast(new { t = "itemTransferred", from = me.Id, to = target.Id, item });
+    }
+
+    private static bool CanReceiveItem(Peer peer, string item) =>
+        ItemCatalog.Get(item) is { Car: false } && peer.Inventory.Count < (peer.Equipment.Contains(ItemCatalog.Backpack) ? PlayerInventory.BackpackCapacity : PlayerInventory.BaseCapacity);
+
+    private static string SanitizeEquipment(string value) =>
+        new(value.Where(c => (c >= 'a' && c <= 'z') || c == ',' || c == '_').ToArray());
+
+    private static List<string> SanitizeInventory(JsonElement items)
+    {
+        if (items.ValueKind != JsonValueKind.Array)
+            return new List<string>();
+        return items.EnumerateArray()
+            .Where(item => item.ValueKind == JsonValueKind.String)
+            .Select(item => ItemCatalog.Get(item.GetString() ?? ""))
+            .OfType<ItemDef>()
+            .Where(def => !def.Hidden && !def.Car)
+            .Take(PlayerInventory.BackpackCapacity)
+            .Select(def => def.Id)
+            .ToList();
     }
 
     // ---------------- Profissões ----------------

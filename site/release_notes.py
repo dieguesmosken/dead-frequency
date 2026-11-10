@@ -10,10 +10,11 @@ ver = sys.argv[1].lstrip("v")
 ref = sys.argv[2] if len(sys.argv) > 2 else "main"
 RAW = f"https://raw.githubusercontent.com/dieguesmosken/dead-frequency/{ref}/site/assets/shots/"
 SITE = "https://www.teuzin.com.br/dead-frequency/"
-DL = "https://github.com/dieguesmosken/dead-frequency/releases/download/v" + ver + "/"
+release_tag = sys.argv[3] if len(sys.argv) > 3 else "v" + ver
+DL = "https://github.com/dieguesmosken/dead-frequency/releases/download/" + release_tag + "/"
 
 src = open(os.path.join(ROOT, "Scripts", "Core", "GameVersion.cs"), encoding="utf-8").read()
-m = re.search(r'new\("' + re.escape(ver) + r'", "([^"]+)", "([^"]+)", new\[\]\s*\{(.*?)\}\),', src, re.S)
+m = re.search(r'new\("' + re.escape(ver) + r'"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*new\[\]\s*\{(.*?)\}\),', src, re.S)
 if not m:
     sys.exit(f"versão {ver} não está no GameVersion.cs")
 date, title, body = m.groups()
