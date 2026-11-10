@@ -276,7 +276,11 @@ assert(restart.shift === 1 && restart.money === 0, "sala recomeça no turno 1 de
 // ---------------- admin ----------------
 const token = process.env.ADMIN_TOKEN ?? "teste-local";
 const admin = (path, init = {}) => fetch(base + "/api/admin" + path, { ...init, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" } });
-assert((await fetch(base + "/admin")).headers.get("content-type").includes("text/html"), "página /admin");
+const adminPage = await fetch(base + "/admin");
+const adminHtml = await adminPage.text();
+assert(adminPage.headers.get("content-type").includes("text/html"), "página /admin");
+const adminScript = adminHtml.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+assert(adminScript && typeof new Function(adminScript) === "function", "script inline do admin tem sintaxe válida");
 const unauthenticatedAdmin = await fetch(base + "/api/admin/status");
 if (unauthenticatedAdmin.status === 503) {
   console.log("skip - painel admin desativado sem ADMIN_TOKEN");

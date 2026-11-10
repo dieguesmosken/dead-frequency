@@ -7,13 +7,22 @@ namespace DeadFrequency;
 
 public static class GameVersion
 {
-    public const string Current = "0.9.7";
+    public const string Current = "0.9.8";
     public const string Display = Current;
 
     public readonly record struct Release(string Version, string Date, string Title, string[] Changes);
 
     public static readonly Release[] Changelog =
     {
+        new("0.9.8", "10/11/2026", "Rua de verdade", new[]
+        {
+            "Meio-fio branco nos trechos permitidos e amarelo nos cruzamentos e pontos proibidos; carros gerados só estacionam junto às marcações brancas.",
+            "Placas de proibido estacionar nos trechos amarelos, com identificação de POLÍCIA e BOMBEIROS nas respectivas áreas.",
+            "Céu procedural com nuvens em movimento, estrelas e transição de cores sincronizada ao ciclo de dia e noite.",
+            "Bocas de lobo com grades, tampas de bueiro nas ruas e som de água corrente audível nas proximidades.",
+            "Ciclovias pintadas e ciclista que percorre a cidade sincronizado pelo relógio; ele toca o sino quando há alguém à frente.",
+            "Delegacia identificada na fachada e no minimapa, com policiais figurantes fardados.",
+        }),
         new("0.9.7", "10/11/2026", "Mãos ocupadas", new[]
         {
             "Barra rápida 1–4: selecione um item para segurá-lo; clique esquerdo usa ou equipa.",

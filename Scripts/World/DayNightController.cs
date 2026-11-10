@@ -205,6 +205,10 @@ public partial class DayNightController : Node
                 sky.GroundBottomColor = new Color(0.22f, 0.22f, 0.22f).Lerp(new Color(0.02f, 0.02f, 0.02f), night);
                 sky.SkyEnergyMultiplier = Mathf.Lerp(1f, 0.6f, night);
             }
+            else if (env.Sky?.SkyMaterial is ShaderMaterial skyShader)
+            {
+                skyShader.SetShaderParameter("day_night_mix", 1f - night * 2f);
+            }
             env.AmbientLightColor = new Color(0.62f, 0.66f, 0.74f).Lerp(new Color(0.17f, 0.18f, 0.24f), night).Lerp(new Color(0.6f, 0.45f, 0.4f), dusk * 0.4f);
             env.AmbientLightEnergy = Mathf.Lerp(0.75f, 0.9f, night);
             env.FogLightColor = horizon.Lerp(new Color(0.05f, 0.06f, 0.08f), night * 0.6f);

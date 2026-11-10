@@ -75,6 +75,8 @@ public partial class CityGenerator : Node3D
     private StandardMaterial3D _stopRed;
     private StandardMaterial3D _signBlue;
     private StandardMaterial3D _signWhite;
+    private StandardMaterial3D _curbWhite;
+    private StandardMaterial3D _curbYellow;
     private CylinderMesh _octagon;
     private readonly Dictionary<Color, StandardMaterial3D> _carMaterials = new();
 
@@ -117,6 +119,9 @@ public partial class CityGenerator : Node3D
             }
         }
 
+        BuildCurbMarkings();
+        BuildBikeLanes();
+        BuildStreetDrainage();
         BuildStreetLamps();
         BuildStreetSigns();
         BuildPhoneBooths();
@@ -401,12 +406,15 @@ public partial class CityGenerator : Node3D
             height = Mathf.Max(4f, Mathf.Round(height / 3.2f) * 3.2f + 0.4f);
 
             Vector3 lotCenter = center + new Vector3(lot.Position.X + lot.Size.X * 0.5f, CurbHeight, lot.Position.Y + lot.Size.Y * 0.5f);
-            BuildBuilding(block, lotCenter, w, d, height);
-            DecorateBuilding(block, lotCenter, w, d, height, center);
+            Vector3 front = GetBuildingFront(lotCenter, center);
+            bool hasStorefront = _decoRng.Randf() < StorefrontChance;
+            float buildingHeight = hasStorefront ? 4.4f : height;
+            BuildBuilding(block, lotCenter, w, d, buildingHeight, hasStorefront);
+            DecorateBuilding(block, lotCenter, w, d, buildingHeight, center, front, hasStorefront);
         }
     }
 
-    private void BuildBuilding(Node3D parent, Vector3 baseCenter, float width, float depth, float height)
+    private void BuildBuilding(Node3D parent, Vector3 baseCenter, float width, float depth, float height, bool isStorefront = false)
     {
         Color wall = WallPalette[_rng.RandiRange(0, WallPalette.Length - 1)];
         float lightSeed = _rng.Randf() * 100f;
@@ -437,24 +445,27 @@ public partial class CityGenerator : Node3D
         AddBox(parent, roofCenter + new Vector3(width * 0.5f, 0f, 0f), new Vector3(0.25f, 0.8f, depth), _concrete, false);
         AddBox(parent, roofCenter - new Vector3(width * 0.5f, 0f, 0f), new Vector3(0.25f, 0.8f, depth), _concrete, false);
 
-        // Ar-condicionados e caixas d'água.
-        int props = _rng.RandiRange(0, 3);
-        for (int i = 0; i < props; i++)
+        if (!isStorefront)
         {
-            var offset = new Vector3(_rng.RandfRange(-width * 0.35f, width * 0.35f), 0f, _rng.RandfRange(-depth * 0.35f, depth * 0.35f));
-            if (_rng.Randf() < 0.6f)
-                AddBox(parent, new Vector3(baseCenter.X, roofY + 0.6f, baseCenter.Z) + offset, new Vector3(1.6f, 1.2f, 1.2f), _darkMetal, false);
-            else
-                AddCylinder(parent, new Vector3(baseCenter.X, roofY + 1.5f, baseCenter.Z) + offset, 1.1f, 3f, _darkMetal);
-        }
+            // Ar-condicionados e caixas d'água.
+            int props = _rng.RandiRange(0, 3);
+            for (int i = 0; i < props; i++)
+            {
+                var offset = new Vector3(_rng.RandfRange(-width * 0.35f, width * 0.35f), 0f, _rng.RandfRange(-depth * 0.35f, depth * 0.35f));
+                if (_rng.Randf() < 0.6f)
+                    AddBox(parent, new Vector3(baseCenter.X, roofY + 0.6f, baseCenter.Z) + offset, new Vector3(1.6f, 1.2f, 1.2f), _darkMetal, false);
+                else
+                    AddCylinder(parent, new Vector3(baseCenter.X, roofY + 1.5f, baseCenter.Z) + offset, 1.1f, 3f, _darkMetal);
+            }
 
-        // Antena com luz vermelha.
-        if (_rng.Randf() < 0.3f)
-        {
-            float antennaH = _rng.RandfRange(4f, 9f);
-            Vector3 pos = new(baseCenter.X + width * 0.25f, roofY + antennaH * 0.5f, baseCenter.Z - depth * 0.25f);
-            AddCylinder(parent, pos, 0.08f, antennaH, _darkMetal);
-            AddBox(parent, pos + new Vector3(0f, antennaH * 0.5f + 0.15f, 0f), new Vector3(0.3f, 0.3f, 0.3f), _redBeacon, false);
+            // Antena com luz vermelha.
+            if (_rng.Randf() < 0.3f)
+            {
+                float antennaH = _rng.RandfRange(4f, 9f);
+                Vector3 pos = new(baseCenter.X + width * 0.25f, roofY + antennaH * 0.5f, baseCenter.Z - depth * 0.25f);
+                AddCylinder(parent, pos, 0.08f, antennaH, _darkMetal);
+                AddBox(parent, pos + new Vector3(0f, antennaH * 0.5f + 0.15f, 0f), new Vector3(0.3f, 0.3f, 0.3f), _redBeacon, false);
+            }
         }
     }
 
@@ -737,12 +748,21 @@ public partial class CityGenerator : Node3D
                 float along = j * Period;
                 for (int side = -1; side <= 1; side += 2)
                 {
+                    bool hasCurb = side < 0
+                        ? k >= -Radius && k <= Radius
+                        : k + 1 >= -Radius && k + 1 <= Radius;
                     // Ruas paralelas a Z (x fixo).
                     if (_rng.Randf() < ParkedCarChance)
-                        BuildCar(_staticRoot, new Vector3(roadPos + side * laneOffset, 0f, along + _rng.RandfRange(-reach, reach)), 0f);
+                    {
+                        float offset = _rng.RandfRange(-reach, reach);
+                        BuildCar(_staticRoot, new Vector3(roadPos + side * laneOffset, 0f, along + offset), 0f, offset, hasCurb);
+                    }
                     // Avenidas paralelas a X (z fixo).
                     if (_rng.Randf() < ParkedCarChance)
-                        BuildCar(_staticRoot, new Vector3(along + _rng.RandfRange(-reach, reach), 0f, roadPos + side * laneOffset), Mathf.Pi * 0.5f);
+                    {
+                        float offset = _rng.RandfRange(-reach, reach);
+                        BuildCar(_staticRoot, new Vector3(along + offset, 0f, roadPos + side * laneOffset), Mathf.Pi * 0.5f, offset, hasCurb);
+                    }
                 }
             }
         }
@@ -750,18 +770,106 @@ public partial class CityGenerator : Node3D
 
     private readonly List<Node3D> _parkedCars = new();
     private readonly List<(Vector3 center, Vector3 dir, float halfLength)> _noParking = new();
+    private bool _curbMarkingsBuilt;
 
-    /// <summary>Proíbe estacionar num trecho de rua (ponto de ônibus, v0.9.7): tira os carros que já estão
-    /// lá e impede os próximos. Não mexe no sorteio da cidade (o carro é sorteado e só não aparece).</summary>
-    public void ForbidParking(Vector3 center, Vector3 dir, float halfLength)
+    /// <summary>Proíbe estacionar num trecho de rua e pinta o meio-fio correspondente de amarelo.</summary>
+    public void ForbidParking(Vector3 center, Vector3 dir, float halfLength, string signLabel = null)
     {
-        _noParking.Add((center, dir.Normalized(), halfLength));
+        Vector3 normalizedDir = dir.Normalized();
+        _noParking.Add((center, normalizedDir, halfLength));
         for (int i = _parkedCars.Count - 1; i >= 0; i--)
         {
             if (IsInstanceValid(_parkedCars[i]) && InNoParking(_parkedCars[i].Position))
             {
                 _parkedCars[i].QueueFree();
                 _parkedCars.RemoveAt(i);
+            }
+        }
+        if (_curbMarkingsBuilt)
+            PaintNoParkingCurb(center, normalizedDir, halfLength);
+        BuildNoParkingSigns(center, normalizedDir, signLabel);
+    }
+
+    private void BuildCurbMarkings()
+    {
+        _curbWhite = Flat(new Color(0.88f, 0.87f, 0.82f), 0.8f);
+        _curbYellow = Flat(new Color(0.95f, 0.74f, 0.08f), 0.75f);
+        for (int bx = -Radius; bx <= Radius; bx++)
+        {
+            for (int bz = -Radius; bz <= Radius; bz++)
+            {
+                Vector3 center = BlockCenter(bx, bz);
+                PaintCurbEdge(center, Vector3.Right, Vector3.Back);
+                PaintCurbEdge(center, Vector3.Left, Vector3.Forward);
+                PaintCurbEdge(center, Vector3.Back, Vector3.Left);
+                PaintCurbEdge(center, Vector3.Forward, Vector3.Right);
+            }
+        }
+
+        _curbMarkingsBuilt = true;
+        foreach ((Vector3 center, Vector3 dir, float halfLength) in _noParking)
+            PaintNoParkingCurb(center, dir, halfLength);
+    }
+
+    private void PaintCurbEdge(Vector3 blockCenter, Vector3 outward, Vector3 along)
+    {
+        const float cornerClearance = 4f;
+        const float markLength = 5f;
+        const float markPitch = 7f;
+        float half = BlockSize * 0.5f;
+        float first = -half + cornerClearance;
+        float last = half - cornerClearance;
+
+        PaintCurbStripe(blockCenter, outward, along, -half + cornerClearance * 0.5f, cornerClearance, _curbYellow);
+        PaintCurbStripe(blockCenter, outward, along, half - cornerClearance * 0.5f, cornerClearance, _curbYellow);
+
+        for (float start = first; start < last; start += markPitch)
+        {
+            float length = Mathf.Min(markLength, last - start);
+            if (length <= 0f)
+                continue;
+            float midpoint = start + length * 0.5f;
+            Vector3 parkingSpot = blockCenter + outward * (half + RoadWidth * 0.5f - 1.4f) + along * midpoint;
+            Material material = InNoParking(parkingSpot) ? _curbYellow : _curbWhite;
+            PaintCurbStripe(blockCenter, outward, along, midpoint, length, material);
+        }
+    }
+
+    private void PaintCurbStripe(Vector3 blockCenter, Vector3 outward, Vector3 along, float midpoint, float length, Material material)
+    {
+        Vector3 position = blockCenter + outward * (BlockSize * 0.5f + 0.015f) + along * midpoint;
+        position.Y = CurbHeight * 0.5f;
+        Vector3 size = Mathf.Abs(outward.X) > 0.5f
+            ? new Vector3(0.03f, CurbHeight, length)
+            : new Vector3(length, CurbHeight, 0.03f);
+        AddBox(_staticRoot, position, size, material, false);
+    }
+
+    private void PaintNoParkingCurb(Vector3 center, Vector3 dir, float halfLength)
+    {
+        float length = Mathf.Max(1f, halfLength * 2f + 0.2f);
+        if (Mathf.Abs(dir.Z) > 0.5f)
+        {
+            float roadX = Mathf.Round((center.X - Period * 0.5f) / Period) * Period + Period * 0.5f;
+            foreach (float side in new[] { -1f, 1f })
+            {
+                Vector3 parkingSpot = new(roadX + side * (RoadWidth * 0.5f - 1.4f), 0f, center.Z);
+                if (!InNoParking(parkingSpot))
+                    continue;
+                Vector3 curb = new(roadX + side * (RoadWidth * 0.5f - 0.045f), CurbHeight * 0.5f, center.Z);
+                AddBox(_staticRoot, curb, new Vector3(0.03f, CurbHeight, length), _curbYellow, false);
+            }
+        }
+        else
+        {
+            float roadZ = Mathf.Round((center.Z - Period * 0.5f) / Period) * Period + Period * 0.5f;
+            foreach (float side in new[] { -1f, 1f })
+            {
+                Vector3 parkingSpot = new(center.X, 0f, roadZ + side * (RoadWidth * 0.5f - 1.4f));
+                if (!InNoParking(parkingSpot))
+                    continue;
+                Vector3 curb = new(center.X, CurbHeight * 0.5f, roadZ + side * (RoadWidth * 0.5f - 0.045f));
+                AddBox(_staticRoot, curb, new Vector3(length, CurbHeight, 0.03f), _curbYellow, false);
             }
         }
     }
@@ -780,7 +888,22 @@ public partial class CityGenerator : Node3D
         return false;
     }
 
-    private void BuildCar(Node3D parent, Vector3 groundPos, float rotationY)
+    private bool HasWhiteCurbMarking(float along)
+    {
+        const float cornerClearance = 4f;
+        const float markLength = 5f;
+        const float markPitch = 7f;
+        float usableLength = BlockSize - cornerClearance * 2f;
+        float offset = along + BlockSize * 0.5f - cornerClearance;
+        if (offset < 0f || offset >= usableLength)
+            return false;
+
+        float start = Mathf.Floor(offset / markPitch) * markPitch;
+        float length = Mathf.Min(markLength, usableLength - start);
+        return offset - start < length;
+    }
+
+    private void BuildCar(Node3D parent, Vector3 groundPos, float rotationY, float? curbOffset = null, bool hasCurb = true)
     {
         Color color = CarPalette[_rng.RandiRange(0, CarPalette.Length - 1)];
         float roll = _rng.Randf();
@@ -789,7 +912,7 @@ public partial class CityGenerator : Node3D
         var car = new StaticBody3D { Position = groundPos, Rotation = new Vector3(0f, rotationY + (_rng.Randf() < 0.5f ? 0f : Mathf.Pi), 0f), CollisionLayer = 1, CollisionMask = 0 };
         Vector3 size = CarModels.Build(car, type, color);
         car.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(size.X, size.Y - 0.2f, size.Z) }, Position = new Vector3(0f, size.Y * 0.5f + 0.1f, 0f) });
-        if (InNoParking(groundPos))
+        if (InNoParking(groundPos) || (curbOffset.HasValue && (!hasCurb || !HasWhiteCurbMarking(curbOffset.Value))))
         {
             car.QueueFree();
             return;
@@ -816,6 +939,91 @@ public partial class CityGenerator : Node3D
                 BuildCrosswalkSign(c + new Vector3(-corner, 0f, -corner + 1.2f), Mathf.Pi);
             }
         }
+    }
+
+    private void BuildNoParkingSigns(Vector3 center, Vector3 dir, string label)
+    {
+        const float laneOffset = 1.4f;
+        const float sidewalkOffset = 1.1f;
+        if (Mathf.Abs(dir.Z) > 0.5f)
+        {
+            float roadX = Mathf.Round((center.X - Period * 0.5f) / Period) * Period + Period * 0.5f;
+            foreach (float side in new[] { -1f, 1f })
+            {
+                Vector3 parkingSpot = new(roadX + side * (RoadWidth * 0.5f - laneOffset), 0f, center.Z);
+                if (!InNoParking(parkingSpot))
+                    continue;
+
+                Vector3 roadNormal = new(-side, 0f, 0f);
+                Vector3 basePos = new(roadX + side * (RoadWidth * 0.5f + sidewalkOffset), CurbHeight, center.Z);
+                BuildNoParkingSign(basePos, roadNormal, label);
+            }
+        }
+        else
+        {
+            float roadZ = Mathf.Round((center.Z - Period * 0.5f) / Period) * Period + Period * 0.5f;
+            foreach (float side in new[] { -1f, 1f })
+            {
+                Vector3 parkingSpot = new(center.X, 0f, roadZ + side * (RoadWidth * 0.5f - laneOffset));
+                if (!InNoParking(parkingSpot))
+                    continue;
+
+                Vector3 roadNormal = new(0f, 0f, -side);
+                Vector3 basePos = new(center.X, CurbHeight, roadZ + side * (RoadWidth * 0.5f + sidewalkOffset));
+                BuildNoParkingSign(basePos, roadNormal, label);
+            }
+        }
+    }
+
+    private void BuildNoParkingSign(Vector3 basePos, Vector3 roadNormal, string label)
+    {
+        RegisterObstacle(basePos);
+        float rotationY = Mathf.Atan2(-roadNormal.X, -roadNormal.Z);
+        var sign = new StaticBody3D
+        {
+            Position = basePos,
+            Rotation = new Vector3(0f, rotationY, 0f),
+            CollisionLayer = 1,
+            CollisionMask = 0,
+        };
+        sign.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(0.12f, 2.7f, 0.12f) }, Position = new Vector3(0f, 1.35f, 0f) });
+        AddCylinder(sign, new Vector3(0f, 1.35f, 0f), 0.045f, 2.7f, _darkMetal);
+
+        const float faceY = 2.15f;
+        AddCylinder(sign, new Vector3(0f, faceY, 0f), 0.58f, 0.08f, _stopRed).Rotation = new Vector3(Mathf.Pi * 0.5f, 0f, 0f);
+        AddCylinder(sign, new Vector3(0f, faceY, -0.045f), 0.48f, 0.08f, _signWhite).Rotation = new Vector3(Mathf.Pi * 0.5f, 0f, 0f);
+        sign.AddChild(new Label3D
+        {
+            Text = "E",
+            FontSize = 100,
+            PixelSize = 0.006f,
+            Modulate = Colors.Black,
+            OutlineSize = 0,
+            Position = new Vector3(0f, faceY, -0.09f),
+            RotationDegrees = new Vector3(0f, 180f, 0f),
+        });
+        AddBox(sign, new Vector3(0f, faceY, -0.12f), new Vector3(0.07f, 1.05f, 0.03f), _stopRed, false)
+            .Rotation = new Vector3(0f, 0f, -0.65f);
+
+        if (!string.IsNullOrEmpty(label))
+        {
+            float panelWidth = Mathf.Max(1.2f, label.Length * 0.16f);
+            const float panelY = 1.15f;
+            AddBox(sign, new Vector3(0f, panelY, 0f), new Vector3(panelWidth, 0.48f, 0.08f), _stopRed, false);
+            AddBox(sign, new Vector3(0f, panelY, -0.05f), new Vector3(panelWidth - 0.1f, 0.38f, 0.03f), _signWhite, false);
+            sign.AddChild(new Label3D
+            {
+                Text = label,
+                FontSize = 40,
+                PixelSize = 0.005f,
+                Modulate = Colors.Black,
+                OutlineSize = 0,
+                Position = new Vector3(0f, panelY, -0.075f),
+                RotationDegrees = new Vector3(0f, 180f, 0f),
+            });
+        }
+
+        _staticRoot.AddChild(sign);
     }
 
     private void BuildStopSign(Vector3 basePos, float rotationY)

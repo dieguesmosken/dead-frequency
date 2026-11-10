@@ -1,6 +1,6 @@
 # Dead Frequency — roadmap da cidade simulada
 
-Atualizado em 09/11/2026 (v0.9.5 + planejamento de expansão). A partir da v0.9 o jogo deixa de ser só "entregas" e vira uma
+Atualizado em 10/11/2026 (v0.9.8 em andamento). A partir da v0.9 o jogo deixa de ser só "entregas" e vira uma
 **cidade simulada na zona morta**: cada jogador escolhe uma profissão, ganha um apartamento, ouve a
 rádio 96.6 e ajuda a cidade a funcionar. Ordem sugerida: de cima para baixo; cada fase deixa o jogo jogável.
 
@@ -53,7 +53,7 @@ Tudo que apareceu jogando a v0.9.5. Vem antes de qualquer conteúdo novo.
 | 9 | Feedback | **Modelo do botijão** melhor (corpo, alça e válvula). |
 | 10 | Visual | **Ícone novo** do jogo e do launcher, e a etiqueta amarela **ALPHA** ao lado do número da versão (menu, launcher, site e ícone). |
 
-### v0.9.7 — Mãos ocupadas (itens e online) ← pronta para PR
+### v0.9.7 — Mãos ocupadas (itens e online) ✅
 Já feito nesta build (feedback de 08/11):
 - ✅ Texturas da cidade: fachadas (reboco, tijolo, pastilha, chapisco), calçada, pedra portuguesa, asfalto.
 - ✅ Mochila virou bag quadrada de entregador, presa às costas dos bonecos novos.
@@ -75,20 +75,21 @@ Já feito nesta build (feedback de 08/11):
 | ✅ **Chat da sala (T)** | Mensagens de texto na sala, com limite de 3 mensagens a cada 5 s no servidor. O painel admin mostra totais por dia UTC/sala (retenção de 30 dias), sem guardar o conteúdo. |
 | ✅ **Salas permanentes do admin** | No painel admin: criar salas fixas, públicas ou com senha; senhas são geradas na criação e mostradas uma vez. Já existem `ADMNA`/`ADMNB` (privadas) e `SERVA`/`SERVB` (públicas); salas permanentes não expiram nem podem ser encerradas. Protocolo 6 valida a senha na entrada. |
 
-### v0.9.8 — Rua de verdade
+### v0.9.8 — Rua de verdade 🚧
 | Ideia | Como funciona no jogo |
 |---|---|
-| **Meio-fio pintado** | Amarelo onde é proibido parar (bombeiros, delegacia, entradas de loja, garagens) e branco intercalado onde pode estacionar. Os carros gerados só estacionam no branco. |
-| **Placas de proibido estacionar** | Nos trechos amarelos; na delegacia e nos bombeiros com a plaquinha embaixo "POLÍCIA" / "BOMBEIROS". |
-| **Bocas de lobo e bueiros** | Bocas de lobo na beira das calçadas (abertura preta ou grade com fundo fundo) e tampas de bueiro na rua. Perto delas dá para ouvir a água correndo embaixo. Sem rede de túneis. |
-| **Ciclovia e ciclista** | Faixa de ciclovia pintada e um ciclista NPC que roda pela cidade como o ônibus (posição pelo relógio, igual para todos) e toca o sininho quando você está na frente. |
-| **Polícia** | Faixa na fachada da delegacia, ícone no minimapa e policiais NPC fardados (só figurantes por enquanto). |
+| ✅ **Céu procedural** | Nuvens em movimento, estrelas e cores sincronizadas ao ciclo de dia e noite. |
+| ✅ **Meio-fio pintado** | Amarelo onde é proibido parar (bombeiros, delegacia, entradas de loja, postos, paradas de ônibus e concessionária) e branco intercalado onde pode estacionar. Os carros gerados só estacionam no branco. |
+| ✅ **Placas de proibido estacionar** | Nos trechos amarelos; na delegacia e nos bombeiros com a plaquinha embaixo "POLÍCIA" / "BOMBEIROS". |
+| ✅ **Bocas de lobo e bueiros** | Bocas de lobo com grade junto ao meio-fio e tampas de bueiro na rua. Perto delas dá para ouvir a água correndo embaixo. Sem rede de túneis. |
+| ✅ **Ciclovia e ciclista** | Faixa de ciclovia pintada e um ciclista NPC que roda pela cidade como o ônibus (posição pelo relógio, igual para todos) e toca o sininho quando você está na frente. |
+| ✅ **Polícia** | Faixa identificada na fachada da delegacia, ícone no minimapa e policiais NPC fardados (só figurantes por enquanto). |
 
 ### v0.9.9 — Lojas de verdade
 | Ideia | Como funciona no jogo |
 |---|---|
-| **Prédios do tamanho da loja** | Mercados, lojas e postos deixam de ser "térreo de prédio": cada um ganha o próprio prédio, com o tamanho da loja. |
-| **Shopping** | Shopping com várias lojas, dois andares e escada (a primeira construção com andar de cima andável). |
+| ✅ **Prédios do tamanho da loja** | Fachadas comerciais aleatórias agora são lojas térreas independentes; o Atacadinho e os postos já ocupam quarteirões próprios. |
+| ✅ **Shopping** | Shopping Marconi com oito balcões interativos, dois pisos e escada com rampa física walkable. |
 | **Táxi amarelo** | O taxista ganha o próprio carro: táxi amarelo com placa luminosa "TÁXI" no teto e o nome de uma cooperativa fictícia. |
 | **Agro-Tudão (casa de rações)** | Na estrada de terra entre a cidade e o sítio: entregas de sacos de ração para os cercados. |
 | **Conserta-Tudo do Primo** | O gari junta sucata nas calçadas e vende aqui, ou troca por melhorias (lanterna de longo alcance, pilhas para a visão noturna). |
