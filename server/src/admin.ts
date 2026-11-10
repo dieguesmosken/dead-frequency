@@ -234,7 +234,7 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
       return;
     }
     $("chatStats").innerHTML = records.map((r) =>
-      "<tr><td>" + esc(r.day) + "</td><td class=\"code\">" + esc(r.room) + "</td><td>" + Number(r.messages || 0) + "</td></tr>"
+      "<tr><td>" + esc(r.day) + "</td><td class='code'>" + esc(r.room) + "</td><td>" + Number(r.messages || 0) + "</td></tr>"
     ).join("");
   }
 
@@ -296,8 +296,8 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
     const entries = Object.entries(passwords || {});
     if (!entries.length) return;
     const box = $("roomPasswords");
-    const text = "Senhas iniciais das salas administrativas. Copie e guarde agora; elas nao serao exibidas novamente:\n" +
-      entries.map(([code, password]) => code + ": " + password).join("\n");
+    const text = "Senhas iniciais das salas administrativas. Copie e guarde agora; elas nao serao exibidas novamente:\\n" +
+      entries.map(([code, password]) => code + ": " + password).join("\\n");
     if (box.dataset.passwords === text) return;
     box.dataset.passwords = text;
     box.textContent = text;
@@ -320,7 +320,7 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
 
   function showCreatedRoomSecret(code, password) {
     const box = $("createdRoomSecret");
-    const text = "Sala permanente criada. Guarde esta senha, ela nao sera exibida novamente:\n" + code + ": " + password;
+    const text = "Sala permanente criada. Guarde esta senha, ela nao sera exibida novamente:\\n" + code + ": " + password;
     box.textContent = text;
     box.className = "msg show ok pre";
     const close = document.createElement("button");

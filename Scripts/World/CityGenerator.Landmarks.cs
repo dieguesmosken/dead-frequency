@@ -170,13 +170,13 @@ public partial class CityGenerator
             front = new Vector3(0f, 0f, Mathf.Sign(toLot.Z));
 
         if (_decoRng.Randf() < StorefrontChance)
-            BuildStorefront(parent, baseCenter, width, depth, front);
+            BuildStorefront(parent, baseCenter, width, depth, front, blockCenter);
 
         if (_decoRng.Randf() < WallAcChance && height > 6f)
             BuildWallAcs(parent, baseCenter, width, depth, height, front);
     }
 
-    private void BuildStorefront(Node3D parent, Vector3 baseCenter, float width, float depth, Vector3 front)
+    private void BuildStorefront(Node3D parent, Vector3 baseCenter, float width, float depth, Vector3 front, Vector3 blockCenter)
     {
         StoreBrand brand = NextBrand();
         float facadeWidth = Mathf.Abs(front.X) > 0.5f ? depth : width;
@@ -218,6 +218,11 @@ public partial class CityGenerator
             .Rotation = new Vector3(0.3f, 0f, 0f);
         AddBox(f, new Vector3(-signWidth * 0.15f, 1.3f, 0.04f), new Vector3(signWidth * 0.55f, 1.8f, 0.06f), _storeWindow, false);
         AddBox(f, new Vector3(signWidth * 0.32f, 1.1f, 0.05f), new Vector3(1.1f, 2.1f, 0.08f), _doorDark, false);
+
+        Vector3 along = new(front.Z, 0f, -front.X);
+        float alongOffset = (baseCenter - blockCenter).Dot(along);
+        Vector3 curb = blockCenter + front * (BlockSize * 0.5f) + along * alongOffset;
+        ForbidParking(curb, along, Mathf.Max(2.5f, signWidth * 0.3f));
     }
 
     /// <summary>Aparelhos de ar-condicionado na parede, logo abaixo de janelas (alinhados à grade do shader).</summary>
@@ -338,6 +343,7 @@ public partial class CityGenerator
     {
         float inner = BlockSize - SidewalkWidth * 2f;
         float half = inner * 0.5f;
+        ForbidParking(center + new Vector3(0f, 0f, -BlockSize * 0.5f), Vector3.Right, 13f, "BOMBEIROS");
         // Frame local: +Z = rua da frente.
         Node3D f = FacadeFrame(block, center + new Vector3(0f, CurbHeight, 0f), Vector3.Back);
         f.Name = "FireStation";
@@ -436,6 +442,7 @@ public partial class CityGenerator
     {
         float inner = BlockSize - SidewalkWidth * 2f;
         float half = inner * 0.5f;
+        ForbidParking(center + new Vector3(0f, 0f, BlockSize * 0.5f), Vector3.Right, 4.5f, "POLÍCIA");
         Node3D f = FacadeFrame(block, center + new Vector3(0f, CurbHeight, 0f), Vector3.Forward);
         f.Name = "PoliceStation";
         MarkPoi(f, "P", new Color(0.3f, 0.5f, 1f));
@@ -449,6 +456,15 @@ public partial class CityGenerator
         AddBox(f, new Vector3(0f, h * 0.5f, z), new Vector3(w, h, d), _whiteWall);
         AddBox(f, new Vector3(0f, 1.1f, frontZ + 0.03f), new Vector3(w, 0.5f, 0.06f), _policeBlue, false);
         AddBox(f, new Vector3(0f, h + 0.2f, z), new Vector3(w + 0.4f, 0.4f, d + 0.4f), _policeBlue, false);
+        f.AddChild(new Label3D
+        {
+            Text = "POLÍCIA",
+            FontSize = 40,
+            PixelSize = 0.005f,
+            Modulate = Colors.White,
+            OutlineSize = 0,
+            Position = new Vector3(0f, 1.1f, frontZ + 0.08f),
+        });
         // Janelas dos dois andares.
         for (int floor = 0; floor < 2; floor++)
             for (float x = -10f; x <= 10f; x += 2.5f)
@@ -485,6 +501,23 @@ public partial class CityGenerator
         // Luminária azul clássica na porta.
         StandardMaterial3D lamp = Emissive(new Color(0.2f, 0.4f, 1f), 3f);
         AddBox(f, new Vector3(0f, 2.9f, frontZ + 2.75f), new Vector3(0.35f, 0.35f, 0.35f), lamp, false);
+
+        for (int i = 0; i < 2; i++)
+        {
+            Color skin = i == 0 ? new Color(0.68f, 0.47f, 0.33f) : new Color(0.42f, 0.28f, 0.2f);
+            CharacterModel officer = CharacterModel.Create(
+                new Color(0.08f, 0.18f, 0.48f),
+                new Color(0.06f, 0.07f, 0.1f),
+                skin,
+                new Color(0.05f, 0.12f, 0.32f),
+                i);
+            officer.Name = $"Policial{i + 1}";
+            officer.Position = new Vector3(i == 0 ? -3.4f : 3.4f, 0f, frontZ + 4.2f);
+            officer.Rotation = new Vector3(0f, Mathf.Pi, 0f);
+            officer.Scale = Vector3.One * 0.9f;
+            AddBox(officer.Head, new Vector3(0f, 0.12f, 0f), new Vector3(0.32f, 0.1f, 0.3f), _policeBlue, false);
+            f.AddChild(officer);
+        }
 
         // Mastros com bandeiras genéricas.
         for (int i = 0; i < 3; i++)
