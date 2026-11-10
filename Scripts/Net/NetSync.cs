@@ -26,9 +26,12 @@ public partial class NetSync : Node
 
     private readonly Dictionary<int, Action<bool>> _purchaseCallbacks = new();
     private int _nextPurchaseId = 1;
+    private readonly Dictionary<int, Action<bool, int>> _saleCallbacks = new();
+    private int _nextSaleId = 1;
 
     private readonly Dictionary<int, RemotePlayer> _remotes = new();
     private readonly Dictionary<string, int> _owners = new();
+    private readonly Dictionary<string, WorldItem> _worldItems = new();
     private readonly Dictionary<int, bool> _remoteDriving = new();
     private Node3D _remoteRoot;
     /// <summary>Todos os veículos da fase por NetId (van, moto, caminhões).</summary>
@@ -80,6 +83,8 @@ public partial class NetSync : Node
         Player.CargoGrabbed += OnCargoGrabbed;
         Player.VehicleEntered += OnVehicleEntered;
         Player.VehicleExited += OnVehicleExited;
+        if (PlayerInventory.Instance != null)
+            PlayerInventory.Instance.Changed += SyncInventory;
         Net.MessageReceived += OnMessage;
         Net.Disconnected += OnDisconnected;
 
@@ -93,6 +98,8 @@ public partial class NetSync : Node
             Instance = null;
         if (!_active || Net == null)
             return;
+        if (PlayerInventory.Instance != null)
+            PlayerInventory.Instance.Changed -= SyncInventory;
         Net.MessageReceived -= OnMessage;
         Net.Disconnected -= OnDisconnected;
     }
@@ -130,6 +137,9 @@ public partial class NetSync : Node
 
         foreach (JsonElement obj in m.GetProperty("objects").EnumerateArray())
             ApplyObject(obj);
+        if (m.TryGetProperty("worldItems", out JsonElement worldItems) && worldItems.ValueKind == JsonValueKind.Array)
+            foreach (JsonElement item in worldItems.EnumerateArray())
+                AddWorldItem(item);
     }
 
     /// <summary>
@@ -228,6 +238,27 @@ public partial class NetSync : Node
                 if (m.TryGetProperty("req", out JsonElement failReq) && _purchaseCallbacks.Remove(failReq.GetInt32(), out Action<bool> failed))
                     failed(false);
                 break;
+            case "sold":
+                Delivery.ApplyNetMoney(m.GetProperty("money").GetInt32());
+                if (m.GetProperty("by").GetInt32() == MyId
+                    && m.TryGetProperty("req", out JsonElement soldReq)
+                    && _saleCallbacks.Remove(soldReq.GetInt32(), out Action<bool, int> sold))
+                    sold(true, m.GetProperty("price").GetInt32());
+                break;
+            case "sellFail":
+                if (m.TryGetProperty("req", out JsonElement failedSaleReq)
+                    && _saleCallbacks.Remove(failedSaleReq.GetInt32(), out Action<bool, int> failedSale))
+                    failedSale(false, 0);
+                break;
+            case "itemSpawn":
+                AddWorldItem(m);
+                break;
+            case "itemRemove":
+                RemoveWorldItem(m.GetProperty("id").GetString());
+                break;
+            case "itemsState":
+                ApplyInventoryState(m);
+                break;
         }
     }
 
@@ -252,7 +283,10 @@ public partial class NetSync : Node
     {
         string equipment = s.TryGetProperty("eq", out JsonElement eq) && eq.ValueKind == JsonValueKind.String ? eq.GetString() : "";
         string look = s.TryGetProperty("lk", out JsonElement lk) && lk.ValueKind == JsonValueKind.String ? lk.GetString() : "";
-        remote.ApplyState(ReadVector(s.GetProperty("p")), s.GetProperty("ry").GetSingle(), s.GetProperty("hp").GetSingle(), s.GetProperty("st").GetInt32(), equipment, look);
+        string held = s.TryGetProperty("held", out JsonElement heldElement) && heldElement.ValueKind == JsonValueKind.String
+            ? heldElement.GetString()
+            : "";
+        remote.ApplyState(ReadVector(s.GetProperty("p")), s.GetProperty("ry").GetSingle(), s.GetProperty("hp").GetSingle(), s.GetProperty("st").GetInt32(), equipment, look, held);
     }
 
     /// <summary>Compra online: o servidor confere o preço e desconta do dinheiro do grupo.</summary>
@@ -261,6 +295,66 @@ public partial class NetSync : Node
         int req = _nextPurchaseId++;
         _purchaseCallbacks[req] = done;
         Net.Send(new { t = "buy", item = itemId, req });
+    }
+
+    public void RequestSale(string itemId, Action<bool, int> done)
+    {
+        int req = _nextSaleId++;
+        _saleCallbacks[req] = done;
+        Net.Send(new { t = "sell", item = itemId, req });
+    }
+
+    public void RequestWorldItemDrop(string itemId, Vector3 position, Quaternion rotation) =>
+        Net.Send(new { t = "itemDrop", item = itemId, p = Vec(position), q = new[] { Round(rotation.X), Round(rotation.Y), Round(rotation.Z), Round(rotation.W) } });
+
+    public void RequestWorldItemPickup(WorldItem item)
+    {
+        if (item != null && !string.IsNullOrEmpty(item.WorldId))
+            Net.Send(new { t = "itemPickup", id = item.WorldId });
+    }
+
+    public void RequestItemTransfer(int playerId, string itemId) =>
+        Net.Send(new { t = "itemTransfer", to = playerId, item = itemId });
+
+    private void AddWorldItem(JsonElement data)
+    {
+        string id = data.GetProperty("id").GetString();
+        if (string.IsNullOrEmpty(id) || _worldItems.ContainsKey(id))
+            return;
+        string itemId = data.GetProperty("item").GetString();
+        Vector3 position = ReadVector(data.GetProperty("p"));
+        Quaternion rotation = data.TryGetProperty("q", out JsonElement q) ? ReadQuaternion(q) : Quaternion.Identity;
+        WorldItem item = WorldItem.Create(id, itemId, position, rotation);
+        if (item == null)
+            return;
+        _worldItems[id] = item;
+        Node parent = GetTree().CurrentScene ?? GetTree().Root;
+        parent.AddChild(item);
+        item.GlobalPosition = position;
+        item.GlobalBasis = new Basis(rotation);
+    }
+
+    private void RemoveWorldItem(string id)
+    {
+        if (_worldItems.Remove(id, out WorldItem item) && IsInstanceValid(item))
+            item.QueueFree();
+    }
+
+    private static void ApplyInventoryState(JsonElement message)
+    {
+        if (!message.TryGetProperty("items", out JsonElement items) || items.ValueKind != JsonValueKind.Array)
+            return;
+        var result = new List<string>();
+        foreach (JsonElement item in items.EnumerateArray())
+            if (item.ValueKind == JsonValueKind.String)
+                result.Add(item.GetString());
+        PlayerInventory.Instance?.ApplyNetworkItems(result);
+    }
+
+    private void SyncInventory()
+    {
+        if (Net?.IsOnline == true)
+            Net.Send(new { t = "inventory", items = PlayerInventory.Instance?.Items });
     }
 
     private void ApplyObject(JsonElement o)
@@ -343,6 +437,9 @@ public partial class NetSync : Node
         _active = false;
         SetPhysicsProcess(false);
         GetTree().Paused = false;
+        foreach (Action<bool, int> callback in _saleCallbacks.Values)
+            callback(false, 0);
+        _saleCallbacks.Clear();
         GetTree().CreateTimer(2.5).Timeout += () =>
         {
             if (IsInsideTree())
@@ -432,7 +529,7 @@ public partial class NetSync : Node
             hp = Round(look.X),
             st = Player.State == PlayerState.Driving ? 1 : Player.State == PlayerState.Riding ? 2 : 0,
             lk = CharacterLook.Local.Encode(),
-            held = Player.HeldItem?.NetId,
+            held = Player.HeldItem?.NetId ?? (PlayerInventory.Instance?.SelectedHotbarItemId is string heldItem ? "item:" + heldItem : null),
             eq = PlayerInventory.Instance?.EquipmentCsv() ?? "",
             objs,
         });

@@ -33,6 +33,7 @@ public partial class MultiplayerPanel : VBoxContainer
     private VBoxContainer _roomRows;
     private LineEdit _server;
     private LineEdit _code;
+    private LineEdit _roomPassword;
     private Label _status;
     private Label _modeHint;
     private Control _serverRow;
@@ -147,6 +148,18 @@ public partial class MultiplayerPanel : VBoxContainer
         _listButton = UiStyle.MakeButton("Salas online", ShowRoomList, 170);
         joinRow.AddChild(_listButton);
         join.AddChild(joinRow);
+        var passwordRow = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
+        passwordRow.AddThemeConstantOverride("separation", 10);
+        passwordRow.AddChild(UiStyle.MakeLabel("Senha da sala", 15, color: UiStyle.PhosphorDim));
+        _roomPassword = new LineEdit
+        {
+            PlaceholderText = "Deixe vazio para salas sem senha",
+            Secret = true,
+            MaxLength = 64,
+            CustomMinimumSize = new Vector2(280, 40),
+        };
+        passwordRow.AddChild(_roomPassword);
+        join.AddChild(passwordRow);
         _joinBlock = join;
         AddChild(join);
 
@@ -277,7 +290,10 @@ public partial class MultiplayerPanel : VBoxContainer
                 line.AddThemeConstantOverride("separation", 10);
                 string host = string.IsNullOrEmpty(r.Host) ? "" : $" · {r.Host}";
                 string auto = r.AutoProfession ? " · profissões sorteadas" : "";
-                Label l = UiStyle.MakeLabel($"{r.Code}  {GameLevels.Get(r.Level).Name}  {r.Players}/{r.Max}{host}{auto}", 15, HorizontalAlignment.Left);
+                string roomName = string.IsNullOrEmpty(r.Name) ? GameLevels.Get(r.Level).Name : r.Name;
+                string permanent = r.Permanent ? " · permanente" : "";
+                string password = r.HasPassword ? " · senha" : "";
+                Label l = UiStyle.MakeLabel($"{r.Code}  {roomName}  {r.Players}/{r.Max}{host}{auto}{permanent}{password}", 15, HorizontalAlignment.Left);
                 l.SizeFlagsHorizontal = SizeFlags.ExpandFill;
                 l.ClipText = true;
                 line.AddChild(l);
@@ -553,7 +569,7 @@ public partial class MultiplayerPanel : VBoxContainer
             return;
         }
         SetBusy(true);
-        NetClient.Instance.JoinRoom(CurrentServer(), code, PlayerName());
+        NetClient.Instance.JoinRoom(CurrentServer(), code, PlayerName(), _roomPassword.Text);
     }
 
     /// <summary>Cola o convite: pega o código e, se tiver endereço de servidor, troca para "Meu servidor".</summary>

@@ -8,14 +8,23 @@ const assert = (cond, label) => {
   if (!cond) throw new Error("FALHOU: " + label);
   console.log("ok -", label);
 };
+async function waitFor(client, type, predicate = () => true, timeout = 3000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const message = client.inbox.find((m) => m.t === type && predicate(m));
+    if (message) return message;
+    await sleep(25);
+  }
+  return undefined;
+}
 
-function connect(code, name, prof = "entregador") {
+function connect(code, name, prof = "entregador", items = [], roomPassword = "") {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`${wsBase}/api/rooms/${code}/ws?name=${encodeURIComponent(name)}`);
     const inbox = [];
     ws.on("message", (data) => inbox.push(JSON.parse(data.toString())));
     ws.on("open", () => {
-      ws.send(JSON.stringify({ t: "hello", version: 5, prof }));
+      ws.send(JSON.stringify({ t: "hello", version: 6, prof, items, roomPassword }));
       resolve({ ws, inbox, send: (m) => ws.send(JSON.stringify(m)), find: (t) => inbox.find((m) => m.t === t), all: (t) => inbox.filter((m) => m.t === t) });
     });
     ws.on("error", reject);
@@ -28,6 +37,11 @@ const pub = await (await fetch(base + "/api/stats")).json();
 assert(pub.ok && typeof pub.onlinePlayers === "number" && pub.protocol === health.protocol, "stats públicas");
 assert(!JSON.stringify(pub).includes("code") && !("rooms" in pub), "stats sem códigos de sala");
 
+const permanentList = await (await fetch(base + "/api/rooms")).json();
+assert(permanentList.rooms.some((r) => r.code === "SERVA" && r.permanent && r.players === 0), "sala permanente de cidade aparece vazia");
+assert(permanentList.rooms.some((r) => r.code === "SERVB" && r.level === "farm"), "sala permanente do sitio aparece na lista");
+assert(!permanentList.rooms.some((r) => r.code === "ADMNA" || r.code === "ADMNB"), "salas administrativas protegidas ficam ocultas");
+
 const { code } = await (await fetch(base + "/api/rooms", { method: "POST" })).json();
 assert(/^[A-Z2-9]{5}$/.test(code), "sala criada " + code);
 
@@ -35,7 +49,7 @@ const info = await (await fetch(`${base}/api/rooms/${code}`)).json();
 assert(info.players === 0, "info da sala");
 assert((await fetch(`${base}/api/rooms/ZZZZZ`)).status === 404, "sala inexistente = 404");
 
-const a = await connect(code, "Teuzin");
+const a = await connect(code, "Teuzin", "entregador", ["tape", "cafe", "guarana"]);
 await sleep(300);
 const welcomeA = a.find("welcome");
 assert(welcomeA && welcomeA.code === code && welcomeA.jobs.length >= 3, "welcome A com pedidos");
@@ -60,10 +74,33 @@ assert(welcomeB.players.length === 1 && welcomeB.seed === welcomeA.seed, "B vê 
 assert(welcomeB.name === "Amigoscript", "nome sanitizado");
 assert(a.find("join")?.player.id === welcomeB.you, "A recebeu join de B");
 
+a.send({ t: "sell", item: "tape", req: 1 });
+const firstSale = await waitFor(a, "sold", (m) => m.req === 1);
+assert(firstSale?.price === 25 && firstSale?.by === welcomeA.you, `recompra paga metade do preço (${JSON.stringify(a.inbox.filter((m) => m.t === "sold" || m.t === "sellFail"))})`);
+a.send({ t: "sell", item: "tape", req: 2 });
+assert(await waitFor(a, "sellFail", (m) => m.req === 2), "item vendido não pode ser vendido novamente");
+
+a.send({ t: "itemDrop", item: "cafe", p: [1, 0, 2], q: [0, 0, 0, 1] });
+const droppedItem = await waitFor(b, "itemSpawn", (m) => m.item === "cafe");
+const dropInventory = await waitFor(a, "itemsState", (m) => !m.items.includes("cafe"));
+assert(droppedItem?.id && dropInventory, "largar item remove da mochila e replica o objeto");
+b.send({ t: "itemPickup", id: droppedItem.id });
+const pickupInventory = await waitFor(b, "itemsState", (m) => m.items.includes("cafe"));
+assert(pickupInventory && await waitFor(a, "itemRemove", (m) => m.id === droppedItem.id), "pegar item adiciona à mochila e remove do mundo");
+
+a.send({ t: "itemTransfer", to: welcomeB.you, item: "guarana" });
+const transferInventoryA = await waitFor(a, "itemsState", (m) => m.items.length === 0);
+const transferInventoryB = await waitFor(b, "itemsState", (m) => m.items.includes("cafe") && m.items.includes("guarana"));
+assert(transferInventoryA && transferInventoryB && await waitFor(b, "itemTransferred", (m) => m.from === welcomeA.you && m.to === welcomeB.you), "entregar item atualiza as duas mochilas e avisa a sala");
+
 const job = welcomeA.jobs[0];
 a.send({ t: "claim", id: job.id });
-await sleep(200);
-assert(b.all("owner").some((m) => m.id === job.id && m.owner === welcomeA.you), "posse da caixa passou para A");
+assert(await waitFor(b, "owner", (m) => m.id === job.id && m.owner === welcomeA.you), "posse da caixa passou para A");
+
+for (let i = 1; i <= 4; i++) a.send({ t: "chat", msg: `teste ${i}` });
+assert(await waitFor(a, "chatFail"), "limite do chat bloqueia spam");
+assert(await waitFor(b, "chat", (m) => m.msg === "teste 3"), "mensagens do chat chegam à sala");
+assert(b.all("chat").filter((m) => m.msg?.startsWith("teste ")).length === 3, "servidor aceita no máximo 3 mensagens em 5 segundos");
 
 a.send({ t: "tick", p: [1, 0, 2], ry: 0.5, hp: 0, st: 0, held: job.id, objs: [{ id: job.id, p: [1, 1, 1], q: [0, 0, 0, 1], integ: 0.5 }, { id: "van", p: [9, 9, 9], q: [0, 0, 0, 1] }] });
 await sleep(200);
@@ -71,14 +108,13 @@ const tick = b.find("tick");
 assert(tick && tick.objs.length === 1 && tick.objs[0].id === job.id, "tick repassado e van (sem posse) filtrada");
 
 b.send({ t: "claim", id: job.id });
-await sleep(200);
-assert(b.find("claimFail")?.id === job.id, "B não toma caixa que A está segurando");
+assert(await waitFor(b, "claimFail", (m) => m.id === job.id), "B não toma caixa que A está segurando");
 
 b.send({ t: "deliver", cargoId: job.id, integ: 1 });
 a.send({ t: "deliver", cargoId: job.id, integ: 0.5 });
-await sleep(300);
+const validDelivery = await waitFor(b, "delivered");
 const delivered = b.all("delivered");
-assert(delivered.length === 1 && delivered[0].by === welcomeA.you, "só o dono entrega");
+assert(validDelivery && delivered.length === 1 && validDelivery.by === welcomeA.you, "só o dono entrega");
 assert(delivered[0].payment === Math.round([150, 300, 120, 180, 220, 90, 160, 140, 260, 280, 200, 110, 170][job.type] * 0.5), "pagamento proporcional à integridade");
 
 for (const j of welcomeA.jobs.slice(1)) {
@@ -86,29 +122,25 @@ for (const j of welcomeA.jobs.slice(1)) {
   await sleep(50);
   a.send({ t: "deliver", cargoId: j.id, integ: 1 });
 }
-await sleep(500);
-assert(a.find("shiftDone"), "turno concluído");
-await sleep(5000);
-const shift = a.find("shift");
+assert(await waitFor(a, "shiftDone"), "turno concluído");
+const shift = await waitFor(a, "shift", (m) => m.shift === 2, 6000);
 assert(shift && shift.shift === 2 && shift.jobs.every((j) => j.status === "pending"), "novo turno via alarm");
 
 b.send({ t: "claim", id: "van" });
-await sleep(150);
+assert(await waitFor(a, "owner", (m) => m.id === "van" && m.owner === welcomeB.you), "van passa para B");
 b.send({ t: "tick", p: [0, 0, 0], ry: 0, hp: 0, st: 1, held: null, objs: [] });
-await sleep(150);
+assert(await waitFor(a, "tick", (m) => m.id === welcomeB.you && m.st === 1), "estado de motorista chega à sala");
 a.send({ t: "claim", id: "van" });
-await sleep(200);
-assert(a.find("claimFail")?.id === "van", "não dá para tomar a van de quem está dirigindo");
+assert(await waitFor(a, "claimFail", (m) => m.id === "van"), "não dá para tomar a van de quem está dirigindo");
 
 // ---------------- loja e game over ----------------
 const moneyBefore = a.all("delivered").at(-1)?.money ?? 0;
 a.send({ t: "buy", item: "tape", req: 7 });
-await sleep(200);
-const bought = b.all("money").find((m) => m.req === 7);
+const bought = await waitFor(b, "money", (m) => m.req === 7);
 assert(bought && bought.money === moneyBefore - 50 && bought.item === "tape", "compra desconta do dinheiro do grupo");
 a.send({ t: "buy", item: "radar", req: 8 });
 a.send({ t: "buy", item: "nave-espacial", req: 9 });
-await sleep(200);
+await waitFor(a, "buyFail", (m) => m.req === 9);
 const fails = a.all("buyFail").map((m) => m.req);
 assert(fails.includes(9) && (moneyBefore - 50 < 400 ? fails.includes(8) : true), "compra sem dinheiro / item inválido recusada");
 a.send({ t: "tick", p: [0, 0, 0], ry: 0, hp: 0, st: 0, held: null, eq: "radar,gloves<x>", objs: [] });
@@ -120,9 +152,11 @@ for (const j of shift2.jobs) {
   await sleep(40);
   a.send({ t: "lost", cargoId: j.id });
 }
-await sleep(400);
-const over = b.find("gameOver");
-assert(over && over.money === 0, "todas as caixas perdidas = game over e dinheiro zerado");
+const over = await waitFor(b, "gameOver", () => true, 3000);
+if (!over || over.money !== 0) {
+  throw new Error(`FALHOU: todas as caixas perdidas = game over e dinheiro zerado (${JSON.stringify({ jobs: shift2.jobs, lost: a.all("lost").map((m) => m.cargoId), shifts: a.all("shift").map((m) => m.shift) })})`);
+}
+assert(true, "todas as caixas perdidas = game over e dinheiro zerado");
 await sleep(8800);
 const restart = b.all("shift").at(-1);
 assert(restart.shift === 1 && restart.money === 0, "sala recomeça no turno 1 depois do game over");
@@ -138,11 +172,9 @@ assert(restart.shift === 1 && restart.money === 0, "sala recomeça no turno 1 de
   assert(w1.autoProfession === true && w1.prof === "entregador" && w2.prof === "taxista", "sala automática equilibra as profissões");
   assert(w2.players[0].prof === "entregador", "welcome mostra a profissão dos outros");
   p2.send({ t: "prof", prof: "gari" });
-  await sleep(200);
-  assert(p2.all("prof").at(-1)?.prof === "taxista", "sala automática não deixa trocar");
+  assert(await waitFor(p2, "prof", (m) => m.prof === "taxista"), "sala automática não deixa trocar");
   p1.send({ t: "earn", job: "taxista", amount: 300 });
-  await sleep(150);
-  assert(p1.find("earnFail"), "não recebe por profissão que não é a sua");
+  assert(await waitFor(p1, "earnFail"), "não recebe por profissão que não é a sua");
   p2.send({ t: "earn", job: "taxista", amount: 99999, what: "corrida" });
   await sleep(150);
   const e1 = p1.all("earned").at(-1);
@@ -167,11 +199,9 @@ assert(restart.shift === 1 && restart.money === 0, "sala recomeça no turno 1 de
   assert(g.find("welcome").prof === "gari" && r.find("welcome").prof === "locutor", "sala livre respeita a escolha");
   assert(g.find("welcome").jobs.length === 3, "turno conta só os entregadores");
   g.send({ t: "earn", job: "gari", units: 9 });
-  await sleep(150);
-  assert(g.all("earned").at(-1)?.payment === 75, "gari: no máximo 3 sacos por pagamento");
+  assert((await waitFor(g, "earned"))?.payment === 75, "gari: no máximo 3 sacos por pagamento");
   r.send({ t: "prof", prof: "repositor" });
-  await sleep(150);
-  assert(g.all("prof").some((m) => m.prof === "repositor" && m.id === r.find("welcome").you), "troca de profissão avisada");
+  assert(await waitFor(g, "prof", (m) => m.prof === "repositor" && m.id === r.find("welcome").you), "troca de profissão avisada");
   g.ws.close(); r.ws.close();
 }
 
@@ -182,11 +212,9 @@ assert(restart.shift === 1 && restart.money === 0, "sala recomeça no turno 1 de
   const v2 = await connect(vc, "Caminhoneiro");
   await sleep(300);
   v1.send({ t: "claim", id: "moto" });
-  await sleep(150);
+  assert(await waitFor(v2, "owner", (m) => m.id === "moto" && m.owner === v1.find("welcome").you), "moto tem dono");
   v1.send({ t: "tick", p: [0, 0, 0], ry: 0, hp: 0, st: 1, held: null, objs: [{ id: "moto", p: [5, 0, 5], q: [0, 0, 0, 1] }] });
-  await sleep(150);
-  assert(v2.all("owner").some((m) => m.id === "moto" && m.owner === v1.find("welcome").you), "moto tem dono");
-  assert(v2.all("tick").some((m) => m.objs.some((o) => o.id === "moto")), "estado da moto repassado");
+  assert(await waitFor(v2, "tick", (m) => m.objs?.some((o) => o.id === "moto")), "estado da moto repassado");
   v2.send({ t: "claim", id: "moto" });
   v2.send({ t: "claim", id: "truck_red" });
   v2.send({ t: "claim", id: "aviao" });
@@ -204,27 +232,51 @@ assert(restart.shift === 1 && restart.money === 0, "sala recomeça no turno 1 de
 const token = process.env.ADMIN_TOKEN ?? "teste-local";
 const admin = (path, init = {}) => fetch(base + "/api/admin" + path, { ...init, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" } });
 assert((await fetch(base + "/admin")).headers.get("content-type").includes("text/html"), "página /admin");
-assert((await fetch(base + "/api/admin/status")).status === 401, "admin sem token = 401");
-const status = await (await admin("/status")).json();
-const listed = status.rooms.find((r) => r.code === code);
-assert(listed && listed.players === 2 && status.stats.deliveries >= welcomeA.jobs.length, "status lista a sala, jogadores e entregas");
-const detail = await (await admin("/rooms/" + code)).json();
-assert(detail.players.length === 2 && detail.jobs.length > 0 && detail.vanOwner === welcomeB.you, "detalhes da sala (jogadores, pedidos, dono da van)");
-await (await admin("/announce", { method: "POST", body: JSON.stringify({ msg: "teste de aviso" }) })).json();
-await sleep(200);
-assert(a.all("chat").some((m) => m.name === "SERVIDOR" && m.msg === "teste de aviso"), "aviso chega nas salas");
+const unauthenticatedAdmin = await fetch(base + "/api/admin/status");
+if (unauthenticatedAdmin.status === 503) {
+  console.log("skip - painel admin desativado sem ADMIN_TOKEN");
+} else {
+  assert(unauthenticatedAdmin.status === 401, "admin sem token = 401");
+  const status = await (await admin("/status")).json();
+  const listed = status.rooms.find((r) => r.code === code);
+  assert(listed && listed.players === 2 && status.stats.deliveries >= welcomeA.jobs.length, "status lista a sala, jogadores e entregas");
+  assert(status.stats.chatMessages >= 3 && status.chatByDayRoom.some((r) => r.room === code && r.messages >= 3), "admin vê métricas agregadas de chat por dia e sala");
+  assert(status.rooms.some((r) => r.code === "ADMNA" && r.permanent && r.hasPassword), "admin vê sala fixa protegida");
+  const detail = await (await admin("/rooms/" + code)).json();
+  assert(detail.players.length === 2 && detail.jobs.length > 0 && detail.vanOwner === welcomeB.you, "detalhes da sala (jogadores, pedidos, dono da van)");
+  await (await admin("/announce", { method: "POST", body: JSON.stringify({ msg: "teste de aviso" }) })).json();
+  await sleep(200);
+  assert(a.all("chat").some((m) => m.name === "SERVIDOR" && m.msg === "teste de aviso"), "aviso chega nas salas");
+
+  const permanentResponse = await admin("/permanent-rooms", {
+    method: "POST",
+    body: JSON.stringify({ name: "Teste Permanente", level: "city", passwordProtected: true }),
+  });
+  const permanentRoom = await permanentResponse.json();
+  assert(permanentResponse.status === 201 && /^[A-Z2-9]{5}$/.test(permanentRoom.code) && permanentRoom.password.length === 10, "admin cria sala permanente com senha de uso unico");
+  const rejected = await connect(permanentRoom.code, "SemSenha", "entregador", [], "ERRADA");
+  assert(await waitFor(rejected, "error", (m) => m.msg === "Senha da sala incorreta."), "senha incorreta impede entrada");
+  assert(!rejected.find("welcome"), "senha incorreta nao recebe welcome");
+  const accepted = await connect(permanentRoom.code, "ComSenha", "entregador", [], permanentRoom.password);
+  assert(await waitFor(accepted, "welcome"), "senha correta permite entrada");
+  const protectedClose = await admin("/rooms/" + permanentRoom.code + "/close", { method: "POST" });
+  assert(protectedClose.status === 409, "sala permanente nao pode ser encerrada");
+  accepted.ws.close();
+}
 
 b.ws.close();
 await sleep(400);
 assert(a.find("leave")?.id === welcomeB.you, "saída avisada");
 assert(a.all("owner").some((m) => m.id === "van" && m.owner === null), "van liberada quando o motorista sai");
 
-const closeRes = await (await admin("/rooms/" + code + "/close", { method: "POST" })).json();
-await sleep(300);
-assert(closeRes.closed && a.find("kick")?.msg.includes("encerrada"), "admin encerra a sala e manda kick");
-assert((await fetch(`${base}/api/rooms/${code}`)).status === 404, "sala encerrada some");
-const after = await (await admin("/status")).json();
-assert(!after.rooms.some((r) => r.code === code), "sala encerrada sai do registro");
+if (unauthenticatedAdmin.status !== 503) {
+  const closeRes = await (await admin("/rooms/" + code + "/close", { method: "POST" })).json();
+  await sleep(300);
+  assert(closeRes.closed && a.find("kick")?.msg.includes("encerrada"), "admin encerra a sala e manda kick");
+  assert((await fetch(`${base}/api/rooms/${code}`)).status === 404, "sala encerrada some");
+  const after = await (await admin("/status")).json();
+  assert(!after.rooms.some((r) => r.code === code), "sala encerrada sai do registro");
+}
 
 console.log("\nTudo certo ✔");
 process.exit(0);

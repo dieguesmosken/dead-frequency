@@ -38,7 +38,7 @@ export interface Env {
 /** Momento em que esta instância do Worker atendeu a primeira requisição (Date.now() no escopo global vale 0). */
 let SERVER_STARTED = 0;
 
-const PROTOCOL_VERSION = 5;
+const PROTOCOL_VERSION = 6;
 /** Veículos da fase (VanController.NetId no Godot): a van e, desde a v0.9.3, a moto e os caminhões do pátio. */
 const VEHICLES = ["van", "moto", "truck_yellow", "truck_red", "car_gou", "car_fusca", "car_opalinha"];
 /** Carros da concessionária (v0.9.7): comprados uma vez por sala, com o dinheiro do grupo. */
@@ -47,6 +47,19 @@ const MAX_PLAYERS = 8;
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sem 0/O/1/I
 const CODE_LENGTH = 5;
 const MAX_MESSAGE_BYTES = 8 * 1024;
+const MAX_INVENTORY_ITEMS = 10;
+const MAX_WORLD_ITEMS = 64;
+const BUYBACK_PERCENT = 50;
+const CHAT_WINDOW_MS = 5000;
+const CHAT_MAX_MESSAGES = 3;
+const CHAT_STATS_RETENTION_DAYS = 30;
+const ROOM_PASSWORD_LENGTH = 10;
+const PERMANENT_ROOMS = [
+  { code: "ADMNA", name: "ADMIN 1 - CIDADE", level: "city", isPublic: false, passwordProtected: true },
+  { code: "ADMNB", name: "ADMIN 2 - SITIO", level: "farm", isPublic: false, passwordProtected: true },
+  { code: "SERVA", name: "SERVIDOR - CIDADE", level: "city", isPublic: true, passwordProtected: false },
+  { code: "SERVB", name: "SERVIDOR - SITIO", level: "farm", isPublic: true, passwordProtected: false },
+] as const;
 const EMPTY_ROOM_TTL_MS = 30 * 60 * 1000;
 const DEBUG_AUTH_WINDOW_MS = 15 * 60 * 1000;
 const DEBUG_AUTH_LOCK_MS = 15 * 60 * 1000;
@@ -133,6 +146,20 @@ function normalizeCode(raw: string): string | null {
   return code;
 }
 
+function randomRoomPassword(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(ROOM_PASSWORD_LENGTH));
+  return Array.from(bytes, (byte) => CODE_ALPHABET[byte % CODE_ALPHABET.length]).join("");
+}
+
+function randomSalt(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function hashRoomPassword(password: string, salt: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${salt}:${password}`));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 // ------------------------------------------------------------------ Worker
 
 export default {
@@ -166,6 +193,7 @@ export default {
 
     if (url.pathname === "/api/rooms" && request.method === "GET") {
       const registry = env.REGISTRY.get(env.REGISTRY.idFromName("global"));
+      await registry.ensurePermanentRooms();
       return json({ rooms: await registry.publicRooms() });
     }
 
@@ -193,6 +221,8 @@ export default {
 
     const match = url.pathname.match(/^\/api\/rooms\/([A-Za-z0-9]+)(\/ws)?$/);
     if (match) {
+      const registry = env.REGISTRY.get(env.REGISTRY.idFromName("global"));
+      await registry.ensurePermanentRooms();
       const code = normalizeCode(match[1]);
       if (!code) return json({ error: "Código inválido" }, 400);
       const stub = env.ROOMS.get(env.ROOMS.idFromName(code));
@@ -231,9 +261,15 @@ async function handleAdmin(request: Request, url: URL, env: Env): Promise<Respon
   const path = url.pathname.replace(/^\/api\/admin/, "");
 
   if (path === "/status" && request.method === "GET") {
+    await registry.ensurePermanentRooms();
     const status = await registry.status();
     const colo = (request as Request & { cf?: { colo?: string } }).cf?.colo ?? "local";
     return json({ ...status, server: { protocol: PROTOCOL_VERSION, maxPlayers: MAX_PLAYERS, colo, isolateStartedAt: SERVER_STARTED, now: Date.now() } });
+  }
+
+  if (path === "/initial-passwords/ack" && request.method === "POST") {
+    await registry.acknowledgeInitialPasswords();
+    return json({ ok: true });
   }
 
   if (path === "/announce" && request.method === "POST") {
@@ -245,6 +281,24 @@ async function handleAdmin(request: Request, url: URL, env: Env): Promise<Respon
     return json({ ok: true, rooms: codes.length });
   }
 
+  if (path === "/permanent-rooms" && request.method === "POST") {
+    let body: { name?: unknown; level?: unknown; passwordProtected?: unknown };
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return json({ error: "Corpo JSON inválido." }, 400);
+    }
+    const name = typeof body.name === "string" ? sanitizeRoomName(body.name) : "";
+    if (!name) return json({ error: "Informe um nome para a sala." }, 400);
+    if (body.level !== undefined && (typeof body.level !== "string" || !LEVELS.includes(body.level)))
+      return json({ error: "Fase inválida." }, 400);
+    if (body.passwordProtected !== undefined && typeof body.passwordProtected !== "boolean")
+      return json({ error: "A opção de senha é inválida." }, 400);
+    const level = body.level ?? "city";
+    const created = await registry.createPermanentRoom(name, level, body.passwordProtected === true);
+    return created ? json(created, 201) : json({ error: "Não foi possível criar a sala permanente." }, 503);
+  }
+
   const match = path.match(/^\/rooms\/([A-Za-z0-9]+)(\/close)?$/);
   if (match) {
     const code = normalizeCode(match[1]);
@@ -252,7 +306,8 @@ async function handleAdmin(request: Request, url: URL, env: Env): Promise<Respon
     const room = env.ROOMS.get(env.ROOMS.idFromName(code));
     if (match[2] && request.method === "POST") {
       const closed = await room.adminClose();
-      if (!closed) await registry.remove(code);
+      if (!closed) return json({ error: "Sala permanente ou inexistente não pode ser encerrada." }, 409);
+      await registry.remove(code);
       return json({ ok: true, closed });
     }
     const detail = await room.adminDetail();
@@ -266,6 +321,7 @@ async function handleAdmin(request: Request, url: URL, env: Env): Promise<Respon
 
 export interface RoomSummary {
   code: string;
+  name?: string;
   players: number;
   names: string[];
   hostName: string | null;
@@ -278,6 +334,8 @@ export interface RoomSummary {
   /** Aparece na lista de salas abertas (padrão: sim). */
   isPublic?: boolean;
   autoProfession?: boolean;
+  permanent?: boolean;
+  hasPassword?: boolean;
 }
 
 interface DebugAuthRecord {
@@ -300,21 +358,163 @@ interface GlobalStats {
   lostCargo: number;
   moneyEarned: number;
   shiftsCompleted: number;
+  chatMessages: number;
   peakPlayers: number;
   peakPlayersAt: number;
   since: number;
 }
 
-export type RegistryEvent = "created" | "join" | "leave" | "delivered" | "lost" | "shift" | "update";
+export type RegistryEvent = "created" | "join" | "leave" | "delivered" | "lost" | "shift" | "chat" | "update";
 
 /** Um único objeto ("global") que guarda o resumo de todas as salas e os totais do servidor. */
 export class Registry extends DurableObject<Env> {
+  private permanentRoomsPromise: Promise<void> | null = null;
+
+  async ensurePermanentRooms(): Promise<void> {
+    if (!this.permanentRoomsPromise) {
+      this.permanentRoomsPromise = this.seedPermanentRooms().catch((error: unknown) => {
+        this.permanentRoomsPromise = null;
+        throw error;
+      });
+    }
+    return this.permanentRoomsPromise;
+  }
+
+  private async seedPermanentRooms(): Promise<void> {
+    if (await this.ctx.storage.get<boolean>("permanent-rooms-ready")) return;
+
+    type SeedRoom = (typeof PERMANENT_ROOMS)[number] & {
+      salt: string;
+      password: string;
+      passwordHash: string;
+    };
+    let seeds = await this.ctx.storage.get<SeedRoom[]>("permanent-room-seed");
+    if (!seeds) {
+      seeds = await Promise.all(PERMANENT_ROOMS.map(async (room) => {
+        const password = room.passwordProtected ? randomRoomPassword() : "";
+        const salt = room.passwordProtected ? randomSalt() : "";
+        return { ...room, salt, password, passwordHash: password ? await hashRoomPassword(password, salt) : "" };
+      }));
+      await this.ctx.storage.put("permanent-room-seed", seeds);
+    }
+
+    const initialPasswords: Record<string, string> = {};
+    for (const seed of seeds) {
+      const stub = this.env.ROOMS.get(this.env.ROOMS.idFromName(seed.code));
+      const response = await stub.fetch("https://room/init", {
+        method: "POST",
+        body: JSON.stringify({
+          code: seed.code,
+          name: seed.name,
+          level: seed.level,
+          permanent: true,
+          isPublic: seed.isPublic,
+          passwordSalt: seed.salt,
+          passwordHash: seed.passwordHash,
+        }),
+      });
+      if (response.status !== 200 && response.status !== 409) {
+        throw new Error(`Falha ao inicializar sala permanente ${seed.code}: ${response.status}`);
+      }
+
+      const infoResponse = await stub.fetch("https://room/info");
+      if (!infoResponse.ok) throw new Error(`Sala permanente ${seed.code} não está disponível.`);
+      const info = await infoResponse.json() as RoomSummary;
+      if (info.permanent !== true) throw new Error(`Código reservado ${seed.code} já pertence a uma sala temporária.`);
+      await this.ctx.storage.put(`room:${seed.code}`, {
+        code: seed.code,
+        name: seed.name,
+        players: info.players,
+        names: [],
+        hostName: null,
+        shift: info.shift,
+        money: 0,
+        pendingJobs: 0,
+        createdAt: info.createdAt,
+        updatedAt: Date.now(),
+        level: seed.level,
+        isPublic: seed.isPublic,
+        permanent: true,
+        hasPassword: seed.passwordProtected,
+      } satisfies RoomSummary);
+      if (seed.passwordProtected) initialPasswords[seed.code] = seed.password;
+    }
+
+    if (Object.keys(initialPasswords).length > 0) {
+      await this.ctx.storage.put("initial-room-passwords", initialPasswords);
+    }
+    await this.ctx.storage.delete("permanent-room-seed");
+    await this.ctx.storage.put("permanent-rooms-ready", true);
+  }
+
+  async createPermanentRoom(name: string, level: string, passwordProtected: boolean): Promise<{ code: string; password?: string } | null> {
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const code = randomCode();
+      const password = passwordProtected ? randomRoomPassword() : "";
+      const salt = passwordProtected ? randomSalt() : "";
+      const stub = this.env.ROOMS.get(this.env.ROOMS.idFromName(code));
+      const response = await stub.fetch("https://room/init", {
+        method: "POST",
+        body: JSON.stringify({
+          code,
+          name,
+          level,
+          permanent: true,
+          isPublic: !passwordProtected,
+          passwordSalt: salt,
+          passwordHash: password ? await hashRoomPassword(password, salt) : "",
+        }),
+      });
+      if (response.status === 409) continue;
+      if (response.status !== 200) return null;
+
+      const info = await (await stub.fetch("https://room/info")).json() as RoomSummary;
+      await this.ctx.storage.put(`room:${code}`, {
+        code,
+        name,
+        players: info.players,
+        names: [],
+        hostName: null,
+        shift: info.shift,
+        money: 0,
+        pendingJobs: 0,
+        createdAt: info.createdAt,
+        updatedAt: Date.now(),
+        level,
+        isPublic: !passwordProtected,
+        permanent: true,
+        hasPassword: passwordProtected,
+      } satisfies RoomSummary);
+      return passwordProtected ? { code, password } : { code };
+    }
+    return null;
+  }
+
   private async stats(): Promise<GlobalStats> {
     return (
       (await this.ctx.storage.get<GlobalStats>("stats")) ?? {
-        roomsCreated: 0, joins: 0, deliveries: 0, lostCargo: 0, moneyEarned: 0, shiftsCompleted: 0, peakPlayers: 0, peakPlayersAt: 0, since: Date.now(),
+        roomsCreated: 0, joins: 0, deliveries: 0, lostCargo: 0, moneyEarned: 0, shiftsCompleted: 0, chatMessages: 0, peakPlayers: 0, peakPlayersAt: 0, since: Date.now(),
       }
     );
+  }
+
+  private lastChatPrunedDay = "";
+
+  private async recordChat(day: string, room: string, amount: number): Promise<void> {
+    if (this.lastChatPrunedDay !== day) {
+      const cutoff = new Date(Date.now() - CHAT_STATS_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const records = await this.ctx.storage.list<number>({ prefix: "chat:" });
+      for (const key of records.keys()) {
+        if (key.slice(5, 15) < cutoff) await this.ctx.storage.delete(key);
+      }
+      this.lastChatPrunedDay = day;
+    }
+
+    const key = `chat:${day}:${room}`;
+    await this.ctx.storage.transaction(async (txn) => {
+      const count = (await txn.get<number>(key)) ?? 0;
+      await txn.put(key, count + amount);
+    });
   }
 
   /**
@@ -385,6 +585,8 @@ export class Registry extends DurableObject<Env> {
     if (event === "delivered") { stats.deliveries++; stats.moneyEarned += amount; }
     if (event === "lost") stats.lostCargo++;
     if (event === "shift") stats.shiftsCompleted++;
+    if (event === "chat")
+      await this.recordChat(new Date().toISOString().slice(0, 10), summary.code, amount);
 
     await this.ctx.storage.put(`room:${summary.code}`, summary);
     const online = await this.onlinePlayers();
@@ -397,17 +599,20 @@ export class Registry extends DurableObject<Env> {
     const rooms = await this.ctx.storage.list<RoomSummary>({ prefix: "room:" });
     const stale = Date.now() - 6 * 60 * 60 * 1000;
     return Array.from(rooms.values())
-      .filter((r) => r.players > 0 && r.isPublic !== false && r.updatedAt > stale)
-      .sort((a, b) => b.players - a.players || b.updatedAt - a.updatedAt)
+      .filter((r) => (r.players > 0 || r.permanent === true) && r.isPublic !== false && (r.permanent === true || r.updatedAt > stale))
+      .sort((a, b) => Number(b.permanent === true) - Number(a.permanent === true) || b.players - a.players || b.updatedAt - a.updatedAt)
       .slice(0, 30)
       .map((r) => ({
         code: r.code,
+        name: r.name ?? "",
         players: r.players,
         max: MAX_PLAYERS,
         level: r.level ?? "city",
         host: r.hostName,
         shift: r.shift,
         autoProfession: r.autoProfession === true,
+        permanent: r.permanent === true,
+        hasPassword: r.hasPassword === true,
       }));
   }
 
@@ -439,19 +644,36 @@ export class Registry extends DurableObject<Env> {
     await this.ctx.storage.delete(`room:${code}`);
   }
 
+  async acknowledgeInitialPasswords(): Promise<void> {
+    await this.ctx.storage.delete("initial-room-passwords");
+  }
+
   async activeCodes(): Promise<string[]> {
     const rooms = await this.ctx.storage.list<RoomSummary>({ prefix: "room:" });
     return Array.from(rooms.values()).filter((r) => r.players > 0).map((r) => r.code);
   }
 
-  async status(): Promise<{ stats: GlobalStats; rooms: RoomSummary[]; onlinePlayers: number; activeRooms: number }> {
+  async status(): Promise<{ stats: GlobalStats; rooms: RoomSummary[]; onlinePlayers: number; activeRooms: number; chatByDayRoom: { day: string; room: string; messages: number }[]; initialPasswords: Record<string, string> }> {
     const rooms = Array.from((await this.ctx.storage.list<RoomSummary>({ prefix: "room:" })).values())
       .sort((a, b) => b.players - a.players || b.updatedAt - a.updatedAt);
+    const cutoff = new Date(Date.now() - CHAT_STATS_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const chatByDayRoom = Array.from((await this.ctx.storage.list<number>({ prefix: "chat:" })).entries())
+      .map(([key, messages]) => {
+        const [, day, room] = key.split(":");
+        return { day, room, messages };
+      })
+      .filter((record) => record.day >= cutoff)
+      .sort((a, b) => b.day.localeCompare(a.day) || a.room.localeCompare(b.room));
+    const stats = await this.stats();
+    stats.chatMessages = chatByDayRoom.reduce((sum, record) => sum + record.messages, 0);
+    const initialPasswords = (await this.ctx.storage.get<Record<string, string>>("initial-room-passwords")) ?? {};
     return {
-      stats: await this.stats(),
+      stats,
       rooms,
       onlinePlayers: rooms.reduce((sum, r) => sum + r.players, 0),
       activeRooms: rooms.filter((r) => r.players > 0).length,
+      chatByDayRoom,
+      initialPasswords,
     };
   }
 
@@ -480,6 +702,7 @@ const LEVELS = ["city", "farm"];
 
 interface RoomState {
   code: string;
+  name?: string;
   /** Fase da sala: todos os jogadores carregam a mesma. Salas antigas não têm (= cidade). */
   level?: string;
   seed: number;
@@ -491,14 +714,25 @@ interface RoomState {
   hostId: number | null;
   owners: Record<string, number | null>; // objeto → id do jogador dono
   cars?: string[]; // carros da concessionária já comprados (v0.9.7)
+  worldItems?: WorldItemState[];
   pendingShift: boolean;
   /** O servidor escolhe a profissão de cada jogador (equilibrando as vagas). */
   autoProfession?: boolean;
   /** Aparece na lista de salas abertas. Salas antigas não têm (= pública). */
   isPublic?: boolean;
+  permanent?: boolean;
+  passwordSalt?: string;
+  passwordHash?: string;
   /** Todas as caixas do turno quebraram: a sala recomeça do turno 1. */
   gameOver?: boolean;
   emptySince: number | null;
+}
+
+interface WorldItemState {
+  id: string;
+  item: string;
+  p: number[];
+  q: number[];
 }
 
 interface Attachment {
@@ -506,6 +740,8 @@ interface Attachment {
   name: string;
   color: string;
   joined: boolean;
+  inventory?: string[];
+  equipment?: string;
   prof?: string;
   debugAuthorizedUntil?: number;
   /** HMAC-SHA-256 do IP de origem; nunca contém o IP original. */
@@ -538,6 +774,7 @@ export class GameRoom extends DurableObject<Env> {
   private objects = new Map<string, ObjectSnapshot>();
   /** Último pagamento de profissão de cada jogador (limite de frequência). */
   private lastEarn = new Map<number, number>();
+  private chatTimestamps = new Map<number, number[]>();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -557,6 +794,7 @@ export class GameRoom extends DurableObject<Env> {
     const joined = this.connected().map(attachmentOf).filter((a) => a.joined && a.id !== excludeId);
     return {
       code: room.code,
+      name: room.name,
       players: joined.length,
       names: joined.map((a) => a.name),
       hostName: joined.find((a) => a.id === room.hostId)?.name ?? null,
@@ -568,6 +806,8 @@ export class GameRoom extends DurableObject<Env> {
       level: room.level ?? "city",
       isPublic: room.isPublic !== false,
       autoProfession: room.autoProfession === true,
+      permanent: room.permanent === true,
+      hasPassword: Boolean(room.passwordHash),
     };
   }
 
@@ -611,6 +851,7 @@ export class GameRoom extends DurableObject<Env> {
   /** Encerra a sala: avisa, desconecta todos e apaga o estado. */
   async adminClose(): Promise<boolean> {
     if (!this.room) return false;
+    if (this.room.permanent) return false;
     const code = this.room.code;
     for (const socket of this.connected()) {
       try {
@@ -636,26 +877,32 @@ export class GameRoom extends DurableObject<Env> {
 
     if (url.pathname === "/init") {
       if (this.room) return json({ error: "exists" }, 409);
-      const { code, level, autoProfession, isPublic } = (await request.json()) as { code: string; level?: string; autoProfession?: boolean; isPublic?: boolean };
+      const { code, name, level, autoProfession, isPublic, permanent, passwordSalt, passwordHash } =
+        (await request.json()) as { code: string; name?: string; level?: string; autoProfession?: boolean; isPublic?: boolean; permanent?: boolean; passwordSalt?: string; passwordHash?: string };
       this.room = {
         code,
+        name: name ? sanitizeRoomName(name) : undefined,
         level: level && LEVELS.includes(level) ? level : "city",
         autoProfession: autoProfession === true,
         isPublic: isPublic !== false,
+        permanent: permanent === true,
+        passwordSalt: typeof passwordSalt === "string" ? passwordSalt : undefined,
+        passwordHash: typeof passwordHash === "string" ? passwordHash : undefined,
         seed: crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000,
         createdAt: Date.now(),
         shift: 0,
         money: 0,
         jobs: [],
+        worldItems: [],
         nextPlayerId: 1,
         hostId: null,
         owners: { van: null },
         pendingShift: false,
-        emptySince: Date.now(),
+        emptySince: permanent === true ? null : Date.now(),
       };
       this.newShift(false);
       await this.save();
-      await this.ctx.storage.setAlarm(Date.now() + EMPTY_ROOM_TTL_MS);
+      if (permanent !== true) await this.ctx.storage.setAlarm(Date.now() + EMPTY_ROOM_TTL_MS);
       this.report("created");
       return json({ code });
     }
@@ -663,7 +910,18 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.room) return json({ error: "Sala não encontrada" }, 404);
 
     if (url.pathname === "/info") {
-      return json({ code: this.room.code, players: this.connected().length, max: MAX_PLAYERS, shift: this.room.shift });
+      return json({
+        code: this.room.code,
+        name: this.room.name ?? "",
+        players: this.connected().length,
+        max: MAX_PLAYERS,
+        shift: this.room.shift,
+        level: this.room.level ?? "city",
+        createdAt: this.room.createdAt,
+        permanent: this.room.permanent === true,
+        hasPassword: Boolean(this.room.passwordHash),
+        isPublic: this.room.isPublic !== false,
+      });
     }
 
     if (url.pathname.endsWith("/ws")) {
@@ -798,15 +1056,26 @@ export class GameRoom extends DurableObject<Env> {
         return this.onLost(me, String(msg.cargoId ?? ""));
       case "buy":
         return this.onBuy(ws, me, String(msg.item ?? ""), Number(msg.req) || 0);
+      case "sell":
+        return this.onSell(ws, me, String(msg.item ?? ""), Number(msg.req) || 0);
+      case "inventory":
+        if (me.joined) {
+          me.inventory = sanitizeInventory(msg.items);
+          ws.serializeAttachment(me);
+        }
+        return;
+      case "itemDrop":
+        return this.onDropWorldItem(ws, me, msg);
+      case "itemPickup":
+        return this.onPickupWorldItem(ws, me, String(msg.id ?? ""));
+      case "itemTransfer":
+        return this.onTransferItem(ws, me, Number(msg.to), String(msg.item ?? ""));
       case "earn":
         return this.onEarn(ws, me, msg);
       case "prof":
         return this.onProf(ws, me, String(msg.prof ?? ""));
-      case "chat": {
-        const chat = String(msg.msg ?? "").slice(0, 120).trim();
-        if (chat) this.broadcast({ t: "chat", id: me.id, name: me.name, msg: chat });
-        return;
-      }
+      case "chat":
+        return this.onChat(ws, me, msg.msg);
       case "ping":
         ws.send(JSON.stringify({ t: "pong", ts: msg.ts }));
         return;
@@ -829,6 +1098,17 @@ export class GameRoom extends DurableObject<Env> {
       return;
     }
     if (me.joined) return;
+    if (room.passwordHash) {
+      const supplied = typeof msg.roomPassword === "string" ? msg.roomPassword.slice(0, 64) : "";
+      const passwordHash = await hashRoomPassword(supplied, room.passwordSalt ?? "");
+      if (!constantTimeEquals(passwordHash, room.passwordHash)) {
+        ws.send(JSON.stringify({ t: "error", msg: "Senha da sala incorreta." }));
+        ws.close(4003, "room password");
+        return;
+      }
+    }
+    me.inventory = sanitizeInventory(msg.items);
+    me.equipment = sanitizeEquipment(msg.eq);
     me.joined = true;
     me.prof = room.autoProfession ? this.assignProfession(me.id) : this.validProfession(String(msg.prof ?? ""));
     ws.serializeAttachment(me);
@@ -861,6 +1141,7 @@ export class GameRoom extends DurableObject<Env> {
         jobs: room.jobs,
         owners: room.owners,
         cars: room.cars ?? [],
+        worldItems: room.worldItems ?? [],
         objects: Array.from(this.objects.values()),
       }),
     );
@@ -871,13 +1152,15 @@ export class GameRoom extends DurableObject<Env> {
   private onTick(ws: WebSocket, me: Attachment, msg: any): void {
     if (!me.joined) return;
     const room = this.room!;
+    const equipment = sanitizeEquipment(msg.eq);
+    me.equipment = equipment;
     const snapshot: PlayerSnapshot = {
       p: vec(msg.p, 3),
       ry: num(msg.ry),
       hp: num(msg.hp),
       st: msg.st === 1 ? 1 : msg.st === 2 ? 2 : 0,
       held: typeof msg.held === "string" ? msg.held.slice(0, 24) : null,
-      eq: typeof msg.eq === "string" ? msg.eq.replace(/[^a-z_,]/g, "").slice(0, 80) : "",
+      eq: equipment,
       lk: typeof msg.lk === "string" ? msg.lk.replace(/[^mw0-9,]/g, "").slice(0, 24) : "",
     };
     this.players.set(me.id, snapshot);
@@ -957,6 +1240,119 @@ export class GameRoom extends DurableObject<Env> {
     await this.save();
     this.broadcast({ t: "money", money: room.money, by: me.id, name: me.name, item, req });
     this.report("update");
+  }
+
+  private onChat(ws: WebSocket, me: Attachment, raw: unknown): void {
+    if (!me.joined) return;
+    const chat = String(raw ?? "").slice(0, 120).trim();
+    if (!chat) return;
+
+    const now = Date.now();
+    const recent = (this.chatTimestamps.get(me.id) ?? []).filter((time) => now - time < CHAT_WINDOW_MS);
+    if (recent.length >= CHAT_MAX_MESSAGES) {
+      ws.send(JSON.stringify({ t: "chatFail", msg: "Aguarde antes de enviar outra mensagem." }));
+      this.chatTimestamps.set(me.id, recent);
+      return;
+    }
+
+    recent.push(now);
+    this.chatTimestamps.set(me.id, recent);
+    this.broadcast({ t: "chat", id: me.id, name: me.name, msg: chat });
+    this.report("chat", 1);
+  }
+
+  /** Recompra apenas itens presentes na mochila sincronizada pelo jogador. */
+  private async onSell(ws: WebSocket, me: Attachment, item: string, req: number): Promise<void> {
+    const room = this.room!;
+    const inventory = me.inventory ?? [];
+    const index = inventory.indexOf(item);
+    const itemPrice = SHOP_PRICES[item];
+    const price = itemPrice === undefined ? 0 : Math.floor(itemPrice * BUYBACK_PERCENT / 100);
+    if (!me.joined || index < 0 || itemPrice === undefined || CARS.includes(item) || price <= 0) {
+      ws.send(JSON.stringify({ t: "sellFail", item, req }));
+      return;
+    }
+
+    inventory.splice(index, 1);
+    me.inventory = inventory;
+    ws.serializeAttachment(me);
+    room.money += price;
+    await this.save();
+    this.broadcast({ t: "sold", money: room.money, by: me.id, name: me.name, item, price, req });
+    this.report("update");
+  }
+
+  private async onDropWorldItem(ws: WebSocket, me: Attachment, msg: any): Promise<void> {
+    const room = this.room!;
+    const item = String(msg.item ?? "");
+    const inventory = me.inventory ?? [];
+    const index = inventory.indexOf(item);
+    if (!me.joined || !Object.prototype.hasOwnProperty.call(SHOP_PRICES, item) || CARS.includes(item) || index < 0 || (room.worldItems ?? []).length >= MAX_WORLD_ITEMS) {
+      ws.send(JSON.stringify({ t: "itemDropFail", msg: "Nao foi possivel largar esse item." }));
+      return;
+    }
+
+    inventory.splice(index, 1);
+    me.inventory = inventory;
+    ws.serializeAttachment(me);
+    const worldItem: WorldItemState = {
+      id: crypto.randomUUID(),
+      item,
+      p: vec(msg.p, 3),
+      q: vec(msg.q, 4),
+    };
+    room.worldItems = [...(room.worldItems ?? []), worldItem];
+    await this.save();
+    ws.send(JSON.stringify({ t: "itemsState", items: inventory }));
+    this.broadcast({ t: "itemSpawn", ...worldItem });
+  }
+
+  private async onPickupWorldItem(ws: WebSocket, me: Attachment, id: string): Promise<void> {
+    const room = this.room!;
+    const worldItems = room.worldItems ?? [];
+    const index = worldItems.findIndex((item) => item.id === id);
+    if (!me.joined || index < 0) return;
+    const [worldItem] = worldItems.splice(index, 1);
+    const inventory = me.inventory ?? [];
+    if (!canReceiveItem(me, worldItem.item, inventory.length)) {
+      worldItems.splice(index, 0, worldItem);
+      ws.send(JSON.stringify({ t: "itemPickupFail", msg: "Mochila cheia." }));
+      return;
+    }
+    inventory.push(worldItem.item);
+    me.inventory = inventory;
+    room.worldItems = worldItems;
+    ws.serializeAttachment(me);
+    await this.save();
+    ws.send(JSON.stringify({ t: "itemsState", items: inventory }));
+    this.broadcast({ t: "itemRemove", id });
+  }
+
+  private async onTransferItem(ws: WebSocket, me: Attachment, targetId: number, item: string): Promise<void> {
+    const targetSocket = this.connected().find((socket) => {
+      const attachment = attachmentOf(socket);
+      return attachment.joined && attachment.id === targetId;
+    });
+    const inventory = me.inventory ?? [];
+    const index = inventory.indexOf(item);
+    const target = targetSocket ? attachmentOf(targetSocket) : null;
+    const targetInventory = target?.inventory ?? [];
+    if (!me.joined || !targetSocket || !target || targetId === me.id || index < 0 ||
+      !Object.prototype.hasOwnProperty.call(SHOP_PRICES, item) || CARS.includes(item) ||
+      !canReceiveItem(target, item, targetInventory.length)) {
+      ws.send(JSON.stringify({ t: "itemTransferFail", msg: "Nao foi possivel entregar o item." }));
+      return;
+    }
+
+    inventory.splice(index, 1);
+    targetInventory.push(item);
+    me.inventory = inventory;
+    target.inventory = targetInventory;
+    ws.serializeAttachment(me);
+    targetSocket.serializeAttachment(target);
+    ws.send(JSON.stringify({ t: "itemsState", items: inventory }));
+    targetSocket.send(JSON.stringify({ t: "itemsState", items: targetInventory }));
+    this.broadcast({ t: "itemTransferred", from: me.id, to: target.id, item });
   }
 
   // ---------------- Profissões ----------------
@@ -1044,6 +1440,7 @@ export class GameRoom extends DurableObject<Env> {
     const me = attachmentOf(ws);
     this.players.delete(me.id);
     this.lastEarn.delete(me.id);
+    this.chatTimestamps.delete(me.id);
 
     // Libera a van se ele dirigia; caixas ficam sem dono até alguém pegar.
     let changed = false;
@@ -1062,9 +1459,13 @@ export class GameRoom extends DurableObject<Env> {
       if (room.hostId !== null) this.broadcast({ t: "host", id: room.hostId }, ws);
     }
     if (remaining.length === 0) {
-      room.emptySince = Date.now();
       changed = true;
-      await this.ctx.storage.setAlarm(Date.now() + EMPTY_ROOM_TTL_MS);
+      if (room.permanent) {
+        room.emptySince = null;
+      } else {
+        room.emptySince = Date.now();
+        await this.ctx.storage.setAlarm(Date.now() + EMPTY_ROOM_TTL_MS);
+      }
     }
     if (changed) await this.save();
     if (me.joined) {
@@ -1130,6 +1531,8 @@ export class GameRoom extends DurableObject<Env> {
       await this.save();
       this.report("shift");
     }
+
+    if (room.permanent) return;
 
     // Sala vazia há muito tempo: apaga tudo.
     if (this.connected().length === 0) {
@@ -1208,6 +1611,31 @@ function constantTimeEquals(a: string, b: string): boolean {
 
 function sanitizeName(raw: string): string {
   return raw.replace(/[^\p{L}\p{N} _.\-]/gu, "").trim().slice(0, 16);
+}
+
+function sanitizeRoomName(raw: string): string {
+  return raw.replace(/[^\p{L}\p{N} _.\-]/gu, "").trim().slice(0, 32);
+}
+
+function sanitizeInventory(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item): item is string =>
+      typeof item === "string" &&
+      Object.prototype.hasOwnProperty.call(SHOP_PRICES, item) &&
+      !CARS.includes(item))
+    .slice(0, MAX_INVENTORY_ITEMS);
+}
+
+function sanitizeEquipment(raw: unknown): string {
+  return typeof raw === "string" ? raw.replace(/[^a-z_,]/g, "").slice(0, 80) : "";
+}
+
+function canReceiveItem(attachment: Attachment | null, item: string, count: number): boolean {
+  if (!attachment || !Object.prototype.hasOwnProperty.call(SHOP_PRICES, item) || CARS.includes(item))
+    return false;
+  const capacity = (attachment.equipment ?? "").split(",").includes("backpack") ? MAX_INVENTORY_ITEMS : 4;
+  return count < capacity;
 }
 
 function num(value: unknown): number {

@@ -30,7 +30,7 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
   .dot.off { background: var(--bad); }
   @keyframes pulse { 50% { opacity: .45; } }
   .muted { color: var(--dim); }
-  button, input {
+  button, input, select {
     font: inherit; color: var(--fg); background: #000; border: 1px solid var(--dim); padding: 8px 12px;
   }
   input { min-width: 0; }
@@ -57,6 +57,7 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
   .tag.host { border-color: var(--warn); color: var(--warn); }
   .msg { padding: 10px 12px; border: 1px solid var(--line); margin-bottom: 14px; display: none; }
   .msg.show { display: block; }
+  .msg.pre { white-space: pre-wrap; }
   .msg.err { border-color: var(--bad); color: var(--bad); }
   .msg.ok { border-color: var(--fg); }
   #login { max-width: 460px; margin: 12vh auto 0; }
@@ -105,11 +106,32 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
       <button type="submit">Enviar aviso</button>
     </form>
 
+    <h2>Criar sala permanente</h2>
+    <form id="permanentRoomForm" class="row panel">
+      <input id="permanentRoomName" maxlength="32" placeholder="Nome da sala" required style="flex:1; min-width:180px">
+      <select id="permanentRoomLevel">
+        <option value="city">Cidade</option>
+        <option value="farm">Sitio</option>
+      </select>
+      <label class="row muted" style="gap:6px"><input id="permanentRoomProtected" type="checkbox" checked> exigir senha</label>
+      <button type="submit">Criar</button>
+    </form>
+    <div id="roomPasswords" class="msg pre"></div>
+    <div id="createdRoomSecret" class="msg pre"></div>
+
     <h2>Salas <span id="roomCount" class="muted"></span></h2>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Código</th><th>Jogadores</th><th>Turno</th><th>Pedidos</th><th>Dinheiro</th><th>Criada</th><th>Atividade</th><th></th></tr></thead>
         <tbody id="rooms"></tbody>
+      </table>
+    </div>
+
+    <h2>Mensagens por dia e sala <span class="muted">(UTC · sem conteúdo)</span></h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Dia</th><th>Sala</th><th>Mensagens</th></tr></thead>
+        <tbody id="chatStats"></tbody>
       </table>
     </div>
 
@@ -173,6 +195,7 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
       ["Turnos concluídos", s.shiftsCompleted, ""],
       ["Entradas em salas", s.joins, ""],
       ["Pico de jogadores", s.peakPlayers, s.peakPlayersAt ? "há " + ago(s.peakPlayersAt) : ""],
+      ["Mensagens no chat", s.chatMessages || 0, "últimos 30 dias · sem conteúdo"],
     ];
     $("cards").innerHTML = cards.map(([label, value, note]) =>
       '<div class="card"><span>' + esc(label) + '</span><b>' + esc(value) + '</b>' + (note ? '<em>' + esc(note) + '</em>' : '') + '</div>').join("");
@@ -187,9 +210,12 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
     $("rooms").innerHTML = rooms.map((r) => {
       const names = r.names.length
         ? r.names.map((n) => '<span class="tag' + (n === r.hostName ? ' host' : '') + '">' + esc(n) + '</span>').join("")
-        : '<span class="muted">vazia · expira em ~30 min</span>';
+        : '<span class="muted">' + (r.permanent ? "permanente · vazia" : "vazia · expira em ~30 min") + '</span>';
+      const roomName = r.name ? '<br><span class="muted" style="letter-spacing:0;font-size:11px">' + esc(r.name) + '</span>' : "";
+      const permanentTag = r.permanent ? '<span class="tag">PERMANENTE</span>' : "";
+      const passwordTag = r.hasPassword ? '<span class="tag">SENHA</span>' : "";
       return '<tr class="' + (r.players ? "" : "empty") + '">' +
-        '<td class="code">' + esc(r.code) + '</td>' +
+        '<td class="code">' + esc(r.code) + roomName + '<br>' + permanentTag + passwordTag + '</td>' +
         '<td class="names">' + r.players + ' · ' + names + '</td>' +
         '<td>' + r.shift + '</td>' +
         '<td>' + r.pendingJobs + ' pendentes</td>' +
@@ -197,8 +223,19 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
         '<td>há ' + ago(r.createdAt) + '</td>' +
         '<td>há ' + ago(r.updatedAt) + '</td>' +
         '<td><button data-detail="' + esc(r.code) + '">Detalhes</button> ' +
-        '<button class="danger" data-close="' + esc(r.code) + '">Encerrar</button></td></tr>';
+        (r.permanent ? '<button disabled title="Salas permanentes não expiram nem podem ser encerradas.">Permanente</button>' :
+          '<button class="danger" data-close="' + esc(r.code) + '">Encerrar</button>') + '</td></tr>';
     }).join("");
+  }
+
+  function renderChatStats(records) {
+    if (!records || !records.length) {
+      $("chatStats").innerHTML = '<tr class="empty"><td colspan="3">Nenhuma mensagem registrada nos últimos 30 dias.</td></tr>';
+      return;
+    }
+    $("chatStats").innerHTML = records.map((r) =>
+      "<tr><td>" + esc(r.day) + "</td><td class=\"code\">" + esc(r.room) + "</td><td>" + Number(r.messages || 0) + "</td></tr>"
+    ).join("");
   }
 
   async function renderDetail(code) {
@@ -241,6 +278,8 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
       const data = await api("/status");
       renderCards(data);
       renderRooms(data.rooms);
+      renderChatStats(data.chatByDayRoom);
+      renderInitialPasswords(data.initialPasswords);
       const srv = data.server;
       $("serverInfo").textContent = "protocolo v" + srv.protocol + " · até " + srv.maxPlayers + " jogadores por sala · datacenter " + srv.colo +
         " · instância do worker ativa há " + ago(srv.isolateStartedAt) + " · atualizado " + new Date().toLocaleTimeString("pt-BR");
@@ -251,6 +290,45 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
       setLive(false, e.status === 503 ? "painel desativado" : "sem resposta");
       show($("appMsg"), e.message, "err");
     }
+  }
+
+  function renderInitialPasswords(passwords) {
+    const entries = Object.entries(passwords || {});
+    if (!entries.length) return;
+    const box = $("roomPasswords");
+    const text = "Senhas iniciais das salas administrativas. Copie e guarde agora; elas nao serao exibidas novamente:\n" +
+      entries.map(([code, password]) => code + ": " + password).join("\n");
+    if (box.dataset.passwords === text) return;
+    box.dataset.passwords = text;
+    box.textContent = text;
+    box.className = "msg show ok pre";
+    const acknowledge = document.createElement("button");
+    acknowledge.textContent = "Ja guardei as senhas";
+    acknowledge.style.marginTop = "10px";
+    acknowledge.onclick = async () => {
+      try {
+        await api("/initial-passwords/ack", { method: "POST" });
+        box.className = "msg";
+        box.dataset.passwords = "";
+      } catch (e) {
+        show($("appMsg"), "Nao foi possivel confirmar as senhas: " + e.message, "err");
+      }
+    };
+    box.appendChild(document.createElement("br"));
+    box.appendChild(acknowledge);
+  }
+
+  function showCreatedRoomSecret(code, password) {
+    const box = $("createdRoomSecret");
+    const text = "Sala permanente criada. Guarde esta senha, ela nao sera exibida novamente:\n" + code + ": " + password;
+    box.textContent = text;
+    box.className = "msg show ok pre";
+    const close = document.createElement("button");
+    close.textContent = "Fechar";
+    close.style.marginTop = "10px";
+    close.onclick = () => { box.className = "msg"; };
+    box.appendChild(document.createElement("br"));
+    box.appendChild(close);
   }
 
   function schedule() {
@@ -308,6 +386,32 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
       $("announceInput").value = "";
       show($("appMsg"), "Aviso enviado para " + r.rooms + " sala(s).", "ok");
     } catch (err) { show($("appMsg"), err.message, "err"); }
+  };
+
+  $("permanentRoomForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const name = $("permanentRoomName").value.trim();
+    if (!name) return;
+    const button = $("permanentRoomForm").querySelector("button[type=submit]");
+    button.disabled = true;
+    try {
+      const created = await api("/permanent-rooms", {
+        method: "POST",
+        body: JSON.stringify({
+          name,
+          level: $("permanentRoomLevel").value,
+          passwordProtected: $("permanentRoomProtected").checked,
+        }),
+      });
+      $("permanentRoomName").value = "";
+      if (created.password) showCreatedRoomSecret(created.code, created.password);
+      else show($("appMsg"), "Sala permanente publica criada: " + created.code, "ok");
+      refresh();
+    } catch (err) {
+      show($("appMsg"), err.message, "err");
+    } finally {
+      button.disabled = false;
+    }
   };
 
   if (token) login(token); else logout();

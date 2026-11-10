@@ -19,7 +19,7 @@ public class NetPlayerInfo
 
 public partial class NetClient : Node
 {
-    public const int ProtocolVersion = 5;
+    public const int ProtocolVersion = 6;
     /// <summary>Servidor oficial do projeto (Cloudflare). Não aparece na tela; é o padrão.</summary>
     public const string OfficialServer = "https://dead-frequency.teuzin0dev.workers.dev";
 
@@ -74,6 +74,8 @@ public partial class NetClient : Node
     private WebSocketPeer.State _lastState = WebSocketPeer.State.Closed;
     private HttpRequest _http;
     private double _pingTimer;
+    private string _joinPassword = "";
+    private string _connectFailureMessage = "";
 
     public override void _EnterTree()
     {
@@ -111,7 +113,7 @@ public partial class NetClient : Node
             Fail($"Não foi possível contatar o servidor ({err}).");
     }
 
-    public void JoinRoom(string serverUrl, string code, string playerName)
+    public void JoinRoom(string serverUrl, string code, string playerName, string roomPassword = "")
     {
         if (Status != ConnectionStatus.Offline)
             Leave();
@@ -120,6 +122,8 @@ public partial class NetClient : Node
         PlayerName = playerName;
         PublicServerUrl = "";
         RoomCode = code.Trim().ToUpperInvariant();
+        _joinPassword = roomPassword.Trim();
+        _connectFailureMessage = "";
         Status = ConnectionStatus.Connecting;
         StatusMessage?.Invoke($"Entrando na sala {RoomCode}...");
 
@@ -168,7 +172,7 @@ public partial class NetClient : Node
         Send(new { t = "debug_add_money", amount });
     }
 
-    public readonly record struct RoomListing(string Code, int Players, int Max, string Level, string Host, int Shift, bool AutoProfession);
+    public readonly record struct RoomListing(string Code, string Name, int Players, int Max, string Level, string Host, int Shift, bool AutoProfession, bool Permanent, bool HasPassword);
 
     /// <summary>Lista as salas públicas abertas no servidor (GET /api/rooms). callback(salas, erro).</summary>
     public void ListRooms(string serverUrl, Action<List<RoomListing>, string> callback)
@@ -191,12 +195,15 @@ public partial class NetClient : Node
                 {
                     list.Add(new RoomListing(
                         r.GetProperty("code").GetString() ?? "",
+                        r.TryGetProperty("name", out JsonElement nm) ? nm.GetString() ?? "" : "",
                         r.GetProperty("players").GetInt32(),
                         r.TryGetProperty("max", out JsonElement mx) ? mx.GetInt32() : 8,
                         r.TryGetProperty("level", out JsonElement lv) ? lv.GetString() ?? "city" : "city",
                         r.TryGetProperty("host", out JsonElement h) && h.ValueKind == JsonValueKind.String ? h.GetString() : "",
                         r.TryGetProperty("shift", out JsonElement sh) ? sh.GetInt32() : 1,
-                        r.TryGetProperty("autoProfession", out JsonElement ap) && ap.ValueKind == JsonValueKind.True));
+                        r.TryGetProperty("autoProfession", out JsonElement ap) && ap.ValueKind == JsonValueKind.True,
+                        r.TryGetProperty("permanent", out JsonElement permanent) && permanent.ValueKind == JsonValueKind.True,
+                        r.TryGetProperty("hasPassword", out JsonElement password) && password.ValueKind == JsonValueKind.True));
                 }
             }
             catch (Exception)
@@ -236,7 +243,16 @@ public partial class NetClient : Node
         if (state == WebSocketPeer.State.Open)
         {
             if (_lastState != WebSocketPeer.State.Open)
-                Send(new { t = "hello", version = ProtocolVersion, name = PlayerName, prof = Professions.Current });
+                Send(new
+                {
+                    t = "hello",
+                    version = ProtocolVersion,
+                    name = PlayerName,
+                    prof = Professions.Current,
+                    items = PlayerInventory.Instance?.Items ?? Array.Empty<string>(),
+                    eq = PlayerInventory.Instance?.EquipmentCsv() ?? "",
+                    roomPassword = _joinPassword,
+                });
 
             while (_socket.GetAvailablePacketCount() > 0)
                 HandleText(_socket.GetPacket().GetStringFromUtf8());
@@ -257,6 +273,7 @@ public partial class NetClient : Node
                 string message = code == 4001 ? "Sala encerrada pelo administrador."
                     : Status == ConnectionStatus.Online
                     ? "Conexão com o servidor perdida."
+                    : !string.IsNullOrEmpty(_connectFailureMessage) ? _connectFailureMessage
                     : code == -1 ? "Não foi possível conectar. Confira o endereço do servidor e o código." : $"Conexão recusada ({code} {reason}).";
                 Fail(message);
             }
@@ -316,7 +333,10 @@ public partial class NetClient : Node
                     PingMs = (float)(Time.GetTicksMsec() - msg.GetProperty("ts").GetUInt64());
                     break;
                 case "error":
-                    StatusMessage?.Invoke(msg.GetProperty("msg").GetString());
+                    string errorMessage = msg.GetProperty("msg").GetString() ?? "Falha ao entrar na sala.";
+                    if (Status == ConnectionStatus.Connecting)
+                        _connectFailureMessage = errorMessage;
+                    StatusMessage?.Invoke(errorMessage);
                     break;
                 case "kick":
                     // Servidor mandou sair (ex.: admin encerrou a sala). Avisa e desconecta já.
@@ -352,6 +372,8 @@ public partial class NetClient : Node
             AddPlayer(p);
 
         Status = ConnectionStatus.Online;
+        _joinPassword = "";
+        _connectFailureMessage = "";
         StatusMessage?.Invoke($"Na sala {RoomCode}");
         Joined?.Invoke();
     }
@@ -407,6 +429,8 @@ public partial class NetClient : Node
     private void ResetSession()
     {
         _debugAuthExpiresAt = 0;
+        _joinPassword = "";
+        _connectFailureMessage = "";
         _socket = null;
         _lastState = WebSocketPeer.State.Closed;
         Status = ConnectionStatus.Offline;
