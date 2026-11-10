@@ -69,6 +69,8 @@ assert(welcomeA && welcomeA.code === code && welcomeA.jobs.length >= 3, "welcome
 assert(Array.isArray(welcomeA.items) && welcomeA.items.length === 0, "inventário local enviado no hello é ignorado");
 a.send({ t: "inventory", items: ["guarana", "tape"], eq: "" });
 assert(await waitFor(a, "itemsState", (m) => m.items.length === 0), "servidor rejeita criação de itens pelo cliente");
+a.send({ t: "sell", item: "guarana", req: 1 });
+assert(await waitFor(a, "sellFail", (m) => m.req === 1), "item inventado não pode ser vendido");
 assert(welcomeA.level === "city", "sala sem fase = cidade");
 
 // Sala do rancho (fase 2).
@@ -118,6 +120,8 @@ assert(delivered[0].payment === Math.round([150, 300, 120, 180, 220, 90, 160, 14
 a.send({ t: "buy", item: "cafe", req: 1 });
 assert(await waitFor(a, "money", (m) => m.req === 1 && m.item === "cafe"), "compra de item aceita pelo servidor");
 assert(await waitFor(a, "itemsState", (m) => m.items.includes("cafe")), "compra adiciona item ao inventário autoritativo");
+a.send({ t: "buy", item: "cafe", req: 1 });
+assert(await waitFor(a, "buyFail", (m) => m.req === 1), "requisição de compra repetida não cobra duas vezes");
 a.send({ t: "buy", item: "guarana", req: 2 });
 assert(await waitFor(a, "money", (m) => m.req === 2 && m.item === "guarana"), "segunda compra aceita");
 
@@ -165,12 +169,12 @@ a.send({ t: "buy", item: "tape", req: 7 });
 const bought = await waitFor(b, "money", (m) => m.req === 7);
 assert(bought && bought.money === moneyBefore - 50 && bought.item === "tape", "compra desconta do dinheiro do grupo");
 assert(await waitFor(a, "itemsState", (m) => m.items.includes("tape")), "compra concede item no servidor");
-a.send({ t: "sell", item: "tape", req: 1 });
-const firstSale = await waitFor(a, "sold", (m) => m.req === 1);
+a.send({ t: "sell", item: "tape", req: 2 });
+const firstSale = await waitFor(a, "sold", (m) => m.req === 2);
 assert(firstSale?.price === 25 && firstSale?.by === welcomeA.you, "recompra paga metade do preço");
 assert(await waitFor(a, "itemsState", (m) => !m.items.includes("tape")), "venda remove item no servidor");
-a.send({ t: "sell", item: "tape", req: 2 });
-assert(await waitFor(a, "sellFail", (m) => m.req === 2), "item vendido não pode ser vendido novamente");
+a.send({ t: "sell", item: "tape", req: 3 });
+assert(await waitFor(a, "sellFail", (m) => m.req === 3), "item vendido não pode ser vendido novamente");
 a.send({ t: "buy", item: "radar", req: 8 });
 a.send({ t: "buy", item: "nave-espacial", req: 9 });
 await waitFor(a, "buyFail", (m) => m.req === 9);
