@@ -1,6 +1,6 @@
 # Dead Frequency — roadmap da cidade simulada
 
-Atualizado em 08/11/2026 (v0.9.5). A partir da v0.9 o jogo deixa de ser só "entregas" e vira uma
+Atualizado em 09/11/2026 (v0.9.5 + planejamento de expansão). A partir da v0.9 o jogo deixa de ser só "entregas" e vira uma
 **cidade simulada na zona morta**: cada jogador escolhe uma profissão, ganha um apartamento, ouve a
 rádio 96.6 e ajuda a cidade a funcionar. Ordem sugerida: de cima para baixo; cada fase deixa o jogo jogável.
 
@@ -9,7 +9,7 @@ rádio 96.6 e ajuda a cidade a funcionar. Ordem sugerida: de cima para baixo; ca
 | Área | O que já tem |
 |---|---|
 | **Profissões** | Entregador (turnos de caixas), Taxista, Gari, Repositor, Frentista, Locutor da 96.6. Escolha no menu, troca na pausa; no online o criador da sala pode deixar o servidor sortear. Pagamento conferido pelo servidor (valor e intervalo mínimo). |
-| **Rádio 96.6** | Estação com estúdio e torre, 5 músicas originais sincronizadas pelo relógio (todo mundo ouve o mesmo trecho), rádio na caminhonete (R), no escritório, mercado, saguão e apartamentos. |
+| **Rádio 96.6** | Estação com estúdio e torre, 5 músicas originais sincronizadas pelo relógio (todo mundo ouve o mesmo trecho), rádio na caminhonete (R), no escritório, mercado, saguão e apartamentos. Planejado: comerciais das lojas, anúncios de eventos e comunicados da cidade com áudio pt-BR pré-gerado por TTS e sincronizado entre jogadores. |
 | **Moradia** | Edifício Sintonia: um apartamento por jogador (elevador no saguão), cama que salva o jogo, TV com canais, rádio. |
 | **Lugares com interior** | Depósito e escritório, Supermercado Atacadinho (corredores, seções, caixas), rádio, saguão e apartamentos. |
 | **Cidade** | Bancos, lotéricas, padarias, mercados, postos, lava-jato, caixa d'água, bombeiros, delegacia, ônibus 966, pedestres que desviam, outdoors iluminados, orelhões. Fase 2: rancho. |
@@ -165,6 +165,56 @@ Cada profissão nova = um `JobBase` em `Scripts/Jobs/` + a regra em `PROFESSIONS
 - Ícone, tela de carregamento e página no itch.io com trailer.
 - Integração com a Twitch: o chat da live vota em eventos (apagão, chuva, entrega bônus) e pede música na 96.6.
 - Mais músicas na rádio (aceitar faixas da comunidade com licença livre).
+
+
+## Expansão da cidade (ideias adicionadas em 09/11/2026)
+
+As fases abaixo são propostas de planejamento; a ordem pode mudar conforme testes, dependências e escopo das builds.
+
+### v0.11 — Bairros e infraestrutura urbana
+- **Área residencial simplificada:** bairro de casas térreas, sem prédios altos, inspirado em conjuntos habitacionais como CDHU ou em um condomínio simples. Avaliar como uma área separada/mapa para manter a cidade principal mais leve.
+- **Praça e parque:** área de convivência com bancos, árvores, iluminação e eventos comunitários.
+- **Playground:** parquinho próximo ao bairro residencial.
+- **Prefeitura e Boulevard:** rua de paralelepípedo, mão única e prédio da prefeitura, formando uma área cívica/comercial característica.
+- **Correios (Correrios):** reformar a agência com entrada clara, balcão de atendimento, caixas de correspondência e uma van amarela inspirada na Fiat Scudo estacionada na entrada.
+- **Canteiros de obras permanentes:** construções inacabadas que fazem parte da paisagem e mudam conforme a cidade evolui.
+- **Obras viárias:** cones, cavaletes, máquinas e desvios temporários ou permanentes, com sinalização coerente.
+- **Sinalização ampliada:** mais placas de trânsito, orientação e advertência, integradas às regras de circulação.
+- **Calçadas e meio-fio:** corrigir os encontros entre calçada, guia e rua; revisar pintura e sinalização de estacionamento para que sejam consistentes.
+- **Postes e fiação:** postes com emaranhados de fios, ligações clandestinas ("gatos") e cabos de telecomunicação.
+- **Infraestrutura de internet:** cabos ADSL antigos abandonados e fibra óptica chegando às casas.
+- **Antenas e parabólicas:** modelos de 60 cm convencionais; antenas clandestinas de TV a cabo ("gato Net") com identidade visual fictícia; marcas fictícias inspiradas em operadoras populares (Céu, Escuro, Antena da Tchau e Antena da Morto); parabólica amarela Centauro de 150 cm; modelos rurais de tela/grade Centauro de 200 e 340 cm.
+
+### v0.12 — Zona rural, água e pesca
+- **Rios e lagos rurais:** corpos d'água distribuídos pelo mapa rural, com margens e vegetação próprias.
+- **Pontos de pesca:** locais acessíveis nas margens, com áreas apropriadas para pescar.
+- **Sistema de pesca:** varas, iscas, espera/ fisgada e diferentes espécies de peixes, com raridades e valores distintos.
+- **Agricultura:** plantações e áreas cultivadas, ampliando as atividades do sítio e as entregas rurais.
+
+### v0.13 — Comércio, indústria e energia
+- **Rodoviária/terminal de ônibus:** terminal como origem e ponto de organização das linhas intermunicipais/urbanas.
+- **Restaurantes:** estabelecimentos com identidade própria, salão, balcão e refeições.
+- **Área industrial:** galpões, pátios de carga e circulação de veículos de serviço.
+- **Usinas de energia:** instalações solares e eólicas como marcos visuais da região.
+- **Data centers:** complexo técnico com geradores, refrigeração e infraestrutura de rede, como parte do cenário e de possíveis tarefas/eventos.
+
+### Rádio 96.6 — publicidade local e agenda de eventos
+A rádio deve anunciar os próprios estabelecimentos e acontecimentos do mundo de Dead Frequency, em vez de depender de comerciais genéricos.
+- **Anúncios das lojas:** ofertas do Atacadinho, preços e promoções dos postos, novidades do Agro-Tudão, serviços do Conserta-Tudo do Primo, ofertas da Lã de Aço 1001 Utilidades, pratos de restaurantes, campanhas de farmácias e inaugurações.
+- **Anúncios de eventos:** festas, shows, feiras, atividades na praça, eventos rurais, inaugurações e programações comunitárias.
+- **Comunicados da cidade:** obras, ruas interditadas, desvios, avisos da prefeitura e informações úteis aos moradores.
+- **Conteúdo contextual:** selecionar anúncios conforme promoções ativas, eventos próximos/em andamento, estabelecimentos recém-inaugurados e condições atuais do mundo.
+- **Roteiros e vozes:** criar textos curtos em pt-BR e usar locutores distintos (rádio local tradicional, varejo animado, voz institucional e anúncios bem-humorados).
+- **Áudio pré-gerado:** gerar os arquivos com TTS durante o desenvolvimento, revisar pronúncia/pausas/volume, normalizar e incluir os áudios no projeto. A execução do jogo não deve chamar APIs, exigir internet nem consumir créditos.
+- **Programação e sincronização:** inserir comerciais e comunicados na grade da 96.6; sincronizar o momento/identificador do anúncio entre jogadores para que todos ouçam o mesmo conteúdo. Conteúdo pode variar de acordo com os eventos e estado do mundo.
+- **Jingles:** criar vinhetas curtas para marcas e estabelecimentos fictícios.
+- **Licenciamento:** confirmar que o plano e os termos do serviço TTS permitem distribuir comercialmente os áudios gerados junto com o jogo.
+
+### Outras prioridades de mundo (a distribuir entre as fases)
+- Farmácias e escolas como edifícios reconhecíveis, com fachadas e interiores quando fizer sentido para as atividades.
+- Mais restaurantes e serviços de bairro, evitando concentrar todo o comércio em prédios genéricos.
+- Revisar a malha viária e a sinalização sempre que novos bairros, obras ou rotas forem adicionados.
+
 
 ---
 
