@@ -34,6 +34,12 @@ public partial class PlayerInventory : Node
     private readonly List<string> _items = new();
     private readonly Dictionary<ItemSlot, string> _equipped = new();
 
+    // O inventário local salvo em disco fica separado do inventário temporário autoritativo online.
+    private bool _onlineSessionActive;
+    private List<string> _offlineItems;
+    private Dictionary<ItemSlot, string> _offlineEquipped;
+    private int _offlineSelectedHotbarIndex = -1;
+
     public override void _EnterTree()
     {
         Instance = this;
@@ -106,18 +112,68 @@ public partial class PlayerInventory : Node
         return result;
     }
 
-    public void ApplyNetworkItems(IEnumerable<string> items)
+    /// <summary>Preserva o inventário offline enquanto a sessão online usa o estado enviado pelo servidor.</summary>
+    public void BeginOnlineSession()
+    {
+        if (_onlineSessionActive)
+            return;
+        _offlineItems = new List<string>(_items);
+        _offlineEquipped = new Dictionary<ItemSlot, string>(_equipped);
+        _offlineSelectedHotbarIndex = SelectedHotbarIndex;
+        _onlineSessionActive = true;
+    }
+
+    public void EndOnlineSession()
+    {
+        if (!_onlineSessionActive)
+            return;
+        _items.Clear();
+        _items.AddRange(_offlineItems ?? new List<string>());
+        _equipped.Clear();
+        if (_offlineEquipped != null)
+            foreach (var pair in _offlineEquipped)
+                _equipped[pair.Key] = pair.Value;
+        SelectedHotbarIndex = _offlineSelectedHotbarIndex >= 0 && _offlineSelectedHotbarIndex < _items.Count
+            ? _offlineSelectedHotbarIndex
+            : -1;
+        _offlineItems = null;
+        _offlineEquipped = null;
+        _offlineSelectedHotbarIndex = -1;
+        _onlineSessionActive = false;
+        Changed?.Invoke();
+    }
+
+    public void ApplyNetworkItems(IEnumerable<string> items) => ApplyNetworkState(items, EquipmentCsv());
+
+    public void ApplyNetworkState(IEnumerable<string> items, string equipmentCsv)
     {
         string selectedItemId = SelectedHotbarItemId;
         _items.Clear();
         foreach (string id in items)
         {
-            if (ItemCatalog.Get(id) == null)
+            if (ItemCatalog.Get(id) == null || ItemCatalog.Get(id).Car)
                 continue;
             _items.Add(id);
             if (_items.Count >= Capacity)
                 break;
         }
+
+        _equipped.Clear();
+        if (!string.IsNullOrWhiteSpace(equipmentCsv))
+        {
+            foreach (string id in equipmentCsv.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                ItemDef def = ItemCatalog.Get(id);
+                if (def == null || !def.IsGear || _equipped.ContainsKey(def.Slot))
+                    continue;
+                _equipped[def.Slot] = id;
+            }
+        }
+
+        // Reaplica o limite depois de saber se a mochila veio equipada.
+        int capacity = IsEquipped(ItemCatalog.Backpack) ? BackpackCapacity : BaseCapacity;
+        if (_items.Count > capacity)
+            _items.RemoveRange(capacity, _items.Count - capacity);
         SelectedHotbarIndex = string.IsNullOrEmpty(selectedItemId) ? -1 : _items.IndexOf(selectedItemId);
         if (SelectedHotbarIndex >= 4)
             SelectedHotbarIndex = -1;
@@ -286,6 +342,9 @@ public partial class PlayerInventory : Node
 
     public void Save()
     {
+        // Não misturar itens comprados na sala multiplayer com o save local/offline.
+        if (_onlineSessionActive)
+            return;
         var data = new SaveData
         {
             Items = new List<string>(_items),
