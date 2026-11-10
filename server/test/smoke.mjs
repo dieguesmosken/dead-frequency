@@ -174,11 +174,13 @@ assert(await waitFor(a, "sellFail", (m) => m.req === 2), "item vendido não pode
 a.send({ t: "buy", item: "radar", req: 8 });
 a.send({ t: "buy", item: "nave-espacial", req: 9 });
 await waitFor(a, "buyFail", (m) => m.req === 9);
+const radarBought = await waitFor(a, "money", (m) => m.req === 8);
+const radarRejected = await waitFor(a, "buyFail", (m) => m.req === 8);
 const fails = a.all("buyFail").map((m) => m.req);
-assert(fails.includes(9) && (moneyBefore - 50 < 400 ? fails.includes(8) : true), "compra sem dinheiro / item inválido recusada");
+assert(fails.includes(9) && (moneyBefore - 50 < 400 ? !!radarRejected : !!radarBought), "compra sem dinheiro / item inválido recusada");
 a.send({ t: "tick", p: [0, 0, 0], ry: 0, hp: 0, st: 0, held: null, eq: "radar,gloves<x>", objs: [] });
 await sleep(150);
-assert(b.all("tick").at(-1)?.eq === "radar,glovesx", "equipamento repassado e filtrado");
+assert(b.all("tick").at(-1)?.eq === (radarBought ? "radar" : ""), "equipamento remoto vem do estado validado pelo servidor");
 const shift2 = a.all("shift").at(-1);
 for (const j of shift2.jobs) {
   a.send({ t: "claim", id: j.id });
