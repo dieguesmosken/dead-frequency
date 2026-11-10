@@ -41,6 +41,7 @@ public partial class NetSync : Node
         id != null && _vehicles.TryGetValue(id, out VanController v) && IsInstanceValid(v) ? v : null;
     private double _tickTimer;
     private bool _active;
+    private bool _onlineInventorySession;
 
     private static NetClient Net => NetClient.Instance;
     private int MyId => Net?.MyId ?? 0;
@@ -54,6 +55,8 @@ public partial class NetSync : Node
         }
         _active = true;
         Instance = this;
+        PlayerInventory.Instance?.BeginOnlineSession();
+        _onlineInventorySession = PlayerInventory.Instance != null;
         // A cena ainda está montando os filhos; criar caixas agora daria erro de add_child.
         Callable.From(Initialize).CallDeferred();
     }
@@ -102,6 +105,11 @@ public partial class NetSync : Node
             PlayerInventory.Instance.Changed -= SyncInventory;
         Net.MessageReceived -= OnMessage;
         Net.Disconnected -= OnDisconnected;
+        if (_onlineInventorySession)
+        {
+            PlayerInventory.Instance?.EndOnlineSession();
+            _onlineInventorySession = false;
+        }
     }
 
     // ================================================================ recebendo
@@ -115,6 +123,7 @@ public partial class NetSync : Node
 
     private void ApplyWelcome(JsonElement m)
     {
+        ApplyInventoryState(m);
         // Carros da sala (precisam existir antes de aplicar donos e posições).
         var cars = new System.Collections.Generic.List<string>();
         if (m.TryGetProperty("cars", out JsonElement carsEl) && carsEl.ValueKind == JsonValueKind.Array)
@@ -348,13 +357,16 @@ public partial class NetSync : Node
         foreach (JsonElement item in items.EnumerateArray())
             if (item.ValueKind == JsonValueKind.String)
                 result.Add(item.GetString());
-        PlayerInventory.Instance?.ApplyNetworkItems(result);
+        string equipment = message.TryGetProperty("equipment", out JsonElement eq) && eq.ValueKind == JsonValueKind.String
+            ? eq.GetString()
+            : "";
+        PlayerInventory.Instance?.ApplyNetworkState(result, equipment);
     }
 
     private void SyncInventory()
     {
-        if (Net?.IsOnline == true)
-            Net.Send(new { t = "inventory", items = PlayerInventory.Instance?.Items });
+        if (Net?.IsOnline == true && PlayerInventory.Instance != null)
+            Net.Send(new { t = "inventory", items = PlayerInventory.Instance.Items, eq = PlayerInventory.Instance.EquipmentCsv() });
     }
 
     private void ApplyObject(JsonElement o)
