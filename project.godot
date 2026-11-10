@@ -12,10 +12,14 @@ config_version=5
 
 config/name="Dead Frequency Internal-Pre Alpha"
 config/description="Simulador de entrega e sobrevivência em 1ª pessoa — van anos 90, física tátil, UI diegética."
-run/main_scene="res://Scenes/UI/main_menu.tscn"
+run/main_scene="res://Scenes/UI/splash_screen.tscn"
 config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 config/icon="res://icon.png"
 config/windows_native_icon="res://icon.ico"
+
+[audio]
+
+buses/default_bus_layout="uid://cqmj8r2nbnn5r"
 
 [autoload]
 
