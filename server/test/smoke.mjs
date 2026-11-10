@@ -24,7 +24,7 @@ function connect(code, name, prof = "entregador", items = [], roomPassword = "")
     const inbox = [];
     ws.on("message", (data) => inbox.push(JSON.parse(data.toString())));
     ws.on("open", () => {
-      ws.send(JSON.stringify({ t: "hello", version: 6, prof, items, roomPassword }));
+      ws.send(JSON.stringify({ t: "hello", version: 7, prof, items, roomPassword }));
       resolve({ ws, inbox, send: (m) => ws.send(JSON.stringify(m)), find: (t) => inbox.find((m) => m.t === t), all: (t) => inbox.filter((m) => m.t === t) });
     });
     ws.on("error", reject);
@@ -49,10 +49,26 @@ const info = await (await fetch(`${base}/api/rooms/${code}`)).json();
 assert(info.players === 0, "info da sala");
 assert((await fetch(`${base}/api/rooms/ZZZZZ`)).status === 404, "sala inexistente = 404");
 
+// Conexão ainda não autenticada não pode gastar o dinheiro compartilhado.
+const preHello = new WebSocket(`${wsBase}/api/rooms/${code}/ws?name=Intruso`);
+const preHelloInbox = [];
+preHello.on("message", (data) => preHelloInbox.push(JSON.parse(data.toString())));
+await new Promise((resolve, reject) => {
+  preHello.once("open", resolve);
+  preHello.once("error", reject);
+});
+preHello.send(JSON.stringify({ t: "buy", item: "tape", req: 1 }));
+await sleep(150);
+assert(preHelloInbox.some((m) => m.t === "buyFail"), "compra bloqueada antes do hello");
+preHello.close();
+
 const a = await connect(code, "Teuzin", "entregador", ["tape", "cafe", "guarana"]);
 await sleep(300);
 const welcomeA = a.find("welcome");
 assert(welcomeA && welcomeA.code === code && welcomeA.jobs.length >= 3, "welcome A com pedidos");
+assert(Array.isArray(welcomeA.items) && welcomeA.items.length === 0, "inventário local enviado no hello é ignorado");
+a.send({ t: "inventory", items: ["guarana", "tape"], eq: "" });
+assert(await waitFor(a, "itemsState", (m) => m.items.length === 0), "servidor rejeita criação de itens pelo cliente");
 assert(welcomeA.level === "city", "sala sem fase = cidade");
 
 // Sala do rancho (fase 2).
@@ -73,25 +89,6 @@ const welcomeB = b.find("welcome");
 assert(welcomeB.players.length === 1 && welcomeB.seed === welcomeA.seed, "B vê A e mesma seed");
 assert(welcomeB.name === "Amigoscript", "nome sanitizado");
 assert(a.find("join")?.player.id === welcomeB.you, "A recebeu join de B");
-
-a.send({ t: "sell", item: "tape", req: 1 });
-const firstSale = await waitFor(a, "sold", (m) => m.req === 1);
-assert(firstSale?.price === 25 && firstSale?.by === welcomeA.you, `recompra paga metade do preço (${JSON.stringify(a.inbox.filter((m) => m.t === "sold" || m.t === "sellFail"))})`);
-a.send({ t: "sell", item: "tape", req: 2 });
-assert(await waitFor(a, "sellFail", (m) => m.req === 2), "item vendido não pode ser vendido novamente");
-
-a.send({ t: "itemDrop", item: "cafe", p: [1, 0, 2], q: [0, 0, 0, 1] });
-const droppedItem = await waitFor(b, "itemSpawn", (m) => m.item === "cafe");
-const dropInventory = await waitFor(a, "itemsState", (m) => !m.items.includes("cafe"));
-assert(droppedItem?.id && dropInventory, "largar item remove da mochila e replica o objeto");
-b.send({ t: "itemPickup", id: droppedItem.id });
-const pickupInventory = await waitFor(b, "itemsState", (m) => m.items.includes("cafe"));
-assert(pickupInventory && await waitFor(a, "itemRemove", (m) => m.id === droppedItem.id), "pegar item adiciona à mochila e remove do mundo");
-
-a.send({ t: "itemTransfer", to: welcomeB.you, item: "guarana" });
-const transferInventoryA = await waitFor(a, "itemsState", (m) => m.items.length === 0);
-const transferInventoryB = await waitFor(b, "itemsState", (m) => m.items.includes("cafe") && m.items.includes("guarana"));
-assert(transferInventoryA && transferInventoryB && await waitFor(b, "itemTransferred", (m) => m.from === welcomeA.you && m.to === welcomeB.you), "entregar item atualiza as duas mochilas e avisa a sala");
 
 const job = welcomeA.jobs[0];
 a.send({ t: "claim", id: job.id });
@@ -117,6 +114,35 @@ const delivered = b.all("delivered");
 assert(validDelivery && delivered.length === 1 && validDelivery.by === welcomeA.you, "só o dono entrega");
 assert(delivered[0].payment === Math.round([150, 300, 120, 180, 220, 90, 160, 140, 260, 280, 200, 110, 170][job.type] * 0.5), "pagamento proporcional à integridade");
 
+// Os itens agora só entram no inventário após concessão validada pelo servidor.
+a.send({ t: "buy", item: "cafe", req: 1 });
+assert(await waitFor(a, "money", (m) => m.req === 1 && m.item === "cafe"), "compra de item aceita pelo servidor");
+assert(await waitFor(a, "itemsState", (m) => m.items.includes("cafe")), "compra adiciona item ao inventário autoritativo");
+a.send({ t: "buy", item: "guarana", req: 2 });
+assert(await waitFor(a, "money", (m) => m.req === 2 && m.item === "guarana"), "segunda compra aceita");
+
+a.send({ t: "tick", p: [1, 0, 2], ry: 0, hp: 0, st: 0, held: null, eq: "", objs: [] });
+await sleep(100);
+a.send({ t: "itemDrop", item: "cafe", p: [100, 0, 100], q: [0, 0, 0, 1] });
+assert(await waitFor(a, "itemDropFail"), "descarte distante do jogador é recusado");
+a.send({ t: "itemDrop", item: "cafe", p: [1, 0, 2], q: [0, 0, 0, 1] });
+const droppedItem = await waitFor(b, "itemSpawn", (m) => m.item === "cafe");
+const dropInventory = await waitFor(a, "itemsState", (m) => !m.items.includes("cafe"));
+assert(droppedItem?.id && dropInventory, "largar item remove da mochila e replica o objeto");
+b.send({ t: "tick", p: [100, 0, 100], ry: 0, hp: 0, st: 0, held: null, eq: "", objs: [] });
+b.send({ t: "itemPickup", id: droppedItem.id });
+assert(await waitFor(b, "itemPickupFail"), "coleta de item distante é recusada");
+b.send({ t: "tick", p: [1, 0, 2], ry: 0, hp: 0, st: 0, held: null, eq: "", objs: [] });
+await sleep(100);
+b.send({ t: "itemPickup", id: droppedItem.id });
+const pickupInventory = await waitFor(b, "itemsState", (m) => m.items.includes("cafe"));
+assert(pickupInventory && await waitFor(a, "itemRemove", (m) => m.id === droppedItem.id), "coleta próxima adiciona item e remove objeto do mundo");
+
+a.send({ t: "itemTransfer", to: welcomeB.you, item: "guarana" });
+const transferInventoryA = await waitFor(a, "itemsState", (m) => !m.items.includes("guarana"));
+const transferInventoryB = await waitFor(b, "itemsState", (m) => m.items.includes("cafe") && m.items.includes("guarana"));
+assert(transferInventoryA && transferInventoryB && await waitFor(b, "itemTransferred", (m) => m.from === welcomeA.you && m.to === welcomeB.you), "entregar item atualiza as duas mochilas e avisa a sala");
+
 for (const j of welcomeA.jobs.slice(1)) {
   a.send({ t: "claim", id: j.id });
   await sleep(50);
@@ -138,6 +164,13 @@ const moneyBefore = a.all("delivered").at(-1)?.money ?? 0;
 a.send({ t: "buy", item: "tape", req: 7 });
 const bought = await waitFor(b, "money", (m) => m.req === 7);
 assert(bought && bought.money === moneyBefore - 50 && bought.item === "tape", "compra desconta do dinheiro do grupo");
+assert(await waitFor(a, "itemsState", (m) => m.items.includes("tape")), "compra concede item no servidor");
+a.send({ t: "sell", item: "tape", req: 1 });
+const firstSale = await waitFor(a, "sold", (m) => m.req === 1);
+assert(firstSale?.price === 25 && firstSale?.by === welcomeA.you, "recompra paga metade do preço");
+assert(await waitFor(a, "itemsState", (m) => !m.items.includes("tape")), "venda remove item no servidor");
+a.send({ t: "sell", item: "tape", req: 2 });
+assert(await waitFor(a, "sellFail", (m) => m.req === 2), "item vendido não pode ser vendido novamente");
 a.send({ t: "buy", item: "radar", req: 8 });
 a.send({ t: "buy", item: "nave-espacial", req: 9 });
 await waitFor(a, "buyFail", (m) => m.req === 9);
