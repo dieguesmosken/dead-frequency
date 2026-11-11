@@ -1178,7 +1178,7 @@ export class GameRoom extends DurableObject<Env> {
 
   private async flushTraffic(): Promise<void> {
     if (this.trafficFlushPromise) {
-      await this.trafficFlushPromise;
+      try { await this.trafficFlushPromise; } catch { /* o lote é recolocado pelo flush original */ }
       if (this.trafficPendingMessages > 0 || this.trafficPendingConnections > 0)
         return this.flushTraffic();
       return;
