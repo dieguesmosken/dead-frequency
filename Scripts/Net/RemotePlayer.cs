@@ -72,10 +72,11 @@ public partial class RemotePlayer : Node3D, IInteractable
             _heldValue = held ?? "";
             _heldVisual?.QueueFree();
             _heldVisual = null;
-            if (!string.IsNullOrEmpty(_heldValue))
+            // Itens de inventário precisam de um visual na mão. Cargas físicas já são
+            // sincronizadas como CargoItem no mundo; desenhar outro "cargo" aqui duplica a caixa.
+            if (_heldValue.StartsWith("item:"))
             {
-                string visualValue = _heldValue.StartsWith("item:") ? _heldValue : "cargo";
-                _heldVisual = WorldItem.CreateVisual(visualValue);
+                _heldVisual = WorldItem.CreateVisual(_heldValue);
                 _heldVisual.Position = new Vector3(0.34f, 1.12f, -0.22f);
                 AddChild(_heldVisual);
             }
