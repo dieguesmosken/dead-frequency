@@ -112,6 +112,7 @@ Já feito nesta build (feedback de 08/11):
 | **Launcher menor** | Hoje o launcher leva o motor Godot inteiro dentro do .exe (~105 MB descompactado), por isso é maior que o zip do jogo (que é compactado). Dá para cortar para ~25–40 MB compilando um "template" do Godot só com o que o launcher usa (sem 3D e física) no CI. |
 | **Atualização incremental** | Em vez de baixar o zip inteiro a cada versão: publicar um manifesto com o hash de cada arquivo e o launcher baixar só o que mudou. O maior arquivo é o `.pck` (todos os assets); separar em um `.pck` base (modelos, sons, texturas — muda pouco) e um de patch (código e cenas) deixa a maioria das atualizações com poucos MB. |
 | **Arte gerada** | Texturas/sprites de muros e fachadas com o SpriteCook e um modelo de jogador novo com o Meshy, quando os conectores estiverem ligados na conversa (hoje não estão). |
+| **Escalabilidade multiplayer (Cloudflare + Oracle Cloud)** | Medir e reduzir o tráfego WebSocket no Cloudflare Workers/Durable Objects. Manter registrada a possibilidade de migrar o servidor de salas para uma VM gratuita Oracle Cloud Always Free (ou operar em paralelo: Cloudflare para API/autenticação e Oracle para sessões WebSocket), após validar latência, disponibilidade, custos, segurança, persistência e um mecanismo de failover. Não migrar nem fazer deploy automaticamente; primeiro comparar métricas e testar uma implementação compatível com o protocolo. |
 
 ## Fase 1 — Polimento da v0.9 (curto prazo)
 | Tarefa | Por quê | Esforço |
