@@ -1027,7 +1027,7 @@ export class GameRoom extends DurableObject<Env> {
 
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
     if (!this.room) {
-      this.trackTraffic("room_missing", 0, 0);
+      this.trackTraffic("room_missing", 1, typeof raw === "string" ? new TextEncoder().encode(raw).byteLength : raw.byteLength);
       // Sala apagada (admin/expirou) mas o socket ainda está vivo: manda sair.
       try {
         ws.send(JSON.stringify({ t: "kick", msg: "Esta sala não existe mais." }));
@@ -1039,7 +1039,7 @@ export class GameRoom extends DurableObject<Env> {
     }
     const text = typeof raw === "string" ? raw : new TextDecoder().decode(raw);
     if (text.length > MAX_MESSAGE_BYTES) {
-      this.trackTraffic("oversized", 0, typeof raw === "string" ? new TextEncoder().encode(raw).byteLength : raw.byteLength);
+      this.trackTraffic("oversized", 1, typeof raw === "string" ? new TextEncoder().encode(raw).byteLength : raw.byteLength);
       return;
     }
 
@@ -1047,7 +1047,7 @@ export class GameRoom extends DurableObject<Env> {
     try {
       msg = JSON.parse(text);
     } catch {
-      this.trackTraffic("invalid_json", 0, typeof raw === "string" ? new TextEncoder().encode(raw).byteLength : raw.byteLength);
+      this.trackTraffic("invalid_json", 1, typeof raw === "string" ? new TextEncoder().encode(raw).byteLength : raw.byteLength);
       return;
     }
     const rawBytes = typeof raw === "string" ? new TextEncoder().encode(raw).byteLength : raw.byteLength;
