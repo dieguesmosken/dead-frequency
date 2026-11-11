@@ -1195,8 +1195,10 @@ export class GameRoom extends DurableObject<Env> {
     const registry = this.env.REGISTRY.get(this.env.REGISTRY.idFromName("global"));
     const task = registry.recordTraffic(new Date().toISOString().slice(0, 10), messages, connections, bytes, byType);
     this.trafficFlushPromise = task;
+    let persisted = false;
     try {
       await task;
+      persisted = true;
     } catch {
       // Se o registro estiver temporariamente indisponível, devolve o lote à memória para nova tentativa.
       this.trafficPendingMessages += messages;
@@ -1207,7 +1209,7 @@ export class GameRoom extends DurableObject<Env> {
     } finally {
       this.trafficFlushPromise = null;
     }
-    if (this.trafficPendingMessages > 0 || this.trafficPendingConnections > 0)
+    if (persisted && (this.trafficPendingMessages > 0 || this.trafficPendingConnections > 0))
       return this.flushTraffic();
   }
 
