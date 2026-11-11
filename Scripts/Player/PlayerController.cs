@@ -212,6 +212,8 @@ public partial class PlayerController : CharacterBody3D
         _invertY = s.InvertY;
         if (_camera != null)
             _camera.Fov = s.Fov;
+        if (_flashlight != null)
+            _flashlight.ShadowEnabled = s.Quality >= 1;
     }
 
     // ---------------- Input ----------------
