@@ -3,11 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://copljtww8ho0d"
-valid=false
+path="res://.godot/imported/ad_teuzin.png-f6ca20ab6d3593b2661ffa50f831a880.ctex"
+metadata={
+"vram_texture": false
+}
 
 [deps]
 
 source_file="res://Assets/Textures/Ads/ad_teuzin.png"
+dest_files=["res://.godot/imported/ad_teuzin.png-f6ca20ab6d3593b2661ffa50f831a880.ctex"]
 
 [params]
 
