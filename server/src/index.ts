@@ -371,6 +371,7 @@ interface DebugAuthAttemptResult {
 interface TrafficDailyRecord {
   messages: number;
   connections: number;
+  flushes: number;
   bytes: number;
   byType: Record<string, number>;
 }
@@ -632,9 +633,10 @@ export class Registry extends DurableObject<Env> {
 
     const key = `traffic:${day}`;
     await this.ctx.storage.transaction(async (txn) => {
-      const record = (await txn.get<TrafficDailyRecord>(key)) ?? { messages: 0, connections: 0, bytes: 0, byType: {} };
+      const record = (await txn.get<TrafficDailyRecord>(key)) ?? { messages: 0, connections: 0, flushes: 0, bytes: 0, byType: {} };
       record.messages += messages;
       record.connections += connections;
+      record.flushes = (record.flushes ?? 0) + 1;
       record.bytes += bytes;
       for (const [type, count] of Object.entries(byType)) {
         record.byType[type] = (record.byType[type] ?? 0) + count;
@@ -718,13 +720,13 @@ export class Registry extends DurableObject<Env> {
     const trafficRecords = Array.from((await this.ctx.storage.list<TrafficDailyRecord>({ prefix: "traffic:" })).entries())
       .map(([key, record]) => {
         const day = key.slice(8);
-        return { day, ...record, estimatedDoRequests: record.connections + Math.ceil(record.messages / WS_MESSAGES_PER_BILLABLE_REQUEST) };
+        return { day, ...record, estimatedDoRequests: record.connections + Math.ceil(record.messages / WS_MESSAGES_PER_BILLABLE_REQUEST) + (record.flushes ?? 0) };
       })
       .sort((a, b) => b.day.localeCompare(a.day))
       .filter((record) => record.day >= cutoff);
     const today = new Date().toISOString().slice(0, 10);
     const todayTraffic = trafficRecords.find((record) => record.day === today) ?? {
-      day: today, messages: 0, connections: 0, bytes: 0, byType: {}, estimatedDoRequests: 0,
+      day: today, messages: 0, connections: 0, flushes: 0, bytes: 0, byType: {}, estimatedDoRequests: 0,
     };
     const initialPasswords = (await this.ctx.storage.get<Record<string, string>>("initial-room-passwords")) ?? {};
     return {
