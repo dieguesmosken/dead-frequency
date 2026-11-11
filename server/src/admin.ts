@@ -66,6 +66,10 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
   #detail { margin-top: 12px; display: none; }
   #detail.show { display: block; }
   .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+  .tabs { display:flex; gap:8px; flex-wrap:wrap; margin: 12px 0 18px; }
+  .tab-btn[aria-selected="true"] { background: var(--fg); color:#000; border-color:var(--fg); }
+  .tab-panel[hidden] { display:none; }
+  .usage-note { line-height:1.55; white-space:normal; }
   .status-pending { color: var(--warn); }
   .status-delivered { color: var(--fg); }
   .status-lost { color: var(--bad); }
@@ -90,7 +94,7 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
       <h1>CENTRAL DE RÁDIO<small>Dead Frequency · painel do servidor</small></h1>
       <div class="row">
         <span><span id="liveDot" class="dot"></span><span id="liveText" class="muted">conectando…</span></span>
-        <label class="row muted" style="gap:6px"><input id="autoRefresh" type="checkbox" checked> auto (5 s)</label>
+        <label class="row muted" style="gap:6px"><input id="autoRefresh" type="checkbox" checked> auto (30 s)</label>
         <button id="refreshBtn">Atualizar</button>
         <button id="logoutBtn">Sair</button>
       </div>
@@ -98,6 +102,12 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
 
     <div id="appMsg" class="msg"></div>
 
+    <nav class="tabs" aria-label="Seções do painel">
+      <button type="button" class="tab-btn" data-tab="overview" aria-selected="true">Visão geral</button>
+      <button type="button" class="tab-btn" data-tab="usage" aria-selected="false">Uso e limites</button>
+    </nav>
+
+    <section id="tab-overview" class="tab-panel">
     <div class="cards" id="cards"></div>
 
     <h2>Aviso para todas as salas</h2>
@@ -138,7 +148,36 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
     <section id="detail" class="panel"></section>
 
     <footer id="serverInfo"></footer>
-  </section>
+    </section>
+
+    <section id="tab-usage" class="tab-panel" hidden>
+      <h2>Uso observado · WebSocket / Durable Objects</h2>
+      <div class="cards" id="trafficCards"></div>
+      <p id="trafficNote" class="panel usage-note muted">Aguardando métricas…</p>
+
+      <h2>Mensagens recebidas por tipo · hoje (UTC)</h2>
+      <div class="table-wrap">
+        <table><thead><tr><th>Tipo</th><th>Mensagens</th></tr></thead><tbody id="trafficTypes"></tbody></table>
+      </div>
+
+      <h2>Histórico diário · últimos 30 dias (UTC)</h2>
+      <div class="table-wrap">
+        <table><thead><tr><th>Dia</th><th>Mensagens WS</th><th>Conexões</th><th>Equivalente DO*</th><th>Dados recebidos</th></tr></thead><tbody id="trafficDays"></tbody></table>
+      </div>
+
+      <h2>Limites de referência · plano Free</h2>
+      <div class="grid2">
+        <div class="panel usage-note">
+          <strong>Workers · 100.000 requisições/dia</strong>
+          <p>O código do jogo não consegue consultar o consumo total oficial da conta. Esse total inclui requisições HTTP e a abertura das conexões WebSocket. Consulte o painel de métricas da Cloudflare para o valor exato.</p>
+          <a href="https://dash.cloudflare.com/" target="_blank" rel="noopener">Abrir painel Cloudflare ↗</a>
+        </div>
+        <div class="panel usage-note">
+          <strong>Durable Objects · 100.000 requisições/dia</strong>
+          <p>*Equivalente parcial estimado: conexões WebSocket + 1 requisição para cada 20 mensagens recebidas. Não inclui chamadas RPC, requisições HTTP internas nem alarmes.</p>
+        </div>
+      </div>
+    </section>
 </main>
 
 <script>
@@ -228,6 +267,42 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
     }).join("");
   }
 
+  function formatBytes(value) {
+    const n = Number(value || 0);
+    if (n < 1024) return n + " B";
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+    return (n / (1024 * 1024)).toFixed(2) + " MB";
+  }
+
+  function renderTraffic(traffic, server) {
+    const t = traffic?.today || { messages: 0, connections: 0, bytes: 0, byType: {}, estimatedDoRequests: 0 };
+    const limit = Number(server?.limits?.durableObjectsFreeRequestsPerDay || 100000);
+    const used = Number(t.estimatedDoRequests || 0);
+    const percent = Math.min(100, used / limit * 100);
+    const cards = [
+      ["Mensagens WebSocket", Number(t.messages || 0).toLocaleString("pt-BR"), "recebidas hoje · UTC"],
+      ["Conexões WebSocket", Number(t.connections || 0).toLocaleString("pt-BR"), "aberturas registradas hoje"],
+      ["Equivalente DO estimado", used.toLocaleString("pt-BR"), percent.toFixed(2).replace(".", ",") + "% da referência Free"],
+      ["Dados recebidos", formatBytes(t.bytes), "payloads WebSocket"],
+    ];
+    $("trafficCards").innerHTML = cards.map(([label, value, note]) =>
+      '<div class="card"><span>' + esc(label) + '</span><b>' + esc(value) + '</b><em>' + esc(note) + '</em></div>').join("");
+
+    const types = Object.entries(t.byType || {}).sort((a, b) => b[1] - a[1]);
+    $("trafficTypes").innerHTML = types.length
+      ? types.map(([type, count]) => "<tr><td>" + esc(type) + "</td><td>" + Number(count).toLocaleString("pt-BR") + "</td></tr>").join("")
+      : '<tr class="empty"><td colspan="2">Nenhuma mensagem registrada hoje.</td></tr>';
+
+    const days = traffic?.days || [];
+    $("trafficDays").innerHTML = days.length
+      ? days.map((d) => "<tr><td>" + esc(d.day) + "</td><td>" + Number(d.messages || 0).toLocaleString("pt-BR") +
+        "</td><td>" + Number(d.connections || 0).toLocaleString("pt-BR") + "</td><td>" +
+        Number(d.estimatedDoRequests || 0).toLocaleString("pt-BR") + "</td><td>" + esc(formatBytes(d.bytes)) + "</td></tr>").join("")
+      : '<tr class="empty"><td colspan="5">Ainda não há histórico de tráfego.</td></tr>';
+
+    $("trafficNote").textContent = "Contadores agregados em lotes (a cada 100 mensagens ou 10 conexões) e enviados ao registro global. O valor é aproximado: uma reinicialização abrupta pode perder o lote ainda não persistido. A equivalência considera a regra 20:1 das mensagens WebSocket recebidas, mas não substitui o Analytics oficial da Cloudflare.";
+  }
+
   function renderChatStats(records) {
     if (!records || !records.length) {
       $("chatStats").innerHTML = '<tr class="empty"><td colspan="3">Nenhuma mensagem registrada nos últimos 30 dias.</td></tr>';
@@ -279,6 +354,7 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
       renderCards(data);
       renderRooms(data.rooms);
       renderChatStats(data.chatByDayRoom);
+      renderTraffic(data.traffic, data.server);
       renderInitialPasswords(data.initialPasswords);
       const srv = data.server;
       $("serverInfo").textContent = "protocolo v" + srv.protocol + " · até " + srv.maxPlayers + " jogadores por sala · datacenter " + srv.colo +
@@ -333,7 +409,7 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
 
   function schedule() {
     clearInterval(timer);
-    if ($("autoRefresh").checked) timer = setInterval(refresh, 5000);
+    if ($("autoRefresh").checked) timer = setInterval(refresh, 30000);
   }
 
   function login(value) {
@@ -354,6 +430,15 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
     if (message) show($("loginMsg"), message, "err");
     $("tokenInput").focus();
   }
+
+  document.querySelectorAll("[data-tab]").forEach((button) => {
+    button.onclick = () => {
+      const selected = button.dataset.tab;
+      document.querySelectorAll("[data-tab]").forEach((item) => item.setAttribute("aria-selected", String(item === button)));
+      $("tab-overview").hidden = selected !== "overview";
+      $("tab-usage").hidden = selected !== "usage";
+    };
+  });
 
   $("loginForm").onsubmit = (e) => { e.preventDefault(); if ($("tokenInput").value.trim()) login($("tokenInput").value); };
   $("logoutBtn").onclick = () => logout();
