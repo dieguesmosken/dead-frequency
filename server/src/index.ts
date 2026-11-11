@@ -842,7 +842,7 @@ export class GameRoom extends DurableObject<Env> {
   private trafficPendingConnections = 0;
   private trafficPendingBytes = 0;
   private trafficPendingByType = new Map<string, number>();
-  private trafficFlushInFlight = false;
+  private trafficFlushPromise: Promise<void> | null = null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -1175,8 +1175,14 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private async flushTraffic(): Promise<void> {
-    if (this.trafficFlushInFlight || (this.trafficPendingMessages === 0 && this.trafficPendingConnections === 0)) return;
-    this.trafficFlushInFlight = true;
+    if (this.trafficFlushPromise) {
+      await this.trafficFlushPromise;
+      if (this.trafficPendingMessages > 0 || this.trafficPendingConnections > 0)
+        return this.flushTraffic();
+      return;
+    }
+    if (this.trafficPendingMessages === 0 && this.trafficPendingConnections === 0) return;
+
     const messages = this.trafficPendingMessages;
     const connections = this.trafficPendingConnections;
     const bytes = this.trafficPendingBytes;
@@ -1186,9 +1192,11 @@ export class GameRoom extends DurableObject<Env> {
     this.trafficPendingBytes = 0;
     this.trafficPendingByType.clear();
 
+    const registry = this.env.REGISTRY.get(this.env.REGISTRY.idFromName("global"));
+    const task = registry.recordTraffic(new Date().toISOString().slice(0, 10), messages, connections, bytes, byType);
+    this.trafficFlushPromise = task;
     try {
-      const registry = this.env.REGISTRY.get(this.env.REGISTRY.idFromName("global"));
-      await registry.recordTraffic(new Date().toISOString().slice(0, 10), messages, connections, bytes, byType);
+      await task;
     } catch {
       // Se o registro estiver temporariamente indisponível, devolve o lote à memória para nova tentativa.
       this.trafficPendingMessages += messages;
@@ -1197,10 +1205,10 @@ export class GameRoom extends DurableObject<Env> {
       for (const [type, count] of Object.entries(byType))
         this.trafficPendingByType.set(type, (this.trafficPendingByType.get(type) ?? 0) + count);
     } finally {
-      this.trafficFlushInFlight = false;
+      this.trafficFlushPromise = null;
     }
-    if (this.trafficPendingMessages >= TRAFFIC_FLUSH_MESSAGES || this.trafficPendingConnections >= TRAFFIC_FLUSH_CONNECTIONS)
-      this.ctx.waitUntil(this.flushTraffic());
+    if (this.trafficPendingMessages > 0 || this.trafficPendingConnections > 0)
+      return this.flushTraffic();
   }
 
   private async onHello(ws: WebSocket, me: Attachment, msg: any): Promise<void> {
