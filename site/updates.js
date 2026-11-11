@@ -23,7 +23,7 @@ function card(r,list,index){
 }
 function render(){
  const list=releases.filter(r=>!privateRelease(r)&&(selected==="internal"?isInternal(r):!isInternal(r)&&!r.prerelease));
- $("#release-list").hidden=selected==="roadmap";$("#roadmap-panel").hidden=selected!=="roadmap";$("#release-status").hidden=selected==="roadmap";
+ $("#release-list").hidden=selected==="roadmap";$("#roadmap").hidden=selected!=="roadmap";$("#release-status").hidden=selected==="roadmap";
  if(selected==="roadmap")return;
  $("#release-status").textContent=list.length?list.length+" atualização(ões) · histórico sincronizado com GitHub":"Nenhuma atualização pública encontrada nesta categoria.";
  $("#release-list").innerHTML=list.length?list.map((r,i)=>card(r,list,i)).join(""):'<div class="updates-empty">Ainda não há versões publicadas nesta categoria.</div>';
@@ -59,4 +59,5 @@ async function init(){
   render();
  }catch(e){$("#release-status").textContent=e.message;$("#release-list").innerHTML='<div class="updates-empty">O histórico continua disponível em <a href="https://github.com/'+REPO+'/releases">GitHub Releases ↗</a>.</div>';}
 }
+window.addEventListener("hashchange",()=>{if(location.hash==="#roadmap"){document.querySelector(".update-tab[data-tab=roadmap]").click();}else if(location.hash==="#internal"){document.querySelector(".update-tab[data-tab=internal]").click();}});
 init();
