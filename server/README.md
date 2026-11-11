@@ -36,7 +36,8 @@ e o código da sala.
 
 ## Painel de admin
 Página com jogadores online, salas, entregas, dinheiro, detalhes de cada sala (quem está dirigindo,
-quem segura cada caixa), aviso para todas as salas e botão para encerrar uma sala.
+quem segura cada caixa), aviso para todas as salas, botão para encerrar uma sala e a aba **Uso e limites**
+(mensagens/conexões WebSocket recebidas, bytes, tipos de mensagem e estimativa parcial de requisições dos Durable Objects).
 
 1. Crie o token (uma senha longa qualquer):
    ```bash
@@ -49,9 +50,12 @@ No teste local, copie `.dev.vars.example` para `.dev.vars` e use o token `teste-
 em http://localhost:8787/admin.
 
 ## Limites do plano gratuito
-Cada mensagem recebida por WebSocket conta como 1/20 de requisição de Durable Object.
-O jogo manda 10 atualizações por segundo por jogador: uma partida de 1 hora com 4 jogadores
-dá cerca de 7 mil requisições, bem abaixo do limite diário gratuito.
+
+- **Workers Free:** 100.000 requisições de entrada por dia. Cada abertura de WebSocket conta como uma requisição do Worker; as mensagens WebSocket encaminhadas não contam como novas requisições do Worker.
+- **Durable Objects Free:** 100.000 requisições por dia. Para a cobrança de compute, 20 mensagens WebSocket recebidas equivalem a 1 requisição; mensagens enviadas pelo servidor não são cobradas como requisições. O upgrade inicial da conexão é uma requisição.
+- O painel **Uso e limites** registra mensagens e conexões WebSocket e calcula a parcela estimada desse tráfego no consumo de requisições dos Durable Objects. A estimativa não inclui chamadas RPC, requisições internas HTTP, alarmes nem o total oficial de requisições do Worker; consulte o Analytics da Cloudflare para os números oficiais.
+- Os contadores são persistidos em lotes de 100 mensagens ou 10 conexões para evitar gravar cada pacote individualmente. Uma reinicialização abrupta pode perder o lote ainda não persistido.
+- O cliente mantém 10 Hz durante mudanças de estado, mas agora omite ticks sem alteração relevante e envia um heartbeat de 1 segundo quando está parado.
 
 ## Protocolo (JSON por WebSocket)
 | Cliente → servidor | Para quê |
