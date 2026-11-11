@@ -53,9 +53,9 @@ em http://localhost:8787/admin.
 
 - **Workers Free:** 100.000 requisições de entrada por dia. Cada abertura de WebSocket conta como uma requisição do Worker; as mensagens WebSocket encaminhadas não contam como novas requisições do Worker.
 - **Durable Objects Free:** 100.000 requisições por dia. Para a cobrança de compute, 20 mensagens WebSocket recebidas equivalem a 1 requisição; mensagens enviadas pelo servidor não são cobradas como requisições. O upgrade inicial da conexão é uma requisição.
-- O painel **Uso e limites** registra mensagens e conexões WebSocket e calcula a parcela estimada desse tráfego no consumo de requisições dos Durable Objects. A estimativa não inclui chamadas RPC, requisições internas HTTP, alarmes nem o total oficial de requisições do Worker; consulte o Analytics da Cloudflare para os números oficiais.
-- Os contadores são persistidos em lotes de 100 mensagens ou 10 conexões para evitar gravar cada pacote individualmente. Uma reinicialização abrupta pode perder o lote ainda não persistido.
-- O cliente mantém 10 Hz durante mudanças de estado, mas agora omite ticks sem alteração relevante e envia um heartbeat de 1 segundo quando está parado.
+- O painel **Uso e limites** registra mensagens e conexões WebSocket e calcula a parcela estimada desse tráfego no consumo de requisições dos Durable Objects, incluindo o RPC usado para gravar cada lote de métricas. A estimativa não inclui outros RPCs, requisições internas HTTP, alarmes nem o total oficial de requisições do Worker; consulte o Analytics da Cloudflare para os números oficiais.
+- Os contadores são persistidos em lotes de 100 mensagens ou 10 conexões para evitar gravar cada pacote individualmente. Hibernação ou reinicialização antes da gravação pode perder o lote ainda não persistido.
+- O cliente mantém 10 Hz durante mudanças de estado, mas agora omite ticks sem alteração relevante e envia um heartbeat de 1 segundo quando está parado. O painel administrativo atualiza automaticamente a cada 60 segundos para evitar polling excessivo.
 
 ## Protocolo (JSON por WebSocket)
 | Cliente → servidor | Para quê |
