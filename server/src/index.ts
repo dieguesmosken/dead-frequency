@@ -56,6 +56,11 @@ const BUYBACK_PERCENT = 50;
 const CHAT_WINDOW_MS = 5000;
 const CHAT_MAX_MESSAGES = 3;
 const CHAT_STATS_RETENTION_DAYS = 30;
+const TRAFFIC_STATS_RETENTION_DAYS = 30;
+const TRAFFIC_FLUSH_MESSAGES = 100;
+const TRAFFIC_FLUSH_CONNECTIONS = 10;
+const FREE_DAILY_REQUEST_LIMIT = 100_000;
+const WS_MESSAGES_PER_BILLABLE_REQUEST = 20;
 const ROOM_PASSWORD_LENGTH = 10;
 const PERMANENT_ROOMS = [
   { code: "ADMNA", name: "ADMIN 1 - CIDADE", level: "city", isPublic: false, passwordProtected: true },
@@ -276,7 +281,7 @@ async function handleAdmin(request: Request, url: URL, env: Env): Promise<Respon
     await registry.ensurePermanentRooms();
     const status = await registry.status();
     const colo = (request as Request & { cf?: { colo?: string } }).cf?.colo ?? "local";
-    return json({ ...status, server: { protocol: PROTOCOL_VERSION, maxPlayers: MAX_PLAYERS, colo, isolateStartedAt: SERVER_STARTED, now: Date.now() } });
+    return json({ ...status, server: { protocol: PROTOCOL_VERSION, maxPlayers: MAX_PLAYERS, colo, isolateStartedAt: SERVER_STARTED, now: Date.now(), limits: { workersFreeRequestsPerDay: FREE_DAILY_REQUEST_LIMIT, durableObjectsFreeRequestsPerDay: FREE_DAILY_REQUEST_LIMIT, wsMessagesPerBillableRequest: WS_MESSAGES_PER_BILLABLE_REQUEST } } });
   }
 
   if (path === "/initial-passwords/ack" && request.method === "POST") {
@@ -361,6 +366,13 @@ interface DebugAuthAttemptResult {
   allowed: boolean;
   lockedUntil: number;
   attemptsRemaining: number;
+}
+
+interface TrafficDailyRecord {
+  messages: number;
+  connections: number;
+  bytes: number;
+  byType: Record<string, number>;
 }
 
 interface GlobalStats {
@@ -511,6 +523,7 @@ export class Registry extends DurableObject<Env> {
   }
 
   private lastChatPrunedDay = "";
+  private lastTrafficPrunedDay = "";
 
   private async recordChat(day: string, room: string, amount: number): Promise<void> {
     if (this.lastChatPrunedDay !== day) {
@@ -606,6 +619,30 @@ export class Registry extends DurableObject<Env> {
     await this.ctx.storage.put("stats", stats);
   }
 
+  /** Persiste contadores agregados em lotes para não gerar uma escrita por mensagem WebSocket. */
+  async recordTraffic(day: string, messages: number, connections: number, bytes: number, byType: Record<string, number>): Promise<void> {
+    if (this.lastTrafficPrunedDay !== day) {
+      const cutoff = new Date(Date.now() - TRAFFIC_STATS_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const records = await this.ctx.storage.list<TrafficDailyRecord>({ prefix: "traffic:" });
+      for (const key of records.keys()) {
+        if (key.slice(8, 18) < cutoff) await this.ctx.storage.delete(key);
+      }
+      this.lastTrafficPrunedDay = day;
+    }
+
+    const key = `traffic:${day}`;
+    await this.ctx.storage.transaction(async (txn) => {
+      const record = (await txn.get<TrafficDailyRecord>(key)) ?? { messages: 0, connections: 0, bytes: 0, byType: {} };
+      record.messages += messages;
+      record.connections += connections;
+      record.bytes += bytes;
+      for (const [type, count] of Object.entries(byType)) {
+        record.byType[type] = (record.byType[type] ?? 0) + count;
+      }
+      await txn.put(key, record);
+    });
+  }
+
   /** Salas abertas e públicas, para a lista do menu Multiplayer (sem nomes além do anfitrião). */
   async publicRooms(): Promise<unknown[]> {
     const rooms = await this.ctx.storage.list<RoomSummary>({ prefix: "room:" });
@@ -665,7 +702,7 @@ export class Registry extends DurableObject<Env> {
     return Array.from(rooms.values()).filter((r) => r.players > 0).map((r) => r.code);
   }
 
-  async status(): Promise<{ stats: GlobalStats; rooms: RoomSummary[]; onlinePlayers: number; activeRooms: number; chatByDayRoom: { day: string; room: string; messages: number }[]; initialPasswords: Record<string, string> }> {
+  async status(): Promise<{ stats: GlobalStats; rooms: RoomSummary[]; onlinePlayers: number; activeRooms: number; chatByDayRoom: { day: string; room: string; messages: number }[]; traffic: { today: TrafficDailyRecord & { day: string; estimatedDoRequests: number }; days: (TrafficDailyRecord & { day: string; estimatedDoRequests: number })[] }; initialPasswords: Record<string, string> }> {
     const rooms = Array.from((await this.ctx.storage.list<RoomSummary>({ prefix: "room:" })).values())
       .sort((a, b) => b.players - a.players || b.updatedAt - a.updatedAt);
     const cutoff = new Date(Date.now() - CHAT_STATS_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -678,6 +715,17 @@ export class Registry extends DurableObject<Env> {
       .sort((a, b) => b.day.localeCompare(a.day) || a.room.localeCompare(b.room));
     const stats = await this.stats();
     stats.chatMessages = chatByDayRoom.reduce((sum, record) => sum + record.messages, 0);
+    const trafficRecords = Array.from((await this.ctx.storage.list<TrafficDailyRecord>({ prefix: "traffic:" })).entries())
+      .map(([key, record]) => {
+        const day = key.slice(8);
+        return { day, ...record, estimatedDoRequests: record.connections + Math.ceil(record.messages / WS_MESSAGES_PER_BILLABLE_REQUEST) };
+      })
+      .sort((a, b) => b.day.localeCompare(a.day))
+      .filter((record) => record.day >= cutoff);
+    const today = new Date().toISOString().slice(0, 10);
+    const todayTraffic = trafficRecords.find((record) => record.day === today) ?? {
+      day: today, messages: 0, connections: 0, bytes: 0, byType: {}, estimatedDoRequests: 0,
+    };
     const initialPasswords = (await this.ctx.storage.get<Record<string, string>>("initial-room-passwords")) ?? {};
     return {
       stats,
@@ -685,6 +733,7 @@ export class Registry extends DurableObject<Env> {
       onlinePlayers: rooms.reduce((sum, r) => sum + r.players, 0),
       activeRooms: rooms.filter((r) => r.players > 0).length,
       chatByDayRoom,
+      traffic: { today: todayTraffic, days: trafficRecords },
       initialPasswords,
     };
   }
@@ -789,6 +838,11 @@ export class GameRoom extends DurableObject<Env> {
   /** Último pagamento de profissão de cada jogador (limite de frequência). */
   private lastEarn = new Map<number, number>();
   private chatTimestamps = new Map<number, number[]>();
+  private trafficPendingMessages = 0;
+  private trafficPendingConnections = 0;
+  private trafficPendingBytes = 0;
+  private trafficPendingByType = new Map<string, number>();
+  private trafficFlushInFlight = false;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -957,6 +1011,7 @@ export class GameRoom extends DurableObject<Env> {
         debugClientId,
       };
       this.ctx.acceptWebSocket(server);
+      this.trackTraffic("ws_connect", 0, 0, 1);
       server.serializeAttachment(attachment);
       this.room.emptySince = null;
       await this.save();
@@ -970,6 +1025,7 @@ export class GameRoom extends DurableObject<Env> {
 
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
     if (!this.room) {
+      this.trackTraffic("room_missing", 0, 0);
       // Sala apagada (admin/expirou) mas o socket ainda está vivo: manda sair.
       try {
         ws.send(JSON.stringify({ t: "kick", msg: "Esta sala não existe mais." }));
@@ -980,14 +1036,21 @@ export class GameRoom extends DurableObject<Env> {
       return;
     }
     const text = typeof raw === "string" ? raw : new TextDecoder().decode(raw);
-    if (text.length > MAX_MESSAGE_BYTES) return;
+    if (text.length > MAX_MESSAGE_BYTES) {
+      this.trackTraffic("oversized", 0, typeof raw === "string" ? new TextEncoder().encode(raw).byteLength : raw.byteLength);
+      return;
+    }
 
     let msg: any;
     try {
       msg = JSON.parse(text);
     } catch {
+      this.trackTraffic("invalid_json", 0, typeof raw === "string" ? new TextEncoder().encode(raw).byteLength : raw.byteLength);
       return;
     }
+    const rawBytes = typeof raw === "string" ? new TextEncoder().encode(raw).byteLength : raw.byteLength;
+    const messageType = typeof msg?.t === "string" ? msg.t.slice(0, 32) : "unknown";
+    this.trackTraffic(messageType, 1, rawBytes);
     const me = ws.deserializeAttachment() as Attachment;
 
     switch (msg.t) {
@@ -1093,11 +1156,51 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   async webSocketClose(ws: WebSocket): Promise<void> {
+    await this.flushTraffic();
     await this.onLeave(ws);
   }
 
   async webSocketError(ws: WebSocket): Promise<void> {
+    await this.flushTraffic();
     await this.onLeave(ws);
+  }
+
+  private trackTraffic(type: string, messages = 0, bytes = 0, connections = 0): void {
+    this.trafficPendingMessages += messages;
+    this.trafficPendingConnections += connections;
+    this.trafficPendingBytes += bytes;
+    if (messages > 0) this.trafficPendingByType.set(type, (this.trafficPendingByType.get(type) ?? 0) + messages);
+    if (this.trafficPendingMessages >= TRAFFIC_FLUSH_MESSAGES || this.trafficPendingConnections >= TRAFFIC_FLUSH_CONNECTIONS)
+      this.ctx.waitUntil(this.flushTraffic());
+  }
+
+  private async flushTraffic(): Promise<void> {
+    if (this.trafficFlushInFlight || (this.trafficPendingMessages === 0 && this.trafficPendingConnections === 0)) return;
+    this.trafficFlushInFlight = true;
+    const messages = this.trafficPendingMessages;
+    const connections = this.trafficPendingConnections;
+    const bytes = this.trafficPendingBytes;
+    const byType = Object.fromEntries(this.trafficPendingByType);
+    this.trafficPendingMessages = 0;
+    this.trafficPendingConnections = 0;
+    this.trafficPendingBytes = 0;
+    this.trafficPendingByType.clear();
+
+    try {
+      const registry = this.env.REGISTRY.get(this.env.REGISTRY.idFromName("global"));
+      await registry.recordTraffic(new Date().toISOString().slice(0, 10), messages, connections, bytes, byType);
+    } catch {
+      // Se o registro estiver temporariamente indisponível, devolve o lote à memória para nova tentativa.
+      this.trafficPendingMessages += messages;
+      this.trafficPendingConnections += connections;
+      this.trafficPendingBytes += bytes;
+      for (const [type, count] of Object.entries(byType))
+        this.trafficPendingByType.set(type, (this.trafficPendingByType.get(type) ?? 0) + count);
+    } finally {
+      this.trafficFlushInFlight = false;
+    }
+    if (this.trafficPendingMessages >= TRAFFIC_FLUSH_MESSAGES || this.trafficPendingConnections >= TRAFFIC_FLUSH_CONNECTIONS)
+      this.ctx.waitUntil(this.flushTraffic());
   }
 
   private async onHello(ws: WebSocket, me: Attachment, msg: any): Promise<void> {
