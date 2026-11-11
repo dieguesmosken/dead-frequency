@@ -26,6 +26,8 @@ public partial class DayNightController : Node
 
     private double _soloHours;
     private float _lastNight = -1f;
+    private int _lastMode = -1;
+    private float _lastAppliedHour = -1f;
 
     // Paletas: dia, pôr do sol e noite.
     private static readonly Color DayTop = new(0.2f, 0.4f, 0.72f), DayHorizon = new(0.68f, 0.74f, 0.8f);
@@ -89,7 +91,9 @@ public partial class DayNightController : Node
             Sun.ShadowEnabled = s.Quality > 0;
             Sun.DirectionalShadowMaxDistance = s.Quality >= 2 ? 120f : 60f;
         }
-        RenderingServer.DirectionalShadowAtlasSetSize(s.Quality >= 2 ? 4096 : 2048, true);
+        // Atlas menor no preset Baixo reduz o uso de memória da GPU.
+        int shadowAtlasSize = s.Quality >= 2 ? 4096 : s.Quality == 1 ? 2048 : 1024;
+        RenderingServer.DirectionalShadowAtlasSetSize(shadowAtlasSize, true);
     }
 
     public override void _Ready()
@@ -128,6 +132,13 @@ public partial class DayNightController : Node
         }
 
         Hour = (float)Mathf.PosMod(totalHours, 24.0);
+
+        // Em horário fixo, céu, iluminação e materiais não precisam ser recalculados a cada frame.
+        if (mode != 0 && mode == _lastMode && Mathf.IsEqualApprox(Hour, _lastAppliedHour))
+            return;
+
+        _lastMode = mode;
+        _lastAppliedHour = Hour;
         Apply(Hour);
     }
 
@@ -189,7 +200,8 @@ public partial class DayNightController : Node
                 Sun.LightColor = new Color(0.55f, 0.65f, 1f);
                 Sun.LightEnergy = Mathf.Lerp(0.05f, 0.35f, moonStrength);
             }
-            Sun.DirectionalShadowMaxDistance = night > 0.5f ? 80f : 120f;
+            int quality = GameSettings.Instance?.Quality ?? 2;
+            Sun.DirectionalShadowMaxDistance = quality <= 0 ? 0f : quality == 1 ? 60f : night > 0.5f ? 80f : 120f;
         }
 
         Environment env = World?.Environment;
