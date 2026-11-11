@@ -94,7 +94,7 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
       <h1>CENTRAL DE RÁDIO<small>Dead Frequency · painel do servidor</small></h1>
       <div class="row">
         <span><span id="liveDot" class="dot"></span><span id="liveText" class="muted">conectando…</span></span>
-        <label class="row muted" style="gap:6px"><input id="autoRefresh" type="checkbox" checked> auto (30 s)</label>
+        <label class="row muted" style="gap:6px"><input id="autoRefresh" type="checkbox" checked> auto (60 s)</label>
         <button id="refreshBtn">Atualizar</button>
         <button id="logoutBtn">Sair</button>
       </div>
@@ -174,7 +174,7 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
         </div>
         <div class="panel usage-note">
           <strong>Durable Objects · 100.000 requisições/dia</strong>
-          <p>*Equivalente parcial estimado: conexões WebSocket + 1 requisição para cada 20 mensagens recebidas. Não inclui chamadas RPC, requisições HTTP internas nem alarmes.</p>
+          <p>*Equivalente parcial estimado: conexões WebSocket + 1 requisição para cada 20 mensagens recebidas e 1 RPC por lote de métricas. Ainda não inclui outros RPCs, requisições HTTP internas nem alarmes.</p>
         </div>
       </div>
     </section>
@@ -300,7 +300,7 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
         Number(d.estimatedDoRequests || 0).toLocaleString("pt-BR") + "</td><td>" + esc(formatBytes(d.bytes)) + "</td></tr>").join("")
       : '<tr class="empty"><td colspan="5">Ainda não há histórico de tráfego.</td></tr>';
 
-    $("trafficNote").textContent = "Contadores agregados em lotes (a cada 100 mensagens ou 10 conexões) e enviados ao registro global. O valor é aproximado: uma reinicialização abrupta pode perder o lote ainda não persistido. A equivalência considera a regra 20:1 das mensagens WebSocket recebidas, mas não substitui o Analytics oficial da Cloudflare.";
+    $("trafficNote").textContent = "Contadores agregados em lotes (a cada 100 mensagens ou 10 conexões) e enviados ao registro global. O valor é aproximado: hibernação ou reinicialização antes da gravação pode perder o lote ainda não persistido. A equivalência soma conexões, mensagens recebidas na regra 20:1 e RPCs de gravação das métricas; outros RPCs e requisições internas não estão incluídos. Não substitui o Analytics oficial da Cloudflare.";
   }
 
   function renderChatStats(records) {
@@ -409,7 +409,7 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
 
   function schedule() {
     clearInterval(timer);
-    if ($("autoRefresh").checked) timer = setInterval(refresh, 30000);
+    if ($("autoRefresh").checked) timer = setInterval(refresh, 60000);
   }
 
   function login(value) {
