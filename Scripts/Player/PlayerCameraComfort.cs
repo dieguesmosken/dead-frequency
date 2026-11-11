@@ -47,8 +47,36 @@ public partial class PlayerController
         return _thirdPerson && _comfortCamera != null ? _comfortCamera : _camera;
     }
 
+    public bool IsThirdPerson => _thirdPerson;
+
     private void HandleComfortCameraInput(InputEvent e)
     {
+        if (Input.MouseMode != Input.MouseModeEnum.Captured)
+            return;
+
+        if (e is InputEventMouseButton { Pressed: true } wheel
+            && wheel.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
+        {
+            if (wheel.CtrlPressed)
+            {
+                // Ctrl + roda ajusta o campo de visão sem alternar a câmera.
+                float direction = wheel.ButtonIndex == MouseButton.WheelUp ? -1f : 1f;
+                float fov = Mathf.Clamp(_camera.Fov + direction * 3f, 50f, 90f);
+                _camera.Fov = fov;
+                if (_comfortCamera != null)
+                    _comfortCamera.Fov = fov;
+                GameHud.Toast(this, $"FOV: {fov:0}°", UiStyle.Phosphor, 1.2);
+            }
+            else
+            {
+                // Cada movimento da roda alterna entre primeira e terceira pessoa.
+                SetThirdPerson(!_thirdPerson, true);
+            }
+
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+
         if (e is InputEventKey { Pressed: true, Echo: false, PhysicalKeycode: Key.V })
         {
             SetThirdPerson(!_thirdPerson, true);
