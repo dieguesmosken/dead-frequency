@@ -290,6 +290,7 @@ if (unauthenticatedAdmin.status === 503) {
   const listed = status.rooms.find((r) => r.code === code);
   assert(listed && listed.players === 2 && status.stats.deliveries >= welcomeA.jobs.length, "status lista a sala, jogadores e entregas");
   assert(status.stats.chatMessages >= 3 && status.chatByDayRoom.some((r) => r.room === code && r.messages >= 3), "admin vê métricas agregadas de chat por dia e sala");
+  assert(status.traffic && typeof status.traffic.today.messages === "number" && Array.isArray(status.traffic.days), "admin expõe métricas agregadas de tráfego WebSocket");
   assert(status.rooms.some((r) => r.code === "ADMNA" && r.permanent && r.hasPassword), "admin vê sala fixa protegida");
   const detail = await (await admin("/rooms/" + code)).json();
   assert(detail.players.length === 2 && detail.jobs.length > 0 && detail.vanOwner === welcomeB.you, "detalhes da sala (jogadores, pedidos, dono da van)");
@@ -317,6 +318,10 @@ b.ws.close();
 await sleep(400);
 assert(a.find("leave")?.id === welcomeB.you, "saída avisada");
 assert(a.all("owner").some((m) => m.id === "van" && m.owner === null), "van liberada quando o motorista sai");
+if (unauthenticatedAdmin.status !== 503) {
+  const trafficStatus = await (await admin("/status")).json();
+  assert(trafficStatus.traffic.today.messages > 0 && trafficStatus.traffic.today.connections > 0, "tráfego WebSocket é persistido ao fechar a conexão");
+}
 
 if (unauthenticatedAdmin.status !== 503) {
   const closeRes = await (await admin("/rooms/" + code + "/close", { method: "POST" })).json();
