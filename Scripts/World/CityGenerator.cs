@@ -349,7 +349,6 @@ public partial class CityGenerator : Node3D
             Seed = NetClient.Instance.Seed;
         }
         else if (SaveManager.Load() is SaveData savedWorld &&
-                 savedWorld.WorldGeneratorVersion > 0 &&
                  string.Equals(savedWorld.Level, Biome.ToString().ToLowerInvariant(), StringComparison.Ordinal))
         {
             Seed = savedWorld.WorldSeed;
