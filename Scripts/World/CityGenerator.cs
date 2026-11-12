@@ -102,6 +102,19 @@ public partial class CityGenerator : Node3D
             MarketBlock, RadioStationBlock, GasStations,
             progress => WorldDataProgress?.Invoke(progress));
 
+        if (Biome == WorldBiome.City)
+        {
+            _deliveryPoints.Clear();
+            foreach (WorldDeliveryPointData point in WorldData.DeliveryPoints)
+            {
+                _deliveryPoints.Add(new DeliveryPoint
+                {
+                    Position = point.Position,
+                    Address = point.Address,
+                });
+            }
+        }
+
         _rng = new RandomNumberGenerator { Seed = (ulong)Seed };
         // Detalhes (lojas, ar-condicionados, orelhões) usam outro gerador para não mudar o resto da cidade.
         _decoRng = new RandomNumberGenerator { Seed = (ulong)Seed * 7919UL + 13UL };
@@ -606,25 +619,10 @@ public partial class CityGenerator : Node3D
 
     private void RegisterDeliveryPoint(int bx, int bz)
     {
-        // Um ponto de entrega no meio de um lado aleatório do quarteirão, na calçada.
-        int side = _rng.RandiRange(0, 3);
-        Vector3 center = BlockCenter(bx, bz);
-        float edge = BlockSize * 0.5f - 1.5f;
-        Vector3 offset;
-        string street;
-        switch (side)
-        {
-            case 0: offset = new Vector3(edge, 0f, 0f); street = StreetX(bx); break;
-            case 1: offset = new Vector3(-edge, 0f, 0f); street = StreetX(bx - 1); break;
-            case 2: offset = new Vector3(0f, 0f, edge); street = StreetZ(bz); break;
-            default: offset = new Vector3(0f, 0f, -edge); street = StreetZ(bz - 1); break;
-        }
-
-        _deliveryPoints.Add(new DeliveryPoint
-        {
-            Position = center + offset + new Vector3(0f, CurbHeight, 0f),
-            Address = $"{street}, nº {_rng.RandiRange(10, 999)}",
-        });
+        // Os pontos da cidade já foram calculados na fase lógica e populados antes da geometria.
+        // Consome os dois sorteios antigos para manter idêntica a sequência do RNG visual legado.
+        _ = _rng.RandiRange(0, 3);
+        _ = _rng.RandiRange(10, 999);
     }
 
     // ------------------------------------------------------------------ depósito
