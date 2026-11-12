@@ -53,6 +53,8 @@ public partial class MainMenu : Control
         SetAnchorsPreset(LayoutPreset.FullRect);
 
         _style = (MenuStyle)Mathf.Clamp(GameSettings.Instance?.MenuStyle ?? 0, 0, MenuStyles.Names.Length - 1);
+        if (GameSettings.IsMobile)
+            _style = MenuStyle.Classico; // celular: layout próprio (MainMenu.Mobile.cs)
         var background = new ColorRect { Color = new Color(0.015f, 0.025f, 0.02f), MouseFilter = MouseFilterEnum.Ignore };
         background.SetAnchorsPreset(LayoutPreset.FullRect);
         AddChild(background);
@@ -191,6 +193,8 @@ public partial class MainMenu : Control
         }
 
         ApplyStyle();
+        if (GameSettings.IsMobile)
+            ApplyMobileLayout();
         AddChild(UiStyle.MakeScanlines());
 
         _startButton.GrabFocus();

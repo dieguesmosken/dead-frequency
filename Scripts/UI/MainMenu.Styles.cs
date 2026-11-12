@@ -20,6 +20,7 @@ public partial class MainMenu
         MenuStyle.Orbita => 64,
         MenuStyle.Cinema => 80,
         MenuStyle.Terminal => 54,
+        _ when GameSettings.IsMobile => MobileTitleSize,
         _ => 72,
     };
 

@@ -49,7 +49,10 @@ public partial class TouchControls : CanvasLayer
     private int _lookFinger = -1;
 
     private TouchButton _interact, _jump, _throw, _drop, _sprint;
-    private TouchButton _pause, _bag, _light, _vision, _radio, _station, _back;
+    private TouchButton _pause, _bag, _light, _vision, _radio, _station, _back, _cameraView;
+
+    /// <summary>Botão sem ação no Input Map: alterna 1ª/3ª pessoa direto no PlayerController.</summary>
+    private const string CameraAction = "_camera_view";
 
     public override void _EnterTree() => Instance = this;
 
@@ -80,6 +83,7 @@ public partial class TouchControls : CanvasLayer
         _radio = Add("radio", "RÁDIO", Kind.Hold);
         _station = Add("radio_next", "ESTAÇÃO", Kind.Hold);
         _back = Add("pause", "VOLTAR", Kind.Hold);
+        _cameraView = Add(CameraAction, "CÂMERA", Kind.Hold);
         Visible = false;
     }
 
@@ -100,7 +104,7 @@ public partial class TouchControls : CanvasLayer
             int mode = s?.TouchMode ?? 0;
             // Automático = só no celular. Alguns PCs (e o X11 do Linux) dizem ter tela de toque sem ter:
             // notebook com toque escolhe "Sempre" nas Opções.
-            return mode == 1 || (mode == 0 && OS.HasFeature("mobile"));
+            return mode == 1 || (mode == 0 && GameSettings.IsMobile);
         }
     }
 
@@ -176,7 +180,7 @@ public partial class TouchControls : CanvasLayer
 
         // Fileira de cima no canto esquerdo: o direito é da lista de entregas do HUD.
         float x = left + u * 0.62f;
-        foreach (TouchButton b in new[] { _pause, _bag, _light, _vision, _radio, _station })
+        foreach (TouchButton b in new[] { _pause, _bag, _cameraView, _light, _vision, _radio, _station })
         {
             if (!b.Visible)
                 continue;
@@ -307,6 +311,12 @@ public partial class TouchControls : CanvasLayer
         if (b.Down == down)
             return;
         b.Down = down;
+        if (b.Action == CameraAction)
+        {
+            if (down && PlayerController.Local is { } p && IsInstanceValid(p))
+                p.ToggleCameraView();
+            return;
+        }
         Input.ParseInputEvent(new InputEventAction { Action = b.Action, Pressed = down, Strength = down ? 1f : 0f });
     }
 

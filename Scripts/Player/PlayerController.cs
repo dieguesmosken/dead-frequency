@@ -148,6 +148,12 @@ public partial class PlayerController : CharacterBody3D
         _head = GetNode<Node3D>("Head");
         _camera = GetNode<Camera3D>("Head/Camera3D");
         _cameraBase = _camera.Position;
+        if (GameSettings.IsMobile)
+        {
+            // Celular: começa em primeira pessoa (mais leve e melhor no toque) e enxerga menos longe.
+            _thirdPerson = false;
+            _camera.Far = Mathf.Min(_camera.Far, 160f);
+        }
         InitializeComfortCamera();
         _carryMarker = GetNode<Marker3D>("Head/CarryMarker");
         _collisionShape = GetNode<CollisionShape3D>("CollisionShape3D");

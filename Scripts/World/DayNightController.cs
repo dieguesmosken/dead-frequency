@@ -239,7 +239,8 @@ public partial class DayNightController : Node
             env.AmbientLightColor = new Color(0.62f, 0.66f, 0.74f).Lerp(new Color(0.17f, 0.18f, 0.24f), night).Lerp(new Color(0.6f, 0.45f, 0.4f), dusk * 0.4f);
             env.AmbientLightEnergy = Mathf.Lerp(0.75f, 0.9f, night);
             env.FogLightColor = horizon.Lerp(new Color(0.05f, 0.06f, 0.08f), night * 0.6f);
-            env.FogDensity = Mathf.Lerp(0.004f, 0.016f, night);
+            // Celular: neblina mais perto esconde o que a câmera não desenha (Far menor) e fica mais leve.
+            env.FogDensity = Mathf.Lerp(0.004f, 0.016f, night) * (GameSettings.IsMobile ? 2.2f : 1f);
             env.GlowIntensity = Mathf.Lerp(0.25f, 0.7f, night);
         }
 

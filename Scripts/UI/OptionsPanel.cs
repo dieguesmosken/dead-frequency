@@ -139,8 +139,9 @@ public partial class OptionsPanel : VBoxContainer
     private void BuildVideo(GameSettings s, VBoxContainer p)
     {
         Section(p, "TELA");
-        Choice(p, "Modo de janela", new[] { "Janela", "Tela cheia (sem borda)", "Tela cheia exclusiva", "Janela maximizada" }, s.WindowMode, i => s.WindowMode = i,
-            "Tela cheia exclusiva costuma dar menos atraso; sem borda troca de janela mais rápido (Alt+Tab).");
+        if (!GameSettings.IsMobile) // no celular é sempre tela cheia
+            Choice(p, "Modo de janela", new[] { "Janela", "Tela cheia (sem borda)", "Tela cheia exclusiva", "Janela maximizada" }, s.WindowMode, i => s.WindowMode = i,
+                "Tela cheia exclusiva costuma dar menos atraso; sem borda troca de janela mais rápido (Alt+Tab).");
         Toggle(p, "V-Sync", s.VSync, b => s.VSync = b, "Trava no ritmo do monitor e evita cortes na imagem; desligue para menos atraso.");
         int[] fpsValues = { 0, 30, 60, 90, 120, 144, 165, 240 };
         Choice(p, "Limite de FPS", new[] { "Sem limite", "30", "60", "90", "120", "144", "165", "240" }, Math.Max(0, Array.IndexOf(fpsValues, s.MaxFps)), i => s.MaxFps = fpsValues[i],
