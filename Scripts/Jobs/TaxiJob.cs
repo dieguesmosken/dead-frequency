@@ -204,7 +204,15 @@ public partial class TaxiJob : JobBase
         ReleasePickupPin();
         _dest = RandomPoint(City.DeliveryPoints[_pickup].Position, 140f, 600f, _pickup);
         if (_dest < 0)
+        {
+            // Sem destino válido, encerra a tentativa e deixa o passageiro esperando novamente.
+            _riding = false;
+            _passenger.Visible = true;
+            _pickupPinPosition = City.DeliveryPoints[_pickup].Position;
+            _hasPickupPin = City.PinChunkForPosition(_pickupPinPosition);
+            _wait = 2.0;
             return;
+        }
         DeliveryPoint d = City.DeliveryPoints[_dest];
         _destPinPosition = d.Position;
         _hasDestPin = City.PinChunkForPosition(_destPinPosition);
