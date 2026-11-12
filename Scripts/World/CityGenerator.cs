@@ -206,7 +206,7 @@ public partial class CityGenerator : Node3D
             if (plan.Kind == WorldBlockKind.Depot)
                 BuildDepot(parent: root);
             else
-                BuildBlockCore(chunk.Coordinate.X, chunk.Coordinate.Z, plan.Kind);
+                BuildBlockCore(chunk.Coordinate.X, chunk.Coordinate.Z, plan.Kind, plan);
 
             BuildChunkDecorations(chunk.Coordinate);
             OptimizeVisibility(root);
@@ -789,7 +789,7 @@ public partial class CityGenerator : Node3D
             _decoRng = new RandomNumberGenerator { Seed = plan.DecorationSeed };
             try
             {
-                BuildBlockCore(bx, bz, plan.Kind);
+                BuildBlockCore(bx, bz, plan.Kind, plan);
             }
             finally
             {
@@ -799,10 +799,10 @@ public partial class CityGenerator : Node3D
             return;
         }
 
-        BuildBlockCore(bx, bz, null);
+        BuildBlockCore(bx, bz, null, null);
     }
 
-    private void BuildBlockCore(int bx, int bz, WorldBlockKind? plannedKind)
+    private void BuildBlockCore(int bx, int bz, WorldBlockKind? plannedKind, WorldBlockData blockPlan = null)
     {
         Vector3 center = BlockCenter(bx, bz);
         var block = new Node3D { Name = $"Block_{bx}_{bz}" };
@@ -840,7 +840,7 @@ public partial class CityGenerator : Node3D
                     BuildParkingLot(block, center, inner);
                     break;
                 default:
-                    BuildBuildings(block, center, inner, bx, bz);
+                    BuildBuildings(block, center, inner, bx, bz, blockPlan);
                     break;
             }
             return;
@@ -855,8 +855,38 @@ public partial class CityGenerator : Node3D
             BuildBuildings(block, center, inner, bx, bz);
     }
 
-    private void BuildBuildings(Node3D block, Vector3 center, float inner, int bx, int bz)
+    private void BuildBuildings(
+        Node3D block,
+        Vector3 center,
+        float inner,
+        int bx,
+        int bz,
+        WorldBlockData blockPlan = null)
     {
+        if (_useLogicalBlockPlans && blockPlan != null)
+        {
+            foreach (WorldBuildingPlan building in blockPlan.Buildings)
+            {
+                RandomNumberGenerator previousRng = _rng;
+                RandomNumberGenerator previousDecoRng = _decoRng;
+                _rng = new RandomNumberGenerator { Seed = building.VisualSeed };
+                _decoRng = new RandomNumberGenerator { Seed = building.DecorationSeed };
+                try
+                {
+                    BuildBuilding(block, building.BaseCenter, building.Width, building.Depth,
+                        building.Height, building.HasStorefront);
+                    DecorateBuilding(block, building.BaseCenter, building.Width, building.Depth,
+                        building.Height, center, building.Front, building.HasStorefront,
+                        building.StoreBrandIndex);
+                }
+                finally
+                {
+                    _rng = previousRng;
+                    _decoRng = previousDecoRng;
+                }
+            }
+            return;
+        }
         // Divide o miolo do quarteirão em 1, 2 ou 4 lotes.
         float split = _rng.Randf();
         var lots = new List<Rect2>();
