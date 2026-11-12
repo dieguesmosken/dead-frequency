@@ -7,13 +7,23 @@ namespace DeadFrequency;
 
 public static class GameVersion
 {
-    public const string Current = "0.9.8";
+    public const string Current = "0.9.9";
     public const string Display = Current;
 
     public readonly record struct Release(string Version, string Date, string Title, string[] Changes);
 
     public static readonly Release[] Changelog =
     {
+        new("0.9.9", "12/11/2026", "Lojas de verdade", new[]
+        {
+            "Táxi amarelo da cooperativa Rádio Táxi Sintonia no pátio da central (com o adesivo do app 66): o taxista agora faz as corridas com ele, e o passageiro só embarca no táxi.",
+            "Van de viagem anos 80, a Fórdi Viajante, estacionada no pátio da central: é a van do futuro Modo História e já dá para dirigir.",
+            "Shopping Marconi com oito balcões, dois pisos e escada para subir a pé; as fachadas comerciais viraram lojas térreas do tamanho certo.",
+            "Central de entregas com portão novo do lado esquerdo e grade de metal em cima do muro; ninguém estaciona mais na frente dos portões.",
+            "Rádio 96.6 com muro e grade, e um portãozinho de pedestre na lateral.",
+            "Céu novo: nuvens, sol, lua com relevo e estrelas que acompanham o ciclo de dia e noite.",
+            "Online: táxi e van de viagem sincronizados. Atualize o servidor com npm run deploy.",
+        }),
         new("0.9.8", "10/11/2026", "Rua de verdade", new[]
         {
             "Meio-fio de concreto cinza com faixas brancas intercaladas e tinta gasta pelo tempo; amarelo nos cruzamentos e trechos proibidos, com a linha amarela oficial no asfalto junto à sarjeta (como manda a Resolução CONTRAN 973/2022). Carros gerados só estacionam onde é permitido.",
