@@ -1,3 +1,4 @@
+using System;
 // Scripts/World/CityGenerator.Farm.cs
 // Fase 2 — Rancho. Mesmo CityGenerator, outro bioma: estradas de terra (desenhadas pelo shader
 // do chão), sítios e fazendas com casa, celeiro, silo, plantação, curral, trator e cata-vento,
