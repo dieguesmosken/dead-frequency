@@ -89,6 +89,8 @@ public partial class CityGenerator : Node3D
     private Node3D _lightsRoot;
     private bool _useLogicalWorldData;
     private bool _useLogicalBlockPlans;
+    private Vector3 _initialChunkPosition;
+    private bool _hasInitialChunkPosition;
     private Node3D _activeChunkRoot;
     private WorldChunkCoordinate? _activeChunkCoordinate;
     private readonly Dictionary<WorldChunkCoordinate, Node3D> _chunkRoots = new();
@@ -299,8 +301,12 @@ public partial class CityGenerator : Node3D
                 ? player.GlobalPosition
                 : new Vector3(-3f, 0f, 8f);
             string profession = GetInitialProfessionForWorld();
+            _initialChunkPosition = WorldData.TryGetProfessionSpawn(profession, out WorldSpawnPoint spawn)
+                ? spawn.Position
+                : fallback;
+            _hasInitialChunkPosition = true;
             IReadOnlyList<WorldChunkData> initialChunks =
-                WorldData.GetInitialChunks(profession, fallback, radius: 1);
+                WorldData.GetChunksAround(_initialChunkPosition, radius: 1);
             foreach (WorldChunkData chunk in initialChunks)
                 BuildChunkVisuals(chunk);
         }
@@ -338,7 +344,13 @@ public partial class CityGenerator : Node3D
         {
             PlayerController player = GetParent()?.GetNodeOrNull<PlayerController>("Player");
             if (player != null)
-                AddChild(new WorldChunkManager { City = this, Target = player });
+                AddChild(new WorldChunkManager
+                {
+                    City = this,
+                    Target = player,
+                    InitialPosition = _initialChunkPosition,
+                    HasInitialPosition = _hasInitialChunkPosition,
+                });
         }
     }
 
