@@ -56,6 +56,7 @@ public partial class CityGenerator
 
     private readonly Dictionary<string, Batch> _batches = new();
     private StaticBody3D _farmBody;
+    private StaticBody3D _activeFarmBody;
     private StandardMaterial3D _farmWindow, _roofRed, _roofBrown, _barnRed, _barnWhite, _metalSilo, _hay, _cornGreen,
         _soil, _cowWhite, _cowBlack, _pigPink, _waterMat, _tractorGreen, _tractorRed, _treeTint, _wheelBlack, _reed;
     private PrismMesh _roofPrism;
@@ -84,13 +85,13 @@ public partial class CityGenerator
     private void BuildFarm()
     {
         BuildFarmResources();
-        _farmBody = new StaticBody3D { Name = "FarmCollision", CollisionLayer = 1, CollisionMask = 0 };
+        _farmBody = new StaticBody3D { Name = "FarmCollision_Global", CollisionLayer = 1, CollisionMask = 0 };
         _staticRoot.AddChild(_farmBody);
 
         DefineFarmRoads();
         BuildFarmGround();
 
-        // Cooperativa no centro: o mesmo galpão/escritório da cidade, com cerca de madeira.
+        // Cooperativa, lago, capela e outros pontos centrais permanecem como estrutura global leve.
         BuildDepot(farm: true);
         _occupied.Add((Vector2.Zero, 34f));
         _occupied.Add((new Vector2(_lakeCenter.X, _lakeCenter.Z), LakeRadius + 10f));
@@ -103,19 +104,167 @@ public partial class CityGenerator
         _occupied.Add((new Vector2(36f, 146f), 14f)); // cemitério
         BuildFarmProps();
 
-        PlaceFarms();
+        if (_useLogicalWorldData && WorldData != null)
+        {
+            // Todos os sítios reservam espaço desde o início, inclusive os que ainda não têm mesh.
+            foreach (WorldFarmSitePlan site in WorldData.FarmSites)
+                _occupied.Add((new Vector2(site.Center.X, site.Center.Z), site.OccupiedRadius));
+        }
+        else
+        {
+            PlaceFarms();
+        }
+
         BuildRoadLamps();
         BuildRoadSigns();
         BuildFarmPhones();
-        BuildTrees();
-        BuildUndergrowth();
-        BuildFarmGrass();
+
+        // No modo lógico, sítios, árvores, mato e capim são renderizados sob demanda por chunk.
+        if (!_useLogicalWorldData)
+        {
+            BuildTrees();
+            BuildUndergrowth();
+            BuildFarmGrass();
+        }
+
         BuildFarmBoundary();
         BuildRadioTower(new Vector3(-FarmExtent + 25f, 0f, -FarmExtent + 25f));
 
         FlushBatches(_staticRoot);
         OptimizeVisibility(this);
         AddChild(new Mosquitoes { Name = "Pernilongos" });
+    }
+
+    /// <summary>Renderiza apenas os sítios e a vegetação que pertencem ao chunk solicitado.</summary>
+    private bool BuildFarmChunkVisuals(WorldChunkData chunk)
+    {
+        if (Biome != WorldBiome.Farm || WorldData == null || IsChunkVisualized(chunk.Coordinate))
+            return false;
+
+        var root = new Node3D { Name = $"FarmChunk_{chunk.Coordinate.X}_{chunk.Coordinate.Z}" };
+        _staticRoot.AddChild(root);
+        _chunkRoots[chunk.Coordinate] = root;
+
+        Node3D previousRoot = _activeChunkRoot;
+        WorldChunkCoordinate? previousCoordinate = _activeChunkCoordinate;
+        StaticBody3D previousFarmBody = _activeFarmBody;
+        RandomNumberGenerator previousRng = _rng;
+        _activeChunkRoot = root;
+        _activeChunkCoordinate = chunk.Coordinate;
+        _activeFarmBody = new StaticBody3D
+        {
+            Name = $"FarmCollision_{chunk.Coordinate.X}_{chunk.Coordinate.Z}",
+            CollisionLayer = 1,
+            CollisionMask = 0,
+        };
+        root.AddChild(_activeFarmBody);
+
+        try
+        {
+            foreach (WorldFarmSitePlan site in WorldData.FarmSites)
+            {
+                if (WorldData.GetChunkCoordinate(site.Center) != chunk.Coordinate)
+                    continue;
+
+                _rng = new RandomNumberGenerator { Seed = site.VisualSeed };
+                BuildFarmstead(
+                    site.GatePosition,
+                    site.TowardRoad,
+                    site.Width,
+                    site.Depth,
+                    site.Name,
+                    site.Address);
+            }
+
+            foreach (WorldFarmTreePlan treePlan in WorldData.FarmTrees)
+            {
+                if (WorldData.GetChunkCoordinate(treePlan.Position) != chunk.Coordinate)
+                    continue;
+
+                RenderFarmTreePlan(treePlan);
+            }
+
+            foreach (WorldFarmUndergrowthPlan plan in WorldData.FarmUndergrowth)
+            {
+                if (WorldData.GetChunkCoordinate(plan.Position) != chunk.Coordinate)
+                    continue;
+
+                if (NatureKit.Get(plan.Model) is not Mesh mesh)
+                    continue;
+
+                var transform = new Transform3D(
+                    new Basis(Vector3.Up, plan.RotationY) * Basis.FromScale(Vector3.One * plan.Scale),
+                    plan.Position);
+                AddInstance("qg_" + plan.Model, mesh, null, transform, Colors.White);
+            }
+
+            BuildFarmGrassForChunk(chunk);
+            FlushBatches(root);
+            OptimizeVisibility(root);
+            ChunkVisualized?.Invoke(chunk.Coordinate);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            GD.PushError($"Falha ao construir chunk rural {chunk.Coordinate.X},{chunk.Coordinate.Z}: {ex}");
+            _batches.Clear();
+            UnloadChunkVisuals(chunk.Coordinate);
+            return false;
+        }
+        finally
+        {
+            _activeChunkRoot = previousRoot;
+            _activeChunkCoordinate = previousCoordinate;
+            _activeFarmBody = previousFarmBody;
+            _rng = previousRng;
+        }
+    }
+
+    private void RenderFarmTreePlan(WorldFarmTreePlan treePlan)
+    {
+        if (treePlan.Dead)
+        {
+            string model = NatureKit.DeadTrees[Mathf.PosMod(treePlan.VariantIndex, NatureKit.DeadTrees.Length)];
+            if (NatureKit.Get(model) is Mesh deadMesh)
+            {
+                var transform = new Transform3D(
+                    new Basis(Vector3.Up, treePlan.RotationY) *
+                    Basis.FromScale(Vector3.One * treePlan.Scale),
+                    treePlan.Position);
+                AddInstance("q_" + model, deadMesh, null, transform, Colors.White);
+            }
+
+            AddShape(
+                new CylinderShape3D { Radius = 0.35f, Height = 4f },
+                new Transform3D(Basis.Identity, treePlan.Position + new Vector3(0f, 2f, 0f)));
+            return;
+        }
+
+        RandomNumberGenerator previousRng = _rng;
+        _rng = new RandomNumberGenerator { Seed = treePlan.VisualSeed };
+        try
+        {
+            Tree(new Vector2(treePlan.Position.X, treePlan.Position.Z), treePlan.Pine);
+        }
+        finally
+        {
+            _rng = previousRng;
+        }
+    }
+
+    private void BuildFarmGrassForChunk(WorldChunkData chunk)
+    {
+        Vector3 center = chunk.Center;
+        Vector2 size = chunk.Size;
+        GrassTufts.Fill(
+            _activeChunkRoot ?? _staticRoot,
+            center,
+            size,
+            1.25f,
+            new Color(0.95f, 0.9f, 0.7f),
+            point => Mathf.Max(Mathf.Abs(point.X), Mathf.Abs(point.Y)) > 20f
+                && DistanceToRoads(point) > 1.2f
+                && IsFree(point, 0.3f));
     }
 
     private void BuildFarmResources()
@@ -310,7 +459,7 @@ public partial class CityGenerator
     private void BuildFarmstead(Vector3 gate, Vector3 towardRoad, float width, float depth, string name, string address)
     {
         var farm = new Node3D { Name = "Farm_" + _deliveryPoints.Count, Position = gate, Rotation = new Vector3(0f, Mathf.Atan2(towardRoad.X, towardRoad.Z), 0f) };
-        _staticRoot.AddChild(farm);
+        (_activeChunkRoot ?? _staticRoot).AddChild(farm);
         Transform3D xf = farm.Transform;
         float hw = width * 0.5f;
 
@@ -1103,7 +1252,7 @@ public partial class CityGenerator
 
     private void AddShape(Shape3D shape, Transform3D transform)
     {
-        _farmBody.AddChild(new CollisionShape3D { Shape = shape, Transform = transform });
+        (_activeFarmBody ?? _farmBody).AddChild(new CollisionShape3D { Shape = shape, Transform = transform });
     }
 
     private void AddInstance(string key, Mesh mesh, Material material, Transform3D transform, Color color)
