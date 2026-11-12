@@ -87,7 +87,7 @@ public partial class CityGenerator : Node3D
 
     private Node3D _staticRoot;
     private Node3D _lightsRoot;
-    private bool _useLogicalDeliveryPoints;
+    private bool _useLogicalWorldData;
     private bool _useLogicalBlockPlans;
 
     public override void _Ready()
@@ -101,18 +101,18 @@ public partial class CityGenerator : Node3D
         // O RNG legado de renderização permanece separado para preservar o mapa visual atual.
         // V7 precisa preservar exatamente os pontos de entrega do gerador legado.
         // V8 pode usar o plano lógico, já que seus clientes usam a mesma geração atualizada.
-        _useLogicalDeliveryPoints = NetClient.Instance?.IsOnline == true
+        _useLogicalWorldData = NetClient.Instance?.IsOnline == true
             && NetClient.Instance.ActiveProtocolVersion >= NetClient.PreferredProtocolVersion;
-        _useLogicalBlockPlans = _useLogicalDeliveryPoints;
+        _useLogicalBlockPlans = _useLogicalWorldData;
 
         WorldData = WorldDataGenerator.Generate(
             Seed, Biome, Radius, BlockSize, RoadWidth, FarmExtent, CurbHeight,
             MarketBlock, RadioStationBlock, FireStationBlock, PoliceStationBlock,
             ShoppingMallBlock, ApartmentBlock, DealerBlock, WaterTowerBlock, CarWashBlock,
-            ParkChance, ParkingLotChance, GasStations, _useLogicalDeliveryPoints,
+            ParkChance, ParkingLotChance, GasStations, _useLogicalWorldData,
             progress => WorldDataProgress?.Invoke(progress));
 
-        if (Biome == WorldBiome.City && _useLogicalDeliveryPoints)
+        if (Biome == WorldBiome.City && _useLogicalWorldData)
         {
             _deliveryPoints.Clear();
             foreach (WorldDeliveryPointData point in WorldData.DeliveryPoints)
@@ -123,6 +123,19 @@ public partial class CityGenerator : Node3D
                     Address = point.Address,
                 });
             }
+
+            // Pontos de interação ficam disponíveis mesmo quando os modelos 3D não estiverem carregados.
+            DumpsterSpots.Clear();
+            DumpsterSpots.AddRange(WorldData.Services.DumpsterSpots);
+            GasSpots.Clear();
+            foreach (WorldGasSpotData spot in WorldData.Services.GasSpots)
+                GasSpots.Add((spot.Position, spot.Brand));
+            MarketShelfSlots.Clear();
+            foreach (WorldMarketShelfSlotData slot in WorldData.Services.MarketShelfSlots)
+                MarketShelfSlots.Add((slot.Position, slot.RotationY));
+            MarketStockPoint = WorldData.Services.MarketStockPoint;
+            MarketEntrance = WorldData.Services.MarketEntrance;
+            RadioConsolePoint = WorldData.Services.RadioConsolePoint;
         }
 
         _rng = new RandomNumberGenerator { Seed = (ulong)Seed };
@@ -671,7 +684,7 @@ public partial class CityGenerator : Node3D
 
     private void RegisterDeliveryPoint(int bx, int bz)
     {
-        if (_useLogicalDeliveryPoints)
+        if (_useLogicalWorldData)
             return; // Os pontos da cidade já foram calculados na fase lógica.
 
         // Compatibilidade V7/offline: mantém os pontos legados até a migração completa do gerador.
