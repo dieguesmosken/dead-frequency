@@ -185,6 +185,7 @@ public partial class CityGenerator : Node3D
         int bx = coordinate.X;
         int bz = coordinate.Z;
         BuildStreetLampForBlock(bx, bz);
+        BuildBikeLanesForBlock(bx, bz);
         BuildStreetSignsForBlock(bx, bz);
         BuildPhoneBoothsForBlock(bx, bz);
         BuildHydrantsForBlock(bx, bz);
