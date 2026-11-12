@@ -351,12 +351,13 @@ public partial class CityGenerator : Node3D
             : farmChunkWidth * farmChunkWidth;
         int logicalBlockCount = Biome == WorldBiome.City ? logicalChunkCount : 0;
         int logicalFarmSiteCount = Biome == WorldBiome.Farm ? 1 : 0;
+        int logicalFarmVegetationCount = Biome == WorldBiome.Farm ? 1 : 0;
         int logicalNoParkingCount = Biome == WorldBiome.City ? 1 : 0;
         int logicalServiceCount = Biome == WorldBiome.City ? logicalChunkCount - 1 : 0;
         int logicalDeliveryCount = Biome == WorldBiome.City && _useLogicalWorldData ? logicalChunkCount - 1 : 0;
         int logicalTotal = Mathf.Max(1,
-            logicalChunkCount + logicalBlockCount + logicalFarmSiteCount + logicalNoParkingCount +
-            logicalServiceCount + logicalDeliveryCount + 1);
+            logicalChunkCount + logicalBlockCount + logicalFarmSiteCount + logicalFarmVegetationCount +
+            logicalNoParkingCount + logicalServiceCount + logicalDeliveryCount + 1);
 
         var logicalOffsets = new Dictionary<string, int>();
         if (Biome == WorldBiome.City)
@@ -377,7 +378,10 @@ public partial class CityGenerator : Node3D
         {
             logicalOffsets["Indexando chunks do rancho"] = 0;
             logicalOffsets["Calculando sítios e destinos do rancho"] = logicalChunkCount;
-            logicalOffsets["Preparando pontos de início"] = logicalChunkCount + logicalFarmSiteCount;
+            logicalOffsets["Planejando árvores e vegetação do rancho"] =
+                logicalChunkCount + logicalFarmSiteCount;
+            logicalOffsets["Preparando pontos de início"] =
+                logicalChunkCount + logicalFarmSiteCount + logicalFarmVegetationCount;
         }
 
         WorldLoadingScreen loading = null;
