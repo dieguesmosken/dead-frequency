@@ -128,7 +128,8 @@ public partial class ProfessionManager : Node3D
             {
                 // Prefere o ponto lógico preparado antes da geometria; mantém o Job como fallback
                 // durante a migração de profissões que ainda não tenham spawn no WorldData.
-                if (City?.WorldData != null &&
+                if (City?.UsesLogicalWorldData == true &&
+                    City.WorldData != null &&
                     City.WorldData.TryGetProfessionSpawn(id, out WorldSpawnPoint logicalSpawn))
                 {
                     Callable.From(() => Player.Teleport(logicalSpawn.Position, logicalSpawn.Yaw)).CallDeferred();
