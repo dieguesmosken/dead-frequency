@@ -122,6 +122,13 @@ public readonly record struct WorldFarmTreePlan(
 
 public readonly record struct WorldFarmReedPlan(Vector3 Position, float Height);
 public readonly record struct WorldFarmUndergrowthPlan(Vector3 Position, string Model, float Scale, float RotationY, bool IsRock);
+public readonly record struct WorldFarmBoundaryPlan(
+    string Kind,
+    Vector3 Position,
+    Vector3 Scale,
+    float RotationY,
+    Color Tint);
+
 
 public readonly record struct WorldFarmSitePlan(
     Vector3 GatePosition,
@@ -196,6 +203,7 @@ public sealed class WorldGenerationData
     public IReadOnlyList<WorldFarmTreePlan> FarmTrees { get; }
     public IReadOnlyList<WorldFarmReedPlan> FarmReeds { get; }
     public IReadOnlyList<WorldFarmUndergrowthPlan> FarmUndergrowth { get; }
+    public IReadOnlyList<WorldFarmBoundaryPlan> FarmBoundary { get; }
     public WorldServiceData Services { get; }
     public IReadOnlyDictionary<string, WorldSpawnPoint> SpawnPoints => _spawnPoints;
 
@@ -212,6 +220,7 @@ public sealed class WorldGenerationData
         List<WorldFarmTreePlan> farmTrees,
         List<WorldFarmReedPlan> farmReeds,
         List<WorldFarmUndergrowthPlan> farmUndergrowth,
+        List<WorldFarmBoundaryPlan> farmBoundary,
         WorldServiceData services,
         Dictionary<string, WorldSpawnPoint> spawnPoints)
     {
@@ -230,6 +239,7 @@ public sealed class WorldGenerationData
         FarmTrees = Array.AsReadOnly(farmTrees.ToArray());
         FarmReeds = Array.AsReadOnly(farmReeds.ToArray());
         FarmUndergrowth = Array.AsReadOnly(farmUndergrowth.ToArray());
+        FarmBoundary = Array.AsReadOnly(farmBoundary.ToArray());
         Services = services ?? WorldServiceData.Empty();
         _chunkIndex = new Dictionary<WorldChunkCoordinate, WorldChunkData>(chunks.Count);
         foreach (WorldChunkData chunk in chunks)
