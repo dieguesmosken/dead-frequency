@@ -18,12 +18,9 @@ public partial class WorldChunkManager : Node
     public int UnloadRadius { get; set; } = 2;
 
     [Export(PropertyHint.Range, "1,8,1")]
-    public int BuildsPerFrame { get; set; } = 1;
-
-    [Export(PropertyHint.Range, "1,8,1")]
     public int UnloadsPerFrame { get; set; } = 1;
 
-    /// <summary>Intervalo entre construções de chunks durante o jogo. 2 = um chunk a cada dois frames.</summary>
+    /// <summary>Intervalo mínimo de frames entre chunks concluídos; a construção em etapas pode levar vários frames.</summary>
     [Export(PropertyHint.Range, "1,6,1")]
     public int BuildIntervalFrames { get; set; } = 2;
 
