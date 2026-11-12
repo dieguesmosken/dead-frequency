@@ -38,6 +38,7 @@ public readonly record struct WorldSpawnPoint(string Profession, Vector3 Positio
 public readonly record struct WorldDeliveryPointData(int BlockX, int BlockZ, Vector3 Position, string Address);
 
 public readonly record struct WorldGasSpotData(Vector3 Position, string Brand);
+public readonly record struct WorldNoParkingZoneData(Vector3 Center, Vector3 Direction, float HalfLength, WorldChunkCoordinate Owner);
 public readonly record struct WorldMarketShelfSlotData(Vector3 Position, float RotationY);
 
 /// <summary>Dados lógicos dos pontos usados pelos sistemas de profissão.</summary>
@@ -46,6 +47,7 @@ public sealed class WorldServiceData
     public IReadOnlyList<Vector3> DumpsterSpots { get; }
     public IReadOnlyList<WorldGasSpotData> GasSpots { get; }
     public IReadOnlyList<WorldMarketShelfSlotData> MarketShelfSlots { get; }
+    public IReadOnlyList<WorldNoParkingZoneData> NoParkingZones { get; }
     public Vector3 MarketStockPoint { get; }
     public Vector3 MarketEntrance { get; }
     public Vector3 RadioConsolePoint { get; }
@@ -54,6 +56,7 @@ public sealed class WorldServiceData
         List<Vector3> dumpsterSpots,
         List<WorldGasSpotData> gasSpots,
         List<WorldMarketShelfSlotData> marketShelfSlots,
+        List<WorldNoParkingZoneData> noParkingZones,
         Vector3 marketStockPoint,
         Vector3 marketEntrance,
         Vector3 radioConsolePoint)
@@ -61,6 +64,7 @@ public sealed class WorldServiceData
         DumpsterSpots = Array.AsReadOnly(dumpsterSpots.ToArray());
         GasSpots = Array.AsReadOnly(gasSpots.ToArray());
         MarketShelfSlots = Array.AsReadOnly(marketShelfSlots.ToArray());
+        NoParkingZones = Array.AsReadOnly(noParkingZones.ToArray());
         MarketStockPoint = marketStockPoint;
         MarketEntrance = marketEntrance;
         RadioConsolePoint = radioConsolePoint;
@@ -68,7 +72,7 @@ public sealed class WorldServiceData
 
     public static WorldServiceData Empty() =>
         new(new List<Vector3>(), new List<WorldGasSpotData>(), new List<WorldMarketShelfSlotData>(),
-            Vector3.Zero, Vector3.Zero, Vector3.Zero);
+            new List<WorldNoParkingZoneData>(), Vector3.Zero, Vector3.Zero, Vector3.Zero);
 }
 
 /// <summary>Tipo lógico de um quarteirão da cidade, sem dependência de geometria.</summary>
