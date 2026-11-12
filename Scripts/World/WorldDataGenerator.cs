@@ -571,8 +571,8 @@ public static class WorldDataGenerator
                     ? building.Width * 0.5f
                     : building.Depth * 0.5f;
                 float signWidth = Mathf.Min(facadeWidth * 0.85f, 9f);
-                float alongOffset = (building.BaseCenter - blockCenter).Dot(along);
-                Vector3 curb = blockCenter + building.Front * (blockSize * 0.5f) + along * alongOffset;
+                // Mesma posição de guia usada por BuildStorefront: centro do prédio + normal * meia profundidade.
+                Vector3 curb = building.BaseCenter + building.Front * halfDepth;
                 result.Add(new WorldNoParkingZoneData(
                     curb,
                     along,
