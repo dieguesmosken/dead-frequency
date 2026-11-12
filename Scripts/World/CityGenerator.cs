@@ -138,7 +138,7 @@ public partial class CityGenerator : Node3D
     /// <summary>Impede o descarregamento do chunk que contém uma missão/objeto ativo.</summary>
     public bool PinChunkForPosition(Vector3 position)
     {
-        if (WorldData == null || (Biome != WorldBiome.City && Biome != WorldBiome.Farm))
+        if (!UsesChunkStreaming || WorldData == null)
             return false;
 
         WorldChunkCoordinate coordinate = WorldData.GetChunkCoordinate(position);
@@ -155,7 +155,7 @@ public partial class CityGenerator : Node3D
     /// <summary>Libera uma reserva feita por PinChunkForPosition.</summary>
     public void UnpinChunkForPosition(Vector3 position)
     {
-        if (WorldData == null || (Biome != WorldBiome.City && Biome != WorldBiome.Farm))
+        if (!UsesChunkStreaming || WorldData == null)
             return;
 
         WorldChunkCoordinate coordinate = WorldData.GetChunkCoordinate(position);
