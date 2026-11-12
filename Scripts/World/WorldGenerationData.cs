@@ -110,6 +110,19 @@ public readonly record struct WorldParkTreePlan(Vector3 Position, float Scale, s
 public readonly record struct WorldParkBenchPlan(Vector3 Position, float RotationY);
 public readonly record struct WorldParkingCarPlan(Vector3 Position, float RotationY, ulong VisualSeed);
 
+/// <summary>Plano lógico de um sítio rural, incluindo destino de entrega e seed visual própria.</summary>
+public readonly record struct WorldFarmSitePlan(
+    Vector3 GatePosition,
+    Vector3 TowardRoad,
+    Vector3 Center,
+    float Width,
+    float Depth,
+    float OccupiedRadius,
+    string Name,
+    string Address,
+    ulong VisualSeed);
+
+
 /// <summary>Plano determinístico de um quarteirão, com streams aleatórios independentes.</summary>
 public sealed class WorldBlockData
 {
@@ -167,6 +180,7 @@ public sealed class WorldGenerationData
     public IReadOnlyList<WorldChunkData> Chunks { get; }
     public IReadOnlyList<WorldBlockData> Blocks { get; }
     public IReadOnlyList<WorldDeliveryPointData> DeliveryPoints { get; }
+    public IReadOnlyList<WorldFarmSitePlan> FarmSites { get; }
     public WorldServiceData Services { get; }
     public IReadOnlyDictionary<string, WorldSpawnPoint> SpawnPoints => _spawnPoints;
 
@@ -179,6 +193,7 @@ public sealed class WorldGenerationData
         List<WorldChunkData> chunks,
         List<WorldBlockData> blocks,
         List<WorldDeliveryPointData> deliveryPoints,
+        List<WorldFarmSitePlan> farmSites,
         WorldServiceData services,
         Dictionary<string, WorldSpawnPoint> spawnPoints)
     {
@@ -193,6 +208,7 @@ public sealed class WorldGenerationData
         foreach (WorldBlockData block in blocks)
             _blockIndex[block.Coordinate] = block;
         DeliveryPoints = Array.AsReadOnly(deliveryPoints.ToArray());
+        FarmSites = Array.AsReadOnly(farmSites.ToArray());
         Services = services ?? WorldServiceData.Empty();
         _chunkIndex = new Dictionary<WorldChunkCoordinate, WorldChunkData>(chunks.Count);
         foreach (WorldChunkData chunk in chunks)
