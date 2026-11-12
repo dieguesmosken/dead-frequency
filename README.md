@@ -140,6 +140,7 @@ qualquer versão distribuída continue com o código aberto e sob a mesma licen�
 - [KayKit](https://kaylousberg.com), de Kay Lousberg: City Builder, Furniture, Halloween e Restaurant Bits (CC0).
 - [Quaternius](https://quaternius.com): personagens animados, animais, prédios da fazenda, natureza e viaturas (CC0).
 - [GGBot](https://ggbot.itch.io/psx-style-cars): táxi do pacote PSX Style Cars (CC0).
+- [REDEMO_H747](https://godotshaders.com/shader/procedural-night-sky-clouds-moon-stars/) (Godot Shaders): base do céu procedural, "Procedural Night Sky" (CC0).
 - Músicas, efeitos, letreiros e anúncios: gerados por código (`Audio/*.py.txt`, `Assets/Textures/Stores/*.py.txt`).
 - Rádio 96.6: cinco músicas originais de bandas fictícias, geradas por `Audio/synth_radio.py.txt` (livres de direitos autorais).
 - Siga [twitch.tv/teuzin0dev](https://twitch.tv/teuzin0dev) · [github.com/dieguesmosken](https://github.com/dieguesmosken) · [recadin.com.br](https://recadin.com.br)

@@ -1,6 +1,7 @@
 
 // Shaders/Sky/procedural_sky.gdshader  (v0.9.9)
-// Base: "Procedural Night Sky" (Shaders Download do Matheus), 100% procedural, sem texturas.
+// Base: "Procedural Night Sky – Clouds, Moon & Stars", de REDEMO_H747 (Godot Shaders, 08/11/2026), licença CC0:
+// https://godotshaders.com/shader/procedural-night-sky-clouds-moon-stars/  — 100% procedural, sem texturas.
 // Adaptado para o ciclo de dia do jogo: sol com disco e brilho, nuvens claras de dia e
 // estrelas que só aparecem à noite. O DayNightController passa cores e direções a cada quadro:
 // zenith/horizon/ground_color, cloud_dark/light_color, star_brightness, moon_direction,
