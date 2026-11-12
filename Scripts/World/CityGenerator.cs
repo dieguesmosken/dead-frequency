@@ -269,7 +269,8 @@ public partial class CityGenerator : Node3D
             foreach (Vector3 position in obstacles)
                 SidewalkObstacles.Remove(position);
         }
-        _noParking.RemoveAll(entry => entry.owner == coordinate);
+        if (!_useLogicalBlockPlans)
+            _noParking.RemoveAll(entry => entry.owner == coordinate);
         if (unloadedRoot != null && GodotObject.IsInstanceValid(unloadedRoot))
         {
             _parkedCars.RemoveAll(car =>
@@ -278,6 +279,21 @@ public partial class CityGenerator : Node3D
         else
         {
             _parkedCars.RemoveAll(car => !GodotObject.IsInstanceValid(car));
+        }
+    }
+
+    private void PrepareLogicalNoParkingZones()
+    {
+        _noParking.Clear();
+        foreach ((Vector2I block, string _) in GasStations)
+        {
+            if (Mathf.Abs(block.X) > Radius || Mathf.Abs(block.Y) > Radius)
+                continue;
+
+            Vector3 center = BlockCenter(block.X, block.Y);
+            var owner = new WorldChunkCoordinate(block.X, block.Y);
+            _noParking.Add((center + new Vector3(12f, 0f, BlockSize * 0.5f), Vector3.Right, 5.5f, owner));
+            _noParking.Add((center + new Vector3(-13f, 0f, BlockSize * 0.5f), Vector3.Right, 5.5f, owner));
         }
     }
 
@@ -362,6 +378,9 @@ public partial class CityGenerator : Node3D
 
         if (Biome == WorldBiome.City)
         {
+            if (_useLogicalBlockPlans)
+                PrepareLogicalNoParkingZones();
+
             if (_useLogicalWorldData)
             {
                 _deliveryPoints.Clear();
@@ -1319,6 +1338,9 @@ public partial class CityGenerator : Node3D
                 ? new Vector3(roadPos + side * laneOffset, 0f, along + offset)
                 : new Vector3(along + offset, 0f, roadPos + side * laneOffset);
 
+            if (InNoParking(groundPosition))
+                return;
+
             BuildCar(
                 _activeChunkRoot ?? _staticRoot,
                 groundPosition,
@@ -1342,13 +1364,31 @@ public partial class CityGenerator : Node3D
         Vector3 normalizedDir = dir.Normalized();
         WorldChunkCoordinate owner = _activeChunkCoordinate
             ?? (WorldData != null ? WorldData.GetChunkCoordinate(center) : default);
-        _noParking.Add((center, normalizedDir, halfLength, owner));
-        for (int i = _parkedCars.Count - 1; i >= 0; i--)
+        bool alreadyPrepared = false;
+        if (_useLogicalBlockPlans)
         {
-            if (IsInstanceValid(_parkedCars[i]) && InNoParking(_parkedCars[i].Position))
+            foreach (var zone in _noParking)
             {
-                _parkedCars[i].QueueFree();
-                _parkedCars.RemoveAt(i);
+                if (zone.owner == owner && zone.center.DistanceSquaredTo(center) < 0.001f)
+                {
+                    alreadyPrepared = true;
+                    break;
+                }
+            }
+        }
+
+        if (!alreadyPrepared)
+            _noParking.Add((center, normalizedDir, halfLength, owner));
+
+        if (!_useLogicalBlockPlans)
+        {
+            for (int i = _parkedCars.Count - 1; i >= 0; i--)
+            {
+                if (IsInstanceValid(_parkedCars[i]) && InNoParking(_parkedCars[i].Position))
+                {
+                    _parkedCars[i].QueueFree();
+                    _parkedCars.RemoveAt(i);
+                }
             }
         }
         if (_curbMarkingsBuilt && !_useLogicalBlockPlans)
