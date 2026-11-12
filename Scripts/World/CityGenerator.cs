@@ -5,6 +5,7 @@
 //
 // Layout: quarteirões centrados em múltiplos de Period (BlockSize + RoadWidth).
 // As ruas ficam entre eles, centradas em k*Period + Period/2. O quarteirão (0,0) é o depósito.
+using System;
 using System.Collections.Generic;
 using Godot;
 
@@ -36,6 +37,10 @@ public partial class CityGenerator : Node3D
     public float Period => BlockSize + RoadWidth;
     public bool IsDay { get; private set; }
     public IReadOnlyList<DeliveryPoint> DeliveryPoints => _deliveryPoints;
+
+    /// <summary>Plano lógico calculado antes da criação de qualquer geometria do mundo.</summary>
+    public WorldGenerationData WorldData { get; private set; }
+    public event Action<WorldGenerationProgress> WorldDataProgress;
 
     private static readonly string[] StreetNamesX =
         { "Rua das Antenas", "Rua Estática", "Rua do Chiado", "Rua Ruído Branco", "Rua da Interferência", "Rua Onda Curta", "Rua do Sintonizador", "Rua Válvula", "Rua do Eco" };
@@ -89,6 +94,14 @@ public partial class CityGenerator : Node3D
         // No multiplayer todos usam a seed da sala, então a cidade (e os endereços) são iguais para todos.
         if (NetClient.Instance?.IsOnline == true)
             Seed = NetClient.Instance.Seed;
+
+        // Primeira etapa: indexa o mundo e calcula os spawns sem criar Nodes, malhas ou colisões.
+        // O RNG legado de renderização permanece separado para preservar o mapa visual atual.
+        WorldData = WorldDataGenerator.Generate(
+            Seed, Biome, Radius, BlockSize, RoadWidth, FarmExtent, CurbHeight,
+            MarketBlock, RadioStationBlock, GasStations,
+            progress => WorldDataProgress?.Invoke(progress));
+
         _rng = new RandomNumberGenerator { Seed = (ulong)Seed };
         // Detalhes (lojas, ar-condicionados, orelhões) usam outro gerador para não mudar o resto da cidade.
         _decoRng = new RandomNumberGenerator { Seed = (ulong)Seed * 7919UL + 13UL };
