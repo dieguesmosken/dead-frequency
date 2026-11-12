@@ -353,7 +353,7 @@ public partial class CityGenerator : Node3D
         int logicalDeliveryCount = Biome == WorldBiome.City && _useLogicalWorldData ? logicalChunkCount - 1 : 0;
         int logicalTotal = Mathf.Max(1,
             logicalChunkCount + logicalBlockCount + logicalFarmSiteCount + logicalFarmVegetationCount +
-            logicalNoParkingCount + logicalServiceCount + logicalDeliveryCount + 1);
+            logicalNoParkingCount + logicalRoadCarCount + logicalServiceCount + logicalDeliveryCount + 1);
 
         var logicalOffsets = new Dictionary<string, int>();
         if (Biome == WorldBiome.City)
@@ -362,13 +362,16 @@ public partial class CityGenerator : Node3D
             logicalOffsets["Planejando quarteirões e prédios"] = logicalChunkCount;
             logicalOffsets["Calculando regras de estacionamento"] =
                 logicalChunkCount + logicalBlockCount;
-            logicalOffsets["Calculando locais de serviço"] =
+            logicalOffsets["Calculando veículos estacionados"] =
                 logicalChunkCount + logicalBlockCount + logicalNoParkingCount;
+            logicalOffsets["Calculando locais de serviço"] =
+                logicalChunkCount + logicalBlockCount + logicalNoParkingCount + logicalRoadCarCount;
             logicalOffsets["Calculando endereços e entregas"] =
-                logicalChunkCount + logicalBlockCount + logicalNoParkingCount + logicalServiceCount;
+                logicalChunkCount + logicalBlockCount + logicalNoParkingCount +
+                logicalRoadCarCount + logicalServiceCount;
             logicalOffsets["Preparando pontos de início"] =
                 logicalChunkCount + logicalBlockCount + logicalNoParkingCount +
-                logicalServiceCount + logicalDeliveryCount;
+                logicalRoadCarCount + logicalServiceCount + logicalDeliveryCount;
         }
         else
         {
@@ -394,7 +397,7 @@ public partial class CityGenerator : Node3D
             MarketBlock, RadioStationBlock, FireStationBlock, PoliceStationBlock,
             ShoppingMallBlock, ApartmentBlock, DealerBlock, WaterTowerBlock, CarWashBlock,
             ParkChance, ParkingLotChance, GasStations, StoreBrandCount, StorefrontChance,
-            FarmNameCatalog, _useLogicalWorldData,
+            ParkedCarChance, FarmNameCatalog, _useLogicalWorldData,
             progress =>
             {
                 WorldDataProgress?.Invoke(progress);
