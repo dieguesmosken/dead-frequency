@@ -64,7 +64,7 @@ Já feito nesta build (feedback de 08/11):
 - ✅ Otimização: peças pequenas somem na neblina, luz de poste apaga longe.
 - ✅ Auto Center Dois Mil (ao lado do depósito): Gou, Fuska e Opalinha a $ 2000; online o carro é da sala.
 - ✅ Menu inicial: manter o menu atual; o redesign foi retirado desta versão.
-- ⏭ Sons do Pixabay com créditos adiados para uma versão futura.
+- ⏭ Sons novos (passos e ambiente) adiados; fontes CC0 definidas em `docs/ASSETS_E_SONS.md` (Pixabay descartado).
 
 | Ideia | Como funciona no jogo |
 |---|---|
@@ -97,6 +97,7 @@ Ideias para depois (pesquisa de 12/11 sobre as regras do CTB):
 | ✅ **Shopping** | Shopping Marconi com oito balcões interativos, dois pisos e escada com rampa física walkable. |
 | ✅ **Táxi amarelo** | O taxista ganha o próprio carro (modelo PSX da GGBot, CC0) no pátio da central, com o nome da cooperativa fictícia "Rádio Táxi Sintonia" e o adesivo do app paródia "66". Passageiro só embarca no táxi. |
 | ✅ **Van de viagem** | Van anos 80 "Fórdi Viajante" (creme e marrom com faixas, janela bolha e bagageiro), estacionada no pátio da central: a van do Modo História. |
+| ✅ **Menus novos por código** | Opções > Interface > Menu inicial: ORBITA966, CINEMA966 e TERMINAL966 ligam os menus novos (fundo com a própria cidade), VISUAL966 libera os três para escolher e CLASSICO966 volta ao menu clássico. |
 | ✅ **Central e rádio** | Portão novo do lado esquerdo da central (feedback dos testes), grade de metal em cima dos muros da central e da rádio, e portãozinho de pedestre na lateral da rádio. |
 | ✅ **Céu novo** | Céu 100% procedural (nuvens, sol, lua com relevo e estrelas) ligado ao ciclo de dia e noite. |
 | **Agro-Tudão (casa de rações)** | Na estrada de terra entre a cidade e o sítio: entregas de sacos de ração para os cercados. |

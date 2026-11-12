@@ -30,6 +30,10 @@ public partial class GameSettings : Node
     public float DayLengthMinutes { get; set; } = 24f;
     /// <summary>Última versão cujas novidades o jogador já viu (para mostrar o changelog só uma vez).</summary>
     public string LastSeenVersion { get; set; } = "";
+    /// <summary>Menu inicial (MenuStyle): 0 clássico, 1 órbita, 2 cinema, 3 terminal. Muda por código nas Opções.</summary>
+    public int MenuStyle { get; set; }
+    /// <summary>VISUAL966: mostra a escolha do menu inicial nas Opções.</summary>
+    public bool MenuPicker { get; set; }
     /// <summary>Multiplayer: 0 = servidor oficial do projeto, 1 = meu servidor (ServerUrl), 2 = hospedar no meu PC.</summary>
     public int ServerMode { get; set; }
     /// <summary>Endereço do "meu servidor" (só usado no modo 1).</summary>
@@ -245,6 +249,8 @@ public partial class GameSettings : Node
         cfg.SetValue("video", "time_mode", TimeMode);
         cfg.SetValue("video", "day_length_minutes", DayLengthMinutes);
         cfg.SetValue("meta", "last_seen_version", LastSeenVersion);
+        cfg.SetValue("meta", "menu_style", MenuStyle);
+        cfg.SetValue("meta", "menu_picker", MenuPicker);
         cfg.SetValue("audio", "master_volume", MasterVolume);
         cfg.SetValue("audio", "music_volume", MusicVolume);
         cfg.SetValue("audio", "sfx_volume", SfxVolume);
@@ -309,6 +315,8 @@ public partial class GameSettings : Node
         TimeMode = cfg.GetValue("video", "time_mode", oldDay ? 2 : 0).AsInt32();
         DayLengthMinutes = cfg.GetValue("video", "day_length_minutes", DayLengthMinutes).AsSingle();
         LastSeenVersion = cfg.GetValue("meta", "last_seen_version", LastSeenVersion).AsString();
+        MenuStyle = cfg.GetValue("meta", "menu_style", MenuStyle).AsInt32();
+        MenuPicker = cfg.GetValue("meta", "menu_picker", MenuPicker).AsBool();
         MasterVolume = cfg.GetValue("audio", "master_volume", MasterVolume).AsSingle();
         MusicVolume = cfg.GetValue("audio", "music_volume", MusicVolume).AsSingle();
         SfxVolume = cfg.GetValue("audio", "sfx_volume", SfxVolume).AsSingle();
