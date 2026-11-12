@@ -51,6 +51,7 @@ public partial class WorldChunkManager : Node
     private int _lastPinVersion = -1;
     private int _buildFrameCountdown;
     private int _trackedObjectScanCountdown;
+    private WorldChunkCoordinate? _buildingCoordinate;
     private bool _isBuilding;
     private bool _hasCenter;
     private bool _hasReportedChunkCounts;
@@ -257,6 +258,16 @@ public partial class WorldChunkManager : Node
             bool built = await City.BuildChunkVisualsAsync(chunk);
             if (built && GodotObject.IsInstanceValid(City))
             {
+                // O jogador pode ter atravessado vários chunks enquanto este era construído.
+                if (!_desired.Contains(chunk.Coordinate) && !City.IsChunkPinned(chunk.Coordinate))
+                {
+                    City.UnloadChunkVisuals(chunk.Coordinate);
+                    built = false;
+                }
+            }
+
+            if (built && GodotObject.IsInstanceValid(City) && City.WorldData != null)
+            {
                 _hasReportedChunkCounts = true;
                 ChunkCountsChanged?.Invoke(
                     City.GetLoadedChunkCoordinates().Count,
@@ -269,6 +280,7 @@ public partial class WorldChunkManager : Node
         }
         finally
         {
+            _buildingCoordinate = null;
             _isBuilding = false;
             _buildFrameCountdown = Mathf.Max(0, BuildIntervalFrames - 1);
         }
@@ -285,6 +297,9 @@ public partial class WorldChunkManager : Node
 
             int dx = Math.Abs(coordinate.X - _lastCenter.X);
             int dz = Math.Abs(coordinate.Z - _lastCenter.Z);
+            if (_buildingCoordinate.HasValue && _buildingCoordinate.Value == coordinate)
+                continue;
+
             if (Math.Max(dx, dz) > UnloadRadius && !_desired.Contains(coordinate) && !City.IsChunkPinned(coordinate))
             {
                 City.UnloadChunkVisuals(coordinate);
@@ -311,6 +326,7 @@ public partial class WorldChunkManager : Node
                     if (City.WorldData.TryGetChunk(coordinate, out WorldChunkData chunk))
                     {
                         _isBuilding = true;
+                        _buildingCoordinate = chunk.Coordinate;
                         BuildQueuedChunkAsync(chunk);
                         break;
                     }
