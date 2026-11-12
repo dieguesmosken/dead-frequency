@@ -10,7 +10,7 @@ namespace DeadFrequency;
 /// </summary>
 public static class WorldDataGenerator
 {
-    public const int CurrentGeneratorVersion = 3;
+    public const int CurrentGeneratorVersion = 4;
     public const float FarmChunkSize = 64f;
 
     private const ulong FnvOffset = 14695981039346656037UL;
@@ -71,6 +71,7 @@ public static class WorldDataGenerator
         var farmTrees = new List<WorldFarmTreePlan>();
         var farmReeds = new List<WorldFarmReedPlan>();
         var farmUndergrowth = new List<WorldFarmUndergrowthPlan>();
+        var farmBoundary = new List<WorldFarmBoundaryPlan>();
         WorldServiceData services = WorldServiceData.Empty();
         var spawnPoints = new Dictionary<string, WorldSpawnPoint>(StringComparer.Ordinal);
 
@@ -151,6 +152,7 @@ public static class WorldDataGenerator
             BuildFarmTreePlans(seed, farmExtent, farmSites, farmTrees);
             BuildFarmReedPlans(seed, farmReeds);
             BuildFarmUndergrowthPlans(farmExtent, farmSites, farmUndergrowth);
+            BuildFarmBoundaryPlans(farmExtent, farmBoundary);
             progress?.Invoke(new WorldGenerationProgress("Planejando árvores e vegetação do rancho", 1, 1));
 
             BuildFarmSpawnPoints(spawnPoints, blockSize);
@@ -159,7 +161,7 @@ public static class WorldDataGenerator
         progress?.Invoke(new WorldGenerationProgress("Preparando pontos de início", 1, 1));
         return new WorldGenerationData(
             seed, CurrentGeneratorVersion, biome, chunkSize, centeredGrid,
-            chunks, blocks, deliveryPoints, farmSites, farmTrees, farmReeds, farmUndergrowth, services, spawnPoints);
+            chunks, blocks, deliveryPoints, farmSites, farmTrees, farmReeds, farmUndergrowth, farmBoundary, services, spawnPoints);
     }
 
     private static void BuildCityBlockPlans(
@@ -1051,6 +1053,74 @@ public static class WorldDataGenerator
                 destination.Add(new WorldFarmTreePlan(
                     new Vector3(edgePoint.X + jitter.X, 0f, edgePoint.Y + jitter.Y),
                     pine, false, 0, 0f, 1f, visualSeed));
+            }
+        }
+    }
+
+    private static void BuildFarmBoundaryPlans(
+        float farmExtent,
+        List<WorldFarmBoundaryPlan> destination)
+    {
+        var rng = new RandomNumberGenerator { Seed = 3220 };
+        float limit = farmExtent + 4f;
+        float wallX = limit - 0.6f;
+
+        foreach ((Vector3 direction, Vector3 along) in new[]
+        {
+            (Vector3.Right, Vector3.Back),
+            (Vector3.Left, Vector3.Back),
+            (Vector3.Back, Vector3.Right),
+            (Vector3.Forward, Vector3.Right),
+        })
+        {
+            for (float t = -limit; t < limit; t += 6f)
+            {
+                float wallHeight = rng.RandfRange(2.6f, 3.1f);
+                Vector3 center = direction * wallX + along * (t + 3f);
+                Vector3 wallSize = direction.X != 0f
+                    ? new Vector3(0.8f, wallHeight, 6.05f)
+                    : new Vector3(6.05f, wallHeight, 0.8f);
+                Color tint = new(
+                    0.9f + rng.Randf() * 0.2f,
+                    0.9f + rng.Randf() * 0.2f,
+                    0.9f + rng.Randf() * 0.15f);
+                destination.Add(new WorldFarmBoundaryPlan(
+                    "wall",
+                    center + new Vector3(0f, wallHeight * 0.5f, 0f),
+                    wallSize,
+                    0f,
+                    tint));
+
+                if (Mathf.PosMod(t, 12f) < 0.5f)
+                {
+                    destination.Add(new WorldFarmBoundaryPlan(
+                        "pillar",
+                        center - along * 3f + new Vector3(0f, 1.8f, 0f),
+                        new Vector3(1.1f, 3.6f, 1.1f),
+                        0f,
+                        Colors.White));
+                }
+            }
+
+            for (int ring = 0; ring < 2; ring++)
+            {
+                for (float t = -limit - 40f; t < limit + 40f; t += ring == 0 ? 26f : 38f)
+                {
+                    float radius = ring == 0 ? rng.RandfRange(18f, 30f) : rng.RandfRange(30f, 48f);
+                    float height = ring == 0 ? rng.RandfRange(22f, 40f) : rng.RandfRange(40f, 75f);
+                    Vector3 center = direction * (limit + radius * 0.75f + ring * 30f)
+                        + along * (t + rng.RandfRange(-8f, 8f));
+                    Color tint = new(
+                        0.8f + rng.Randf() * 0.35f,
+                        0.8f + rng.Randf() * 0.3f,
+                        0.75f + rng.Randf() * 0.3f);
+                    destination.Add(new WorldFarmBoundaryPlan(
+                        "mountain",
+                        center + new Vector3(0f, height * 0.5f - 1f, 0f),
+                        new Vector3(radius * 2f, height, radius * 2f),
+                        rng.Randf() * 3f,
+                        tint));
+                }
             }
         }
     }
