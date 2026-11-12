@@ -1261,7 +1261,11 @@ export class GameRoom extends DurableObject<Env> {
   private async onHello(ws: WebSocket, me: Attachment, msg: any): Promise<void> {
     const room = this.room!;
     if (Number(msg.version) !== (room.protocol ?? 7)) {
-      ws.send(JSON.stringify({ t: "error", msg: "Versão do jogo diferente da do servidor. Atualize o jogo." }));
+      const roomProtocol = room.protocol ?? 7;
+      ws.send(JSON.stringify({
+        t: "error",
+        msg: `Esta sala utiliza o protocolo V${roomProtocol}. Seu jogo utiliza o protocolo V${Number(msg.version) || 0}. Atualize o jogo para entrar.`,
+      }));
       ws.close(4000, "version");
       return;
     }
