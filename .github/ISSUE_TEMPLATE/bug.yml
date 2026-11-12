@@ -1,0 +1,40 @@
+name: 🐞 Bug
+description: Algo não funciona como deveria no jogo, no launcher ou no site
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: input
+    id: versao
+    attributes:
+      label: Versão do jogo
+      description: "Aparece no canto do menu principal (ex.: v0.9.8)"
+      placeholder: v0.9.8
+    validations:
+      required: true
+  - type: dropdown
+    id: modo
+    attributes:
+      label: Onde aconteceu
+      options: [Solo, Online (multiplayer), Launcher, Site]
+    validations:
+      required: true
+  - type: textarea
+    id: oque
+    attributes:
+      label: O que aconteceu
+      description: E o que você esperava que acontecesse
+    validations:
+      required: true
+  - type: textarea
+    id: passos
+    attributes:
+      label: Como repetir
+      placeholder: |
+        1. Peguei a van no depósito
+        2. Fui até a Rua Estática
+        3. ...
+  - type: textarea
+    id: extra
+    attributes:
+      label: Prints, vídeo ou log
+      description: O log fica em %APPDATA%\Godot\app_userdata\Dead Frequency\logs (Windows)
