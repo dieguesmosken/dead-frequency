@@ -51,6 +51,8 @@ public static class ItemCatalog
     public const string Slippers = "chinelos";
     public const string SlippersBroken = "chinelos_quebrados";
     public const string Nail = "prego";
+    // v0.9.9 — Lã de Aço 1001 Utilidades
+    public const string SteelWool = "palha_aco";
     public const string CarGou = "car_gou";
     public const string CarFusca = "car_fusca";
     public const string CarOpalinha = "car_opalinha";
@@ -85,6 +87,8 @@ public static class ItemCatalog
             Description = "A tira soltou: você anda pisando torto (mais devagar). Use um Prego para consertar." },
         new ItemDef { Id = Nail, Name = "Prego", Price = 10, Slot = ItemSlot.None, Color = new Color(0.7f, 0.7f, 0.72f),
             Description = "Conserta a tira do chinelo arrebentado (precisa estar calçado)." },
+        new ItemDef { Id = SteelWool, Name = "Palha de aço Brilhaço", Price = 8, Slot = ItemSlot.None, Color = new Color(0.78f, 0.74f, 0.66f),
+            Description = "Da Lã de Aço 1001 Utilidades. Use perto da TV do apartamento: enrolada na antena, acaba com o chuvisco da imagem." },
         // v0.9.7 — Auto Center Dois Mil (preço de lançamento; depois sobe).
         new ItemDef { Id = CarGou, Name = "Gou 1.0 quadrado", Price = 2000, Slot = ItemSlot.None, Color = new Color(0.35f, 0.55f, 0.95f), Car = true,
             Description = "Folksvagem 1.0, econômico e valente. Fica no pátio da concessionária para todo mundo da sala dirigir." },
