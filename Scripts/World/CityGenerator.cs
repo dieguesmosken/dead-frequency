@@ -246,8 +246,10 @@ public partial class CityGenerator : Node3D
     /// <summary>Descarta apenas a geometria do chunk; os dados lógicos permanecem na memória.</summary>
     public void UnloadChunkVisuals(WorldChunkCoordinate coordinate)
     {
+        Node3D unloadedRoot = null;
         if (_chunkRoots.TryGetValue(coordinate, out Node3D root))
         {
+            unloadedRoot = root;
             _chunkRoots.Remove(coordinate);
             if (GodotObject.IsInstanceValid(root))
                 root.QueueFree();
@@ -268,11 +270,10 @@ public partial class CityGenerator : Node3D
                 SidewalkObstacles.Remove(position);
         }
         _noParking.RemoveAll(entry => entry.owner == coordinate);
-        if (_chunkRoots.TryGetValue(coordinate, out Node3D currentRoot) &&
-            GodotObject.IsInstanceValid(currentRoot))
+        if (unloadedRoot != null && GodotObject.IsInstanceValid(unloadedRoot))
         {
             _parkedCars.RemoveAll(car =>
-                !GodotObject.IsInstanceValid(car) || car.GetParent() == currentRoot);
+                !GodotObject.IsInstanceValid(car) || car.GetParent() == unloadedRoot);
         }
         else
         {
