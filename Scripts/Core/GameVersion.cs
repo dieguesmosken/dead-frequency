@@ -19,10 +19,15 @@ public static class GameVersion
             "Táxi amarelo da cooperativa Rádio Táxi Sintonia no pátio da central (com o adesivo do app 66): o taxista agora faz as corridas com ele, e o passageiro só embarca no táxi.",
             "Van de viagem anos 80, a Fórdi Viajante, estacionada no pátio da central: é a van do futuro Modo História e já dá para dirigir.",
             "Shopping Marconi com oito balcões, dois pisos e escada para subir a pé; as fachadas comerciais viraram lojas térreas do tamanho certo.",
-            "Central de entregas com portão novo do lado esquerdo e grade de metal em cima do muro; ninguém estaciona mais na frente dos portões.",
-            "Rádio 96.6 com muro e grade, e um portãozinho de pedestre na lateral.",
+            "Lã de Aço 1001 Utilidades no shopping: a palha de aço Brilhaço enrolada na antena acaba com o chuvisco da TV do apartamento.",
+            "Conserta-Tudo do Primo em frente à central: o gari acha sucata na rua e vende ao Primo, que também vende a lanterna de longo alcance.",
+            "Agro-Tudão no sítio: casa de rações na Estrada do Rancho, entregas de saco de ração para os sítios e o Repelente Espanta-Muriçoca.",
+            "Central de entregas com portão novo do lado esquerdo e grade de metal em cima do muro; ninguém estaciona mais na frente dos portões. A Rádio 96.6 ganhou muro, grade e um portãozinho.",
             "Céu novo: nuvens, sol, lua com relevo e estrelas que acompanham o ciclo de dia e noite.",
-            "Online: táxi e van de viagem sincronizados. Atualize o servidor com npm run deploy.",
+            "Menus iniciais novos liberados por código em Opções > Interface: ORBITA966, CINEMA966 e TERMINAL966 (VISUAL966 libera os três).",
+            "Mais leve em PC fraco: a cidade carrega em pedaços em volta do jogador, com tela de carregamento do mundo.",
+            "Prévia para celular nas versões de teste: APK de Android com controles de toque e atualização pelo próprio jogo.",
+            "Online: táxi, van de viagem, sucata, ração e itens novos validados pelo servidor. Atualize o servidor com npm run deploy.",
         }),
         new("0.9.8", "10/11/2026", "Rua de verdade", new[]
         {
