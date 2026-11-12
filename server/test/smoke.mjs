@@ -18,13 +18,13 @@ async function waitFor(client, type, predicate = () => true, timeout = 3000) {
   return undefined;
 }
 
-function connect(code, name, prof = "entregador", items = [], roomPassword = "") {
+function connect(code, name, prof = "entregador", items = [], roomPassword = "", protocol = 7) {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`${wsBase}/api/rooms/${code}/ws?name=${encodeURIComponent(name)}`);
+    const ws = new WebSocket(`${wsBase}/api/rooms/${code}/ws?protocol=${protocol}&name=${encodeURIComponent(name)}`);
     const inbox = [];
     ws.on("message", (data) => inbox.push(JSON.parse(data.toString())));
     ws.on("open", () => {
-      ws.send(JSON.stringify({ t: "hello", version: 7, prof, items, roomPassword }));
+      ws.send(JSON.stringify({ t: "hello", version: protocol, prof, items, roomPassword }));
       resolve({ ws, inbox, send: (m) => ws.send(JSON.stringify(m)), find: (t) => inbox.find((m) => m.t === t), all: (t) => inbox.filter((m) => m.t === t) });
     });
     ws.on("error", reject);
@@ -33,6 +33,7 @@ function connect(code, name, prof = "entregador", items = [], roomPassword = "")
 
 const health = await (await fetch(base + "/")).json();
 assert(health.ok, "health");
+assert(Array.isArray(health.supportedProtocols) && health.supportedProtocols.includes(7) && health.supportedProtocols.includes(8), "health anuncia protocolos habilitados");
 const pub = await (await fetch(base + "/api/stats")).json();
 assert(pub.ok && typeof pub.onlinePlayers === "number" && pub.protocol === health.protocol, "stats públicas");
 assert(!JSON.stringify(pub).includes("code") && !("rooms" in pub), "stats sem códigos de sala");
@@ -76,6 +77,31 @@ assert(await waitFor(a, "sellFail", (m) => m.req === 1), "item inventado não po
 assert(welcomeA.level === "city", "sala sem fase = cidade");
 
 // Sala do rancho (fase 2).
+// Protocolo 8 usa outro Durable Object; a rota antiga continua apontando somente para V7.
+assert((await fetch(base + "/api/rooms?protocol=6")).status === 400, "protocolo legado não habilitado");
+const unsupportedCreate = await fetch(base + "/api/rooms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ protocol: 6 }) });
+assert(unsupportedCreate.status === 400, "criação rejeita protocolo não suportado");
+const { code: v8Code, protocol: v8Protocol } = await (await fetch(base + "/api/rooms", {
+  method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ protocol: 8 }),
+})).json();
+assert(v8Protocol === 8, "criação declara protocolo 8");
+const v8Info = await (await fetch(`${base}/api/rooms/${v8Code}?protocol=8`)).json();
+assert(v8Info.protocol === 8, "info da sala identifica protocolo 8");
+assert((await fetch(`${base}/api/rooms/${v8Code}`)).status === 404, "rota padrão V7 não acessa sala V8");
+const v8Client = await connect(v8Code, "ClienteV8", "entregador", [], "", 8);
+await sleep(250);
+assert(v8Client.find("welcome")?.code === v8Code, "cliente V8 entra na sala V8");
+assert((await (await fetch(base + "/api/rooms?protocol=8")).json()).rooms.some((r) => r.code === v8Code), "lista pública filtra salas V8");
+const mismatch = new WebSocket(`${wsBase}/api/rooms/${v8Code}/ws?protocol=8&name=VersaoErrada`);
+const mismatchInbox = [];
+mismatch.on("message", (data) => mismatchInbox.push(JSON.parse(data.toString())));
+await new Promise((resolve, reject) => { mismatch.once("open", resolve); mismatch.once("error", reject); });
+mismatch.send(JSON.stringify({ t: "hello", version: 7, prof: "entregador" }));
+await sleep(150);
+assert(mismatchInbox.some((m) => m.t === "error"), "hello V7 não entra em sala V8");
+mismatch.close();
+v8Client.ws.close();
+
 const { code: farmCode } = await (await fetch(base + "/api/rooms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ level: "farm" }) })).json();
 const farmer = await connect(farmCode, "Caipira");
 await sleep(300);

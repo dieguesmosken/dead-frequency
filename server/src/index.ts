@@ -39,6 +39,24 @@ export interface Env {
 let SERVER_STARTED = 0;
 
 const PROTOCOL_VERSION = 7;
+/** Protocolos com isolamento de sala habilitado. V8 inicia com o mesmo contrato de mensagens do V7. */
+const SUPPORTED_PROTOCOLS = [7, 8] as const;
+type SupportedProtocol = (typeof SUPPORTED_PROTOCOLS)[number];
+
+function normalizeProtocol(value: unknown): SupportedProtocol | null {
+  const protocol = typeof value === "number" ? value : typeof value === "string" && /^\d+$/.test(value) ? Number(value) : NaN;
+  return SUPPORTED_PROTOCOLS.includes(protocol as SupportedProtocol) ? protocol as SupportedProtocol : null;
+}
+
+/** Mantém os IDs históricos do V7; versões futuras recebem namespaces próprios. */
+function roomDurableId(protocol: SupportedProtocol, code: string): string {
+  return protocol === 7 ? code : `v${protocol}:${code}`;
+}
+
+/** Mantém as chaves antigas do Registry para não perder salas V7 já registradas. */
+function roomSummaryKey(protocol: number | undefined, code: string): string {
+  return (protocol ?? 7) === 7 ? `room:${code}` : `room:v${protocol}:${code}`;
+}
 /** Veículos da fase (VanController.NetId no Godot): a van e, desde a v0.9.3, a moto e os caminhões do pátio. */
 const VEHICLES = ["van", "moto", "truck_yellow", "truck_red", "car_gou", "car_fusca", "car_opalinha"];
 /** Carros da concessionária (v0.9.7): comprados uma vez por sala, com o dinheiro do grupo. */
@@ -186,7 +204,7 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
 
     if (url.pathname === "/" || url.pathname === "/health") {
-      return json({ ok: true, game: "dead-frequency", protocol: PROTOCOL_VERSION });
+      return json({ ok: true, game: "dead-frequency", protocol: PROTOCOL_VERSION, supportedProtocols: SUPPORTED_PROTOCOLS });
     }
 
     if (url.pathname === "/admin" || url.pathname === "/admin/") {
@@ -203,34 +221,42 @@ export default {
     if (url.pathname === "/api/stats" && request.method === "GET") {
       const registry = env.REGISTRY.get(env.REGISTRY.idFromName("global"));
       const stats = await registry.publicStats();
-      return new Response(JSON.stringify({ ok: true, protocol: PROTOCOL_VERSION, maxPlayers: MAX_PLAYERS, ...stats, now: Date.now() }), {
+      return new Response(JSON.stringify({ ok: true, protocol: PROTOCOL_VERSION, supportedProtocols: SUPPORTED_PROTOCOLS, maxPlayers: MAX_PLAYERS, ...stats, now: Date.now() }), {
         headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=15", ...CORS },
       });
     }
 
     if (url.pathname === "/api/rooms" && request.method === "GET") {
+      const protocol = normalizeProtocol(url.searchParams.get("protocol") ?? String(PROTOCOL_VERSION));
+      if (!protocol) return json({ error: "Protocolo não suportado.", supportedProtocols: SUPPORTED_PROTOCOLS }, 400);
       const registry = env.REGISTRY.get(env.REGISTRY.idFromName("global"));
       await registry.ensurePermanentRooms();
-      return json({ rooms: await registry.publicRooms() });
+      return json({ protocol, rooms: await registry.publicRooms(protocol) });
     }
 
     if (url.pathname === "/api/rooms" && request.method === "POST") {
       let level = "city";
       let autoProfession = false;
       let isPublic = true;
+      let protocol: SupportedProtocol = PROTOCOL_VERSION;
       try {
-        const body = (await request.json()) as { level?: unknown; autoProfession?: unknown; isPublic?: unknown };
+        const body = (await request.json()) as { level?: unknown; autoProfession?: unknown; isPublic?: unknown; protocol?: unknown };
         if (typeof body.level === "string" && LEVELS.includes(body.level)) level = body.level;
         autoProfession = body.autoProfession === true;
         isPublic = body.isPublic !== false;
+        if (body.protocol !== undefined) {
+          const requested = normalizeProtocol(body.protocol);
+          if (!requested) return json({ error: "Protocolo não suportado.", supportedProtocols: SUPPORTED_PROTOCOLS }, 400);
+          protocol = requested;
+        }
       } catch {
-        // corpo vazio ou inválido: cidade
+        // corpo vazio ou inválido: cidade, protocolo atual
       }
       for (let attempt = 0; attempt < 6; attempt++) {
         const code = randomCode();
-        const stub = env.ROOMS.get(env.ROOMS.idFromName(code));
-        const res = await stub.fetch("https://room/init", { method: "POST", body: JSON.stringify({ code, level, autoProfession, isPublic }) });
-        if (res.status === 200) return json({ code });
+        const stub = env.ROOMS.get(env.ROOMS.idFromName(roomDurableId(protocol, code)));
+        const res = await stub.fetch("https://room/init", { method: "POST", body: JSON.stringify({ code, protocol, level, autoProfession, isPublic }) });
+        if (res.status === 200) return json({ code, protocol });
         if (res.status !== 409) return json({ error: "Falha ao criar sala" }, 500);
       }
       return json({ error: "Não foi possível gerar um código livre" }, 503);
@@ -238,11 +264,13 @@ export default {
 
     const match = url.pathname.match(/^\/api\/rooms\/([A-Za-z0-9]+)(\/ws)?$/);
     if (match) {
+      const protocol = normalizeProtocol(url.searchParams.get("protocol") ?? String(PROTOCOL_VERSION));
+      if (!protocol) return json({ error: "Protocolo não suportado.", supportedProtocols: SUPPORTED_PROTOCOLS }, 400);
       const registry = env.REGISTRY.get(env.REGISTRY.idFromName("global"));
       await registry.ensurePermanentRooms();
       const code = normalizeCode(match[1]);
       if (!code) return json({ error: "Código inválido" }, 400);
-      const stub = env.ROOMS.get(env.ROOMS.idFromName(code));
+      const stub = env.ROOMS.get(env.ROOMS.idFromName(roomDurableId(protocol, code)));
       if (match[2]) {
         if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
           return json({ error: "Esperado WebSocket" }, 426);
@@ -281,7 +309,7 @@ async function handleAdmin(request: Request, url: URL, env: Env): Promise<Respon
     await registry.ensurePermanentRooms();
     const status = await registry.status();
     const colo = (request as Request & { cf?: { colo?: string } }).cf?.colo ?? "local";
-    return json({ ...status, server: { protocol: PROTOCOL_VERSION, maxPlayers: MAX_PLAYERS, colo, isolateStartedAt: SERVER_STARTED, now: Date.now(), limits: { workersFreeRequestsPerDay: FREE_DAILY_REQUEST_LIMIT, durableObjectsFreeRequestsPerDay: FREE_DAILY_REQUEST_LIMIT, wsMessagesPerBillableRequest: WS_MESSAGES_PER_BILLABLE_REQUEST } } });
+    return json({ ...status, server: { protocol: PROTOCOL_VERSION, supportedProtocols: SUPPORTED_PROTOCOLS, maxPlayers: MAX_PLAYERS, colo, isolateStartedAt: SERVER_STARTED, now: Date.now(), limits: { workersFreeRequestsPerDay: FREE_DAILY_REQUEST_LIMIT, durableObjectsFreeRequestsPerDay: FREE_DAILY_REQUEST_LIMIT, wsMessagesPerBillableRequest: WS_MESSAGES_PER_BILLABLE_REQUEST } } });
   }
 
   if (path === "/initial-passwords/ack" && request.method === "POST") {
@@ -293,9 +321,12 @@ async function handleAdmin(request: Request, url: URL, env: Env): Promise<Respon
     const { msg } = (await request.json().catch(() => ({}))) as { msg?: string };
     const text = String(msg ?? "").trim().slice(0, 120);
     if (!text) return json({ error: "Mensagem vazia" }, 400);
-    const codes = await registry.activeCodes();
-    await Promise.all(codes.map((code) => env.ROOMS.get(env.ROOMS.idFromName(code)).adminAnnounce(text)));
-    return json({ ok: true, rooms: codes.length });
+    const rooms = await registry.activeCodes();
+    await Promise.all(rooms.map(({ code, protocol }) => {
+      const supported = normalizeProtocol(protocol);
+      return supported ? env.ROOMS.get(env.ROOMS.idFromName(roomDurableId(supported, code))).adminAnnounce(text) : Promise.resolve();
+    }));
+    return json({ ok: true, rooms: rooms.length });
   }
 
   if (path === "/permanent-rooms" && request.method === "POST") {
@@ -319,12 +350,14 @@ async function handleAdmin(request: Request, url: URL, env: Env): Promise<Respon
   const match = path.match(/^\/rooms\/([A-Za-z0-9]+)(\/close)?$/);
   if (match) {
     const code = normalizeCode(match[1]);
+    const protocol = normalizeProtocol(url.searchParams.get("protocol") ?? String(PROTOCOL_VERSION));
     if (!code) return json({ error: "Código inválido" }, 400);
-    const room = env.ROOMS.get(env.ROOMS.idFromName(code));
+    if (!protocol) return json({ error: "Protocolo não suportado.", supportedProtocols: SUPPORTED_PROTOCOLS }, 400);
+    const room = env.ROOMS.get(env.ROOMS.idFromName(roomDurableId(protocol, code)));
     if (match[2] && request.method === "POST") {
       const closed = await room.adminClose();
       if (!closed) return json({ error: "Sala permanente ou inexistente não pode ser encerrada." }, 409);
-      await registry.remove(code);
+      await registry.remove(code, protocol);
       return json({ ok: true, closed });
     }
     const detail = await room.adminDetail();
@@ -338,6 +371,7 @@ async function handleAdmin(request: Request, url: URL, env: Env): Promise<Respon
 
 export interface RoomSummary {
   code: string;
+  protocol?: number;
   name?: string;
   players: number;
   names: string[];
@@ -612,9 +646,9 @@ export class Registry extends DurableObject<Env> {
     if (event === "lost") stats.lostCargo++;
     if (event === "shift") stats.shiftsCompleted++;
     if (event === "chat")
-      await this.recordChat(new Date().toISOString().slice(0, 10), summary.code, amount);
+      await this.recordChat(new Date().toISOString().slice(0, 10), (summary.protocol ?? 7) === 7 ? summary.code : `v${summary.protocol}-${summary.code}`, amount);
 
-    await this.ctx.storage.put(`room:${summary.code}`, summary);
+    await this.ctx.storage.put(roomSummaryKey(summary.protocol, summary.code), summary);
     const online = await this.onlinePlayers();
     if (online > stats.peakPlayers) { stats.peakPlayers = online; stats.peakPlayersAt = Date.now(); }
     await this.ctx.storage.put("stats", stats);
@@ -646,15 +680,16 @@ export class Registry extends DurableObject<Env> {
   }
 
   /** Salas abertas e públicas, para a lista do menu Multiplayer (sem nomes além do anfitrião). */
-  async publicRooms(): Promise<unknown[]> {
+  async publicRooms(protocol: SupportedProtocol = PROTOCOL_VERSION): Promise<unknown[]> {
     const rooms = await this.ctx.storage.list<RoomSummary>({ prefix: "room:" });
     const stale = Date.now() - 6 * 60 * 60 * 1000;
     return Array.from(rooms.values())
-      .filter((r) => (r.players > 0 || r.permanent === true) && r.isPublic !== false && (r.permanent === true || r.updatedAt > stale))
+      .filter((r) => (r.protocol ?? 7) === protocol && (r.players > 0 || r.permanent === true) && r.isPublic !== false && (r.permanent === true || r.updatedAt > stale))
       .sort((a, b) => Number(b.permanent === true) - Number(a.permanent === true) || b.players - a.players || b.updatedAt - a.updatedAt)
       .slice(0, 30)
       .map((r) => ({
         code: r.code,
+        protocol: r.protocol ?? 7,
         name: r.name ?? "",
         players: r.players,
         max: MAX_PLAYERS,
@@ -691,17 +726,17 @@ export class Registry extends DurableObject<Env> {
     };
   }
 
-  async remove(code: string): Promise<void> {
-    await this.ctx.storage.delete(`room:${code}`);
+  async remove(code: string, protocol: number = 7): Promise<void> {
+    await this.ctx.storage.delete(roomSummaryKey(protocol, code));
   }
 
   async acknowledgeInitialPasswords(): Promise<void> {
     await this.ctx.storage.delete("initial-room-passwords");
   }
 
-  async activeCodes(): Promise<string[]> {
+  async activeCodes(): Promise<Array<{ code: string; protocol: number }>> {
     const rooms = await this.ctx.storage.list<RoomSummary>({ prefix: "room:" });
-    return Array.from(rooms.values()).filter((r) => r.players > 0).map((r) => r.code);
+    return Array.from(rooms.values()).filter((r) => r.players > 0).map((r) => ({ code: r.code, protocol: r.protocol ?? 7 }));
   }
 
   async status(): Promise<{ stats: GlobalStats; rooms: RoomSummary[]; onlinePlayers: number; activeRooms: number; chatByDayRoom: { day: string; room: string; messages: number }[]; traffic: { today: TrafficDailyRecord & { day: string; estimatedDoRequests: number }; days: (TrafficDailyRecord & { day: string; estimatedDoRequests: number })[] }; initialPasswords: Record<string, string> }> {
@@ -765,6 +800,8 @@ const LEVELS = ["city", "farm"];
 
 interface RoomState {
   code: string;
+  /** Versão da sala; ausente em dados legados significa V7. */
+  protocol?: number;
   name?: string;
   /** Fase da sala: todos os jogadores carregam a mesma. Salas antigas não têm (= cidade). */
   level?: string;
@@ -864,6 +901,7 @@ export class GameRoom extends DurableObject<Env> {
     const joined = this.connected().map(attachmentOf).filter((a) => a.joined && a.id !== excludeId);
     return {
       code: room.code,
+      protocol: room.protocol ?? 7,
       name: room.name,
       players: joined.length,
       names: joined.map((a) => a.name),
@@ -923,6 +961,7 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.room) return false;
     if (this.room.permanent) return false;
     const code = this.room.code;
+    const protocol = this.room.protocol ?? 7;
     for (const socket of this.connected()) {
       try {
         socket.send(JSON.stringify({ t: "kick", msg: "Sala encerrada pelo administrador." }));
@@ -936,7 +975,7 @@ export class GameRoom extends DurableObject<Env> {
     this.objects.clear();
     await this.ctx.storage.deleteAll();
     const registry = this.env.REGISTRY.get(this.env.REGISTRY.idFromName("global"));
-    await registry.remove(code);
+    await registry.remove(code, protocol);
     return true;
   }
 
@@ -947,10 +986,13 @@ export class GameRoom extends DurableObject<Env> {
 
     if (url.pathname === "/init") {
       if (this.room) return json({ error: "exists" }, 409);
-      const { code, name, level, autoProfession, isPublic, permanent, passwordSalt, passwordHash } =
-        (await request.json()) as { code: string; name?: string; level?: string; autoProfession?: boolean; isPublic?: boolean; permanent?: boolean; passwordSalt?: string; passwordHash?: string };
+      const { code, protocol: requestedProtocol, name, level, autoProfession, isPublic, permanent, passwordSalt, passwordHash } =
+        (await request.json()) as { code: string; protocol?: number; name?: string; level?: string; autoProfession?: boolean; isPublic?: boolean; permanent?: boolean; passwordSalt?: string; passwordHash?: string };
+      const protocol = normalizeProtocol(requestedProtocol ?? 7);
+      if (!protocol) return json({ error: "Protocolo não suportado." }, 400);
       this.room = {
         code,
+        protocol,
         name: name ? sanitizeRoomName(name) : undefined,
         level: level && LEVELS.includes(level) ? level : "city",
         autoProfession: autoProfession === true,
@@ -982,6 +1024,7 @@ export class GameRoom extends DurableObject<Env> {
     if (url.pathname === "/info") {
       return json({
         code: this.room.code,
+        protocol: this.room.protocol ?? 7,
         name: this.room.name ?? "",
         players: this.connected().length,
         max: MAX_PLAYERS,
@@ -1217,7 +1260,7 @@ export class GameRoom extends DurableObject<Env> {
 
   private async onHello(ws: WebSocket, me: Attachment, msg: any): Promise<void> {
     const room = this.room!;
-    if (Number(msg.version) !== PROTOCOL_VERSION) {
+    if (Number(msg.version) !== (room.protocol ?? 7)) {
       ws.send(JSON.stringify({ t: "error", msg: "Versão do jogo diferente da do servidor. Atualize o jogo." }));
       ws.close(4000, "version");
       return;
@@ -1257,6 +1300,7 @@ export class GameRoom extends DurableObject<Env> {
         name: me.name,
         color: me.color,
         code: room.code,
+        protocol: room.protocol ?? 7,
         seed: room.seed,
         level: room.level ?? "city",
         prof: me.prof,
@@ -1732,7 +1776,7 @@ export class GameRoom extends DurableObject<Env> {
         const code = room.code;
         await this.ctx.storage.deleteAll();
         this.room = null;
-        await this.env.REGISTRY.get(this.env.REGISTRY.idFromName("global")).remove(code);
+        await this.env.REGISTRY.get(this.env.REGISTRY.idFromName("global")).remove(code, room.protocol ?? 7);
         return;
       }
       await this.ctx.storage.setAlarm(since + EMPTY_ROOM_TTL_MS);
