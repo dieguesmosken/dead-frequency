@@ -834,10 +834,10 @@ public partial class CityGenerator : Node3D
             switch (plannedKind.Value)
             {
                 case WorldBlockKind.Park:
-                    BuildPark(block, center, inner);
+                    BuildPark(block, center, inner, blockPlan);
                     break;
                 case WorldBlockKind.ParkingLot:
-                    BuildParkingLot(block, center, inner);
+                    BuildParkingLot(block, center, inner, blockPlan);
                     break;
                 default:
                     BuildBuildings(block, center, inner, bx, bz, blockPlan);
@@ -1084,7 +1084,7 @@ public partial class CityGenerator : Node3D
                 new Vector3(-4.5f, CurbHeight, 31.4f), 0.4f, 1.2f));
     }
 
-    private void BuildPark(Node3D block, Vector3 center, float inner)
+    private void BuildPark(Node3D block, Vector3 center, float inner, WorldBlockData blockPlan = null)
     {
         AddBox(block, center + new Vector3(0f, CurbHeight + 0.05f, 0f), new Vector3(inner, 0.1f, inner), _grass, false);
         GrassTufts.Fill(block, center + new Vector3(0f, CurbHeight + 0.1f, 0f), new Vector2(inner - 0.6f, inner - 0.6f), 0.55f, new Color(0.8f, 0.95f, 0.75f));
@@ -1106,6 +1106,40 @@ public partial class CityGenerator : Node3D
             block.AddChild(tree);
         }
 
+        if (_useLogicalBlockPlans && blockPlan != null)
+        {
+            foreach (WorldParkTreePlan treePlan in blockPlan.ParkTrees)
+            {
+                if (NatureKit.Spawn(block, treePlan.Model, treePlan.Position, treePlan.RotationY,
+                    treePlan.Scale * 0.7f, 0.25f) != null)
+                    continue;
+
+                var fallbackTree = new StaticBody3D
+                {
+                    Position = treePlan.Position,
+                    CollisionLayer = 1,
+                    CollisionMask = 0,
+                };
+                fallbackTree.AddChild(new CollisionShape3D
+                {
+                    Shape = new CylinderShape3D { Radius = 0.25f, Height = 3f },
+                    Position = new Vector3(0f, 1.5f, 0f),
+                });
+                AddCylinder(fallbackTree, new Vector3(0f, 1.2f * treePlan.Scale, 0f),
+                    0.18f * treePlan.Scale, 2.4f * treePlan.Scale, _trunk);
+                AddCylinder(fallbackTree, new Vector3(0f, 3.6f * treePlan.Scale, 0f),
+                    1.6f * treePlan.Scale, 3.6f * treePlan.Scale, _leaves, _treeTop);
+                AddCylinder(fallbackTree, new Vector3(0f, 5f * treePlan.Scale, 0f),
+                    1.1f * treePlan.Scale, 2.6f * treePlan.Scale, _leaves, _treeTop);
+                block.AddChild(fallbackTree);
+            }
+
+            foreach (WorldParkBenchPlan bench in blockPlan.ParkBenches)
+                AddBox(block, bench.Position, new Vector3(1.8f, 0.5f, 0.5f),
+                    _trunk, true, bench.RotationY);
+            return;
+        }
+
         // Bancos.
         for (int i = 0; i < 3; i++)
         {
@@ -1114,10 +1148,28 @@ public partial class CityGenerator : Node3D
         }
     }
 
-    private void BuildParkingLot(Node3D block, Vector3 center, float inner)
+    private void BuildParkingLot(Node3D block, Vector3 center, float inner, WorldBlockData blockPlan = null)
     {
         AddBox(block, center + new Vector3(0f, CurbHeight + 0.02f, 0f), new Vector3(inner, 0.04f, inner), _darkMetal, false);
         PaintParkingStripes(block, center, inner);
+        if (_useLogicalBlockPlans && blockPlan != null)
+        {
+            foreach (WorldParkingCarPlan carPlan in blockPlan.ParkingCars)
+            {
+                RandomNumberGenerator previousRng = _rng;
+                _rng = new RandomNumberGenerator { Seed = carPlan.VisualSeed };
+                try
+                {
+                    BuildCar(block, carPlan.Position, carPlan.RotationY);
+                }
+                finally
+                {
+                    _rng = previousRng;
+                }
+            }
+            return;
+        }
+
         int cars = _rng.RandiRange(3, 7);
         for (int i = 0; i < cars; i++)
         {
