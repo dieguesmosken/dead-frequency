@@ -724,7 +724,7 @@ public partial class CityGenerator : Node3D
                     InitialPosition = _initialChunkPosition,
                     HasInitialPosition = _hasInitialChunkPosition,
                     LoadRadius = 2,
-                    UnloadRadius = 3,
+                    UnloadRadius = 2,
                 };
                 AddChild(_chunkManager);
             }
