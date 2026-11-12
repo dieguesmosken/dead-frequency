@@ -1,6 +1,6 @@
 # Dead Frequency — roadmap da cidade simulada
 
-Atualizado em 10/11/2026 (v0.9.8 em andamento). A partir da v0.9 o jogo deixa de ser só "entregas" e vira uma
+Atualizado em 12/11/2026 (v0.9.8 lançada). A partir da v0.9 o jogo deixa de ser só "entregas" e vira uma
 **cidade simulada na zona morta**: cada jogador escolhe uma profissão, ganha um apartamento, ouve a
 rádio 96.6 e ajuda a cidade a funcionar. Ordem sugerida: de cima para baixo; cada fase deixa o jogo jogável.
 
@@ -64,7 +64,7 @@ Já feito nesta build (feedback de 08/11):
 - ✅ Otimização: peças pequenas somem na neblina, luz de poste apaga longe.
 - ✅ Auto Center Dois Mil (ao lado do depósito): Gou, Fuska e Opalinha a $ 2000; online o carro é da sala.
 - ✅ Menu inicial: manter o menu atual; o redesign foi retirado desta versão.
-- ⏭ Sons do Pixabay com créditos adiados para uma versão futura.
+- ⏭ Sons novos (passos e ambiente) adiados; fontes CC0 definidas em `docs/ASSETS_E_SONS.md` (Pixabay descartado).
 
 | Ideia | Como funciona no jogo |
 |---|---|
@@ -75,7 +75,7 @@ Já feito nesta build (feedback de 08/11):
 | ✅ **Chat da sala (T)** | Mensagens de texto na sala, com limite de 3 mensagens a cada 5 s no servidor. O painel admin mostra totais por dia UTC/sala (retenção de 30 dias), sem guardar o conteúdo. |
 | ✅ **Salas permanentes do admin** | No painel admin: criar salas fixas, públicas ou com senha; senhas são geradas na criação e mostradas uma vez. Já existem `ADMNA`/`ADMNB` (privadas) e `SERVA`/`SERVB` (públicas); salas permanentes não expiram nem podem ser encerradas. Protocolo 6 valida a senha na entrada. |
 
-### v0.9.8 — Rua de verdade 🚧
+### v0.9.8 — Rua de verdade ✅
 | Ideia | Como funciona no jogo |
 |---|---|
 | ✅ **Céu procedural** | Nuvens em movimento, estrelas e cores sincronizadas ao ciclo de dia e noite. |
@@ -85,22 +85,45 @@ Já feito nesta build (feedback de 08/11):
 | ✅ **Ciclovia e ciclista** | Faixa de ciclovia pintada e um ciclista NPC que roda pela cidade como o ônibus (posição pelo relógio, igual para todos) e toca o sininho quando você está na frente. |
 | ✅ **Polícia** | Faixa identificada na fachada da delegacia, ícone no minimapa e policiais NPC fardados (só figurantes por enquanto). |
 
+Ideias para depois (pesquisa de 12/11 sobre as regras do CTB):
+- **Meio-fio amarelo "de morador"**: em bairros residenciais, trechos pintados de amarelo por conta própria, sem placa (é irregular na vida real e não proíbe nada). Toque de realismo para quando houver multas.
+- **Multas do Art. 181 do CTB** (quando a carreira tiver economia): estacionar a menos de 5 m da esquina, em frente a guia rebaixada, sobre a calçada/faixa/ciclovia, em frente a hidrante ou no ponto de ônibus, ou a mais de 50 cm da guia.
+- **Meio-fio e calçada com mais detalhe**: rachaduras com normal map e vaga azul de idoso/PCD pintada no asfalto.
+
 ### v0.9.9 — Lojas de verdade
 | Ideia | Como funciona no jogo |
 |---|---|
 | ✅ **Prédios do tamanho da loja** | Fachadas comerciais aleatórias agora são lojas térreas independentes; o Atacadinho e os postos já ocupam quarteirões próprios. |
 | ✅ **Shopping** | Shopping Marconi com oito balcões interativos, dois pisos e escada com rampa física walkable. |
-| **Táxi amarelo** | O taxista ganha o próprio carro: táxi amarelo com placa luminosa "TÁXI" no teto e o nome de uma cooperativa fictícia. |
+| ✅ **Táxi amarelo** | O taxista ganha o próprio carro (modelo PSX da GGBot, CC0) no pátio da central, com o nome da cooperativa fictícia "Rádio Táxi Sintonia" e o adesivo do app paródia "66". Passageiro só embarca no táxi. |
+| ✅ **Van de viagem** | Van anos 80 "Fórdi Viajante" (creme e marrom com faixas, janela bolha e bagageiro), estacionada no pátio da central: a van do Modo História. |
+| ✅ **Menus novos por código** | Opções > Interface > Menu inicial: ORBITA966, CINEMA966 e TERMINAL966 ligam os menus novos (fundo com a própria cidade), VISUAL966 libera os três para escolher e CLASSICO966 volta ao menu clássico. |
+| ✅ **Central e rádio** | Portão novo do lado esquerdo da central (feedback dos testes), grade de metal em cima dos muros da central e da rádio, e portãozinho de pedestre na lateral da rádio. |
+| ✅ **Céu novo** | Céu 100% procedural (nuvens, sol, lua com relevo e estrelas) ligado ao ciclo de dia e noite. |
 | **Agro-Tudão (casa de rações)** | Na estrada de terra entre a cidade e o sítio: entregas de sacos de ração para os cercados. |
-| **Conserta-Tudo do Primo** | O gari junta sucata nas calçadas e vende aqui, ou troca por melhorias (lanterna de longo alcance, pilhas para a visão noturna). |
-| **Lã de Aço 1001 Utilidades** | Carga leve do repositor; no apartamento, melhora a imagem chiada da TV. |
+| ✅ **Conserta-Tudo do Primo** | Barraca em frente ao depósito. O gari acha sucata na rua (rádio velho, cano, roda) e vende ao Primo pelo mesmo valor do saco; o Primo vende a lanterna de longo alcance (dobro do alcance, basta estar na mochila), kit de reparo, fita e prego. Pilhas para a visão noturna ficaram de fora: ela não gasta bateria hoje. |
+| ✅ **Lã de Aço 1001 Utilidades** | Balcão no Shopping Marconi (no lugar das Lojas Marcianas) com palha de aço Brilhaço, fita e prego. Na TV do apartamento, a palha de aço na antena acaba com o chuvisco. O repositor às vezes repõe fardos de palha de aço (carga leve). |
 
-### v0.10 — Carreira
+### v0.10 — Dead Frequency no celular (Android)
+Planejado em 12/11/2026 (antes a v0.10 era a Carreira, que passou para a v0.11). Objetivo: jogar e testar no
+celular, nos dois aparelhos do Matheus e em outros. Depende da otimização para PC fraco (`hotfix/pc-fraco`,
+streaming por chunks) estar na Internal.
+
+| Ideia | Como funciona no jogo |
+|---|---|
+| **Exportar para Android** | Preset Android no `export_presets.cfg` (C#/.NET, arm64), APK de teste gerado pelo CI junto com o prerelease da Internal. A chave de assinatura de release fica com o Matheus (segredo no GitHub, nunca no repositório). |
+| **Controles de toque** | Joystick virtual à esquerda (andar e dirigir), arrastar à direita (câmera) e botões grandes para E (interagir), pular/freio, R (rádio), N (visão noturna) e inventário. Só aparecem em tela de toque; controle Bluetooth também funciona. |
+| **Modo gráfico leve** | Renderizador Compatibility/Mobile, resolução interna baixa (combina com o visual PS1 de 320x240/640x480), sombras desligadas, neblina mais perto e menos luzes acesas. Meta: 30 fps estáveis. |
+| **Menus e HUD para tela pequena** | Botões e fontes maiores, menu e pausa por toque, respeito ao entalhe da câmera (safe area) e opção de tamanho dos controles. |
+| **Online entre PC e celular** | Mesmo servidor e protocolo (WebSocket): sem mudança no `server/`. Testar sala com PC e celular juntos. |
+| **Distribuição** | No Android não tem launcher: o site ganha o link do APK de cada versão. Play Store fica para depois. |
+
+### v0.11 — Carreira
 | Ideia | Como funciona no jogo |
 |---|---|
 | **Níveis de profissão** | Cada tarefa dá experiência na profissão. A cada nível: bônus em dinheiro por tarefa e itens de presente (ex.: luvas no nível 3 de entregador, café grátis para o taxista da madrugada). Salvo no save e conferido pelo servidor no online. |
 
-### v0.10.x — Trânsito de verdade
+### v0.11.x — Trânsito de verdade
 | Ideia | Como funciona no jogo |
 |---|---|
 | **Trânsito procedural** | Carros andando pelas ruas, parando no semáforo e no PARE. |
@@ -173,7 +196,7 @@ Cada profissão nova = um `JobBase` em `Scripts/Jobs/` + a regra em `PROFESSIONS
 
 As fases abaixo são propostas de planejamento; a ordem pode mudar conforme testes, dependências e escopo das builds.
 
-### v0.11 — Bairros e infraestrutura urbana
+### v0.12 — Bairros e infraestrutura urbana
 - **Área residencial simplificada:** bairro de casas térreas, sem prédios altos, inspirado em conjuntos habitacionais como CDHU ou em um condomínio simples. Avaliar como uma área separada/mapa para manter a cidade principal mais leve.
 - **Praça e parque:** área de convivência com bancos, árvores, iluminação e eventos comunitários.
 - **Playground:** parquinho próximo ao bairro residencial.
@@ -187,13 +210,13 @@ As fases abaixo são propostas de planejamento; a ordem pode mudar conforme test
 - **Infraestrutura de internet:** cabos ADSL antigos abandonados e fibra óptica chegando às casas.
 - **Antenas e parabólicas:** modelos de 60 cm convencionais; antenas clandestinas de TV a cabo ("gato Net") com identidade visual fictícia; marcas fictícias inspiradas em operadoras populares (Céu, Escuro, Antena da Tchau e Antena da Morto); parabólica amarela Centauro de 150 cm; modelos rurais de tela/grade Centauro de 200 e 340 cm.
 
-### v0.12 — Zona rural, água e pesca
+### v0.13 — Zona rural, água e pesca
 - **Rios e lagos rurais:** corpos d'água distribuídos pelo mapa rural, com margens e vegetação próprias.
 - **Pontos de pesca:** locais acessíveis nas margens, com áreas apropriadas para pescar.
 - **Sistema de pesca:** varas, iscas, espera/ fisgada e diferentes espécies de peixes, com raridades e valores distintos.
 - **Agricultura:** plantações e áreas cultivadas, ampliando as atividades do sítio e as entregas rurais.
 
-### v0.13 — Comércio, indústria e energia
+### v0.14 — Comércio, indústria e energia
 - **Rodoviária/terminal de ônibus:** terminal como origem e ponto de organização das linhas intermunicipais/urbanas.
 - **Restaurantes:** estabelecimentos com identidade própria, salão, balcão e refeições.
 - **Área industrial:** galpões, pátios de carga e circulação de veículos de serviço.
@@ -217,6 +240,35 @@ A rádio deve anunciar os próprios estabelecimentos e acontecimentos do mundo d
 - Mais restaurantes e serviços de bairro, evitando concentrar todo o comércio em prédios genéricos.
 - Revisar a malha viária e a sinalização sempre que novos bairros, obras ou rotas forem adicionados.
 
+
+---
+
+## Modo História e novas fases (planejado em 12/11/2026)
+
+Documentação completa em [`docs/README_PARA_IAS.md`](docs/README_PARA_IAS.md). Tom: cotidiano e aventura leve, **sem terror**.
+
+### Em andamento — Mundo e polimento (foco atual)
+- [ ] **Fase 1 · Cidade (ambientação Brazilcore):** lombadas com física de suspensão, asfalto remendado/bueiros, postes com fios e cartazes, orelhões, lixeiras de grade, calçadas irregulares e árvores com a base pintada de branco.
+- [ ] **Fase 2 · Rancho (reconstrução):** estradas de terra vermelha em circuito, sítios, *packing house* de banana/palmito, lago com pesqueiro e sinalização rústica.
+
+### Próximas — Imersão e novos cenários (cenas isoladas)
+- [ ] **IK nos personagens:** `TwoBoneIK3D` para mãos na caixa/saco/volante e `LookAtModifier3D` para NPCs olharem o jogador.
+- [ ] **Otimização de renderização:** `MultiMeshInstance3D` para vegetação/postes e *occlusion culling*.
+- [ ] **Fase 3 · O Bananal (`Bananal.tscn`):** navegação pelo sinal da 96.6 (radar sonoro).
+- [ ] **Fase 4 · Gruta da Estática (`Gruta.tscn`):** caverna de calcário com salas modulares, lanterna e visão noturna.
+- [ ] **Fase 5 · Estrada da Serra (`Serra.tscn`):** subida sinuosa com neblina e teste de integridade da carga.
+
+### Modo História (offline)
+- [ ] Progressão desacoplada (`StoryManager` + `JobEvents`), salva no `save.tzn`.
+- [ ] Piloto automático na `VanController` + `ChapterTransitionZone` (loading disfarçado na estrada, rádio ligado e banner retrô).
+- [ ] Campanha em 7 capítulos ligando Cidade, Rancho, Bananal, Gruta, Serra e Rádio 96.6 (capítulos a definir).
+
+### Backlog opcional — vida urbana
+- [ ] Praça da Matriz à noite com barracas de pastel/lanche e carro de som anunciando eventos.
+- [ ] Festivais sazonais na praça (Festa da Colheita, Bon Odori) e travessia de balsa.
+
+### Pós-v1.0
+- [ ] Testar servidor dedicado com Colyseus (Oracle Cloud Free Tier), cliente via NuGet `Colyseus` + `schema-codegen`.
 
 ---
 

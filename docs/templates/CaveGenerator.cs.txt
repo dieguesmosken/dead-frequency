@@ -1,0 +1,55 @@
+// Scripts/World/Phases/CaveGenerator.cs  (modelo — Fase 4, Gruta da Estática)
+// Monta a gruta encaixando salas prontas (.tscn) uma atrás da outra, sempre igual para a mesma semente.
+// Cada sala precisa de dois Marker3D: "Entrada" (onde encaixa na anterior) e "Saida" (onde a próxima encaixa).
+// A última sala é a da repetidora de rádio.
+// FALTA: checar sobreposição entre salas (hoje pode encavalar se as salas fizerem curva demais).
+using Godot;
+
+namespace DeadFrequency;
+
+public partial class CaveGenerator : Node3D
+{
+    [Export] public PackedScene EntryRoomScene;
+    [Export] public Godot.Collections.Array<PackedScene> MiddleRoomScenes = new();
+    [Export] public PackedScene FinalRepeaterRoomScene;
+    [Export] public int RoomCount = 10;
+    [Export] public ulong Seed = 966;
+
+    public override void _Ready() => GenerateCave();
+
+    public void GenerateCave()
+    {
+        if (EntryRoomScene == null || FinalRepeaterRoomScene == null)
+            return;
+        var rng = new RandomNumberGenerator { Seed = Seed };
+
+        Node3D current = EntryRoomScene.Instantiate<Node3D>();
+        AddChild(current);
+
+        for (int i = 0; i < RoomCount && MiddleRoomScenes.Count > 0; i++)
+        {
+            Marker3D exit = current.GetNodeOrNull<Marker3D>("Saida");
+            if (exit == null)
+                break;
+            Node3D next = MiddleRoomScenes[rng.RandiRange(0, MiddleRoomScenes.Count - 1)].Instantiate<Node3D>();
+            AddChild(next);
+            AlignToExit(next, exit);
+            current = next;
+        }
+
+        Marker3D lastExit = current.GetNodeOrNull<Marker3D>("Saida");
+        if (lastExit != null)
+        {
+            Node3D final = FinalRepeaterRoomScene.Instantiate<Node3D>();
+            AddChild(final);
+            AlignToExit(final, lastExit);
+        }
+    }
+
+    // Põe a "Entrada" da sala nova exatamente em cima da "Saida" da anterior.
+    private static void AlignToExit(Node3D room, Marker3D exit)
+    {
+        Marker3D entry = room.GetNodeOrNull<Marker3D>("Entrada");
+        room.GlobalTransform = entry == null ? exit.GlobalTransform : exit.GlobalTransform * entry.Transform.AffineInverse();
+    }
+}

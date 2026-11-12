@@ -329,7 +329,13 @@ public partial class PlayerController : CharacterBody3D
 
         // Polling em vez de eventos: funciona mesmo se algum Control da UI estiver com foco.
         if (Input.IsActionJustPressed("flashlight"))
+        {
             _flashlight.Visible = !_flashlight.Visible;
+            // Lanterna de longo alcance (Conserta-Tudo do Primo, v0.9.9): basta estar na mochila.
+            bool strong = PlayerInventory.Instance != null && System.Linq.Enumerable.Contains(PlayerInventory.Instance.Items, ItemCatalog.StrongFlashlight);
+            _flashlight.SpotRange = strong ? 44f : 22f;
+            _flashlight.SpotAngle = strong ? 30f : 24f;
+        }
 
         if (Input.IsActionJustPressed("night_vision"))
         {

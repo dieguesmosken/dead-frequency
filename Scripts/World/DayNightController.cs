@@ -219,7 +219,22 @@ public partial class DayNightController : Node
             }
             else if (env.Sky?.SkyMaterial is ShaderMaterial skyShader)
             {
-                skyShader.SetShaderParameter("day_night_mix", 1f - night * 2f);
+                // Céu procedural (v0.9.9, Shaders/Sky/procedural_sky.gdshader): mesmas cores do resto do ciclo.
+                Color ground = new Color(0.22f, 0.22f, 0.22f).Lerp(new Color(0.02f, 0.022f, 0.026f), night);
+                skyShader.SetShaderParameter("zenith_color", top);
+                skyShader.SetShaderParameter("horizon_color", horizon);
+                skyShader.SetShaderParameter("ground_color", ground);
+                Color cloudLight = new Color(0.96f, 0.96f, 0.98f).Lerp(new Color(1f, 0.7f, 0.5f), dusk * 0.7f).Lerp(new Color(0.3f, 0.32f, 0.36f), night);
+                Color cloudDark = new Color(0.58f, 0.62f, 0.7f).Lerp(new Color(0.45f, 0.3f, 0.35f), dusk * 0.6f).Lerp(new Color(0.045f, 0.05f, 0.06f), night);
+                skyShader.SetShaderParameter("cloud_light_color", cloudLight);
+                skyShader.SetShaderParameter("cloud_dark_color", cloudDark);
+                skyShader.SetShaderParameter("star_brightness", 0.6f * night);
+                skyShader.SetShaderParameter("moon_direction", toMoon);
+                skyShader.SetShaderParameter("moon_brightness", 1.1f * Mathf.Clamp(toMoon.Y / 0.1f, 0f, 1f) * Mathf.Max(night, 0.15f));
+                skyShader.SetShaderParameter("sun_direction", toSun);
+                skyShader.SetShaderParameter("sun_strength", Mathf.Clamp((sunHeight + 0.05f) / 0.15f, 0f, 1f));
+                skyShader.SetShaderParameter("sun_color", new Color(1f, 0.92f, 0.75f).Lerp(new Color(1f, 0.55f, 0.25f), dusk));
+                skyShader.SetShaderParameter("day_night_mix", 1f - night * 2f); // céu antigo (main.gdshader)
             }
             env.AmbientLightColor = new Color(0.62f, 0.66f, 0.74f).Lerp(new Color(0.17f, 0.18f, 0.24f), night).Lerp(new Color(0.6f, 0.45f, 0.4f), dusk * 0.4f);
             env.AmbientLightEnergy = Mathf.Lerp(0.75f, 0.9f, night);

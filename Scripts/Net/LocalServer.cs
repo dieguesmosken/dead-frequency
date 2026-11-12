@@ -685,7 +685,7 @@ public partial class LocalServer : Node
         _jobs.Select(j => new Dictionary<string, object> { ["id"] = j.Id, ["type"] = j.Type, ["pick"] = j.Pick, ["slot"] = j.Slot, ["status"] = j.Status }).ToList();
 
     /// <summary>Mesmos de VEHICLES no servidor.</summary>
-    private static readonly string[] Vehicles = { "van", "moto", "truck_yellow", "truck_red", "car_gou", "car_fusca", "car_opalinha" };
+    private static readonly string[] Vehicles = { "van", "moto", "truck_yellow", "truck_red", "car_gou", "car_fusca", "car_opalinha", "taxi", "van_viagem" };
     private readonly List<string> _cars = new();
 
     private bool IsKnownObject(string id) => Vehicles.Contains(id) || _jobs.Any(j => j.Id == id && j.Status == "pending");

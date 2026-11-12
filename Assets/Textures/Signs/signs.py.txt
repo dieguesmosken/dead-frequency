@@ -1,0 +1,95 @@
+"""Placas de trânsito chapadas (v0.9.8): desenho da placa numa textura, colada numa chapa fina.
+Uso: python3 Assets/Textures/Signs/signs.py.txt   (da raiz do repositório)
+
+proibido_estacionar.png           R-6a redonda (fundo transparente fora do círculo)
+proibido_estacionar_policia.png   chapa retangular branca com a R-6a e "POLÍCIA" embaixo
+proibido_estacionar_bombeiros.png idem com "BOMBEIROS"
+onibus.png                        placa azul de serviço "ÔNIBUS" com o pictograma do ônibus
+verso_redondo.png                 verso cinza da placa redonda
+"""
+import os
+from PIL import Image, ImageDraw, ImageFont
+
+OUT = os.path.dirname(os.path.abspath(__file__))
+F = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+RED = (220, 38, 38, 255)
+WHITE = (250, 250, 248, 255)
+BLACK = (40, 40, 40, 255)
+BLUE = (28, 70, 150, 255)
+GRAY = (150, 152, 155, 255)
+S = 4  # desenha 4x maior e reduz: bordas lisas
+
+
+def r6a(d, cx, cy, r):
+    """Proibido estacionar: anel vermelho, E preto e a faixa diagonal por cima do E."""
+    d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=RED)
+    ri = r * 0.8
+    d.ellipse((cx - ri, cy - ri, cx + ri, cy + ri), fill=WHITE)
+    # Letra E desenhada com retângulos (fica igual em qualquer máquina).
+    ew, eh, t = r * 0.52, r * 0.9, r * 0.16
+    x0, y0 = cx - ew * 0.42, cy - eh / 2
+    d.rectangle((x0, y0, x0 + t, y0 + eh), fill=BLACK)
+    d.rectangle((x0, y0, x0 + ew, y0 + t), fill=BLACK)
+    d.rectangle((x0, cy - t / 2, x0 + ew * 0.85, cy + t / 2), fill=BLACK)
+    d.rectangle((x0, y0 + eh - t, x0 + ew, y0 + eh), fill=BLACK)
+    # Diagonal de cima-esquerda para baixo-direita, presa no anel.
+    import math
+    a = math.radians(45)
+    w = r * 0.17
+    dx, dy = math.cos(a) * ri, math.sin(a) * ri
+    nx, ny = -math.sin(a) * w / 2, math.cos(a) * w / 2
+    d.polygon([(cx - dx + nx, cy - dy + ny), (cx + dx + nx, cy + dy + ny), (cx + dx - nx, cy + dy - ny), (cx - dx - nx, cy - dy - ny)], fill=RED)
+
+
+def save(img, name, size):
+    img.resize(size, Image.LANCZOS).save(os.path.join(OUT, name))
+
+
+def round_sign():
+    n = 256 * S
+    img = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+    r6a(ImageDraw.Draw(img), n / 2, n / 2, n / 2 - 2 * S)
+    save(img, "proibido_estacionar.png", (256, 256))
+    back = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+    ImageDraw.Draw(back).ellipse((2 * S, 2 * S, n - 2 * S, n - 2 * S), fill=GRAY)
+    save(back, "verso_redondo.png", (256, 256))
+
+
+def labeled(label, name):
+    w, h = 256 * S, 384 * S
+    img = Image.new("RGBA", (w, h), WHITE)
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle((3 * S, 3 * S, w - 3 * S, h - 3 * S), 14 * S, outline=BLACK, width=4 * S)
+    r6a(d, w / 2, 125 * S, 100 * S)
+    size = 40 * S if len(label) <= 7 else 31 * S
+    d.text((w / 2, 300 * S), label, font=ImageFont.truetype(F, size), fill=BLACK, anchor="mm")
+    save(img, name, (256, 384))
+
+
+def bus():
+    w, h = 256 * S, 384 * S
+    img = Image.new("RGBA", (w, h), BLUE)
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle((8 * S, 8 * S, w - 8 * S, h - 8 * S), 14 * S, outline=WHITE, width=5 * S)
+    d.rounded_rectangle((26 * S, 26 * S, w - 26 * S, 250 * S), 10 * S, fill=WHITE)
+    # Pictograma do ônibus de lado (preto): carroceria, janelas brancas e rodas.
+    bx0, by0, bx1, by1 = 46 * S, 92 * S, 212 * S, 182 * S
+    d.rounded_rectangle((bx0, by0, bx1, by1), 8 * S, fill=BLACK)
+    d.rectangle((bx0 + 6 * S, by0 - 8 * S, bx0 + 14 * S, by0), fill=BLACK)  # retrovisor
+    for i in range(6):
+        x = bx0 + 34 * S + i * 21 * S
+        d.rectangle((x, by0 + 12 * S, x + 15 * S, by0 + 38 * S), fill=WHITE)
+    d.rectangle((bx0 + 8 * S, by0 + 12 * S, bx0 + 26 * S, by0 + 38 * S), fill=WHITE)  # para-brisa
+    for x in (bx0 + 36 * S, bx1 - 36 * S):
+        d.ellipse((x - 15 * S, by1 - 12 * S, x + 15 * S, by1 + 18 * S), fill=BLACK)
+        d.ellipse((x - 6 * S, by1 - 3 * S, x + 6 * S, by1 + 9 * S), fill=WHITE)
+    d.text((w / 2, 318 * S), "ÔNIBUS", font=ImageFont.truetype(F, 46 * S), fill=WHITE, anchor="mm")
+    save(img, "onibus.png", (256, 384))
+
+
+if __name__ == "__main__":
+    round_sign()
+    labeled("POLÍCIA", "proibido_estacionar_policia.png")
+    labeled("BOMBEIROS", "proibido_estacionar_bombeiros.png")
+    bus()
+    print("ok:", OUT)

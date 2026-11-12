@@ -1,6 +1,8 @@
 // Scripts/Jobs/RepositorJob.cs
 // Repositor: no Supermercado Atacadinho, pegue uma caixa de produtos no estoque (fundo da loja)
 // e reponha uma prateleira marcada como VAZIA. R$ 30 por prateleira.
+// v0.9.9: às vezes a caixa é um fardo de palha de aço Brilhaço, da Lã de Aço 1001 Utilidades (carga leve):
+// a prateleira fica com os pacotinhos amarelos e vermelhos.
 using System.Collections.Generic;
 using Godot;
 
@@ -12,6 +14,8 @@ public partial class RepositorJob : JobBase
     private const int EmptyAtOnce = 4;
 
     private bool _carrying;
+    private bool _lightLoad;
+    private static readonly Color SteelWoolYellow = new(0.96f, 0.78f, 0.12f);
     private readonly List<int> _empty = new();
     private readonly Dictionary<int, Node3D> _emptyNodes = new();
     private readonly Dictionary<int, Node3D> _restocked = new();
@@ -58,6 +62,7 @@ public partial class RepositorJob : JobBase
     private void TakeBox()
     {
         _carrying = true;
+        _lightLoad = Rng.Randf() < 0.35f;
         // Caixa visível na frente da câmera.
         Camera3D cam = Player?.Camera;
         if (cam != null)
@@ -65,12 +70,13 @@ public partial class RepositorJob : JobBase
             _boxInHand = new MeshInstance3D
             {
                 Mesh = new BoxMesh { Size = new Vector3(0.45f, 0.3f, 0.35f) },
-                MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(0.62f, 0.45f, 0.26f) },
+                MaterialOverride = new StandardMaterial3D { AlbedoColor = _lightLoad ? SteelWoolYellow : new Color(0.62f, 0.45f, 0.26f) },
                 Position = new Vector3(0.25f, -0.35f, -0.6f),
             };
             cam.AddChild(_boxInHand);
         }
-        GameHud.Toast(this, "Leve a caixa até uma prateleira VAZIA (azul)", Blue, 3.0);
+        GameHud.Toast(this, _lightLoad ? "Fardo de palha de aço Brilhaço (Lã de Aço 1001): leve como pluma. Leve a uma prateleira VAZIA."
+            : "Leve a caixa até uma prateleira VAZIA (azul)", _lightLoad ? SteelWoolYellow : Blue, 3.0);
     }
 
     private void EmptySomeShelves()
@@ -125,14 +131,16 @@ public partial class RepositorJob : JobBase
         var row = new Node3D { Rotation = new Vector3(0f, rot, 0f) };
         AddChild(row);
         row.GlobalPosition = pos;
+        bool wool = _lightLoad;
         for (int k = 0; k < 7; k++)
         {
-            var mat = new StandardMaterial3D { AlbedoColor = Color.FromHsv(Rng.Randf(), 0.7f, 0.85f) };
-            float h = Rng.RandfRange(0.18f, 0.32f);
+            var mat = new StandardMaterial3D { AlbedoColor = wool ? (k % 2 == 0 ? SteelWoolYellow : new Color(0.85f, 0.15f, 0.1f)) : Color.FromHsv(Rng.Randf(), 0.7f, 0.85f) };
+            float h = wool ? 0.12f : Rng.RandfRange(0.18f, 0.32f);
             row.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(0.17f, h, 0.22f) }, MaterialOverride = mat, Position = new Vector3(-0.66f + k * 0.22f, h * 0.5f + 0.02f, 0f) });
         }
         _restocked[slot] = row;
-        M.Earn(1, "Prateleira reposta");
+        _lightLoad = false;
+        M.Earn(1, wool ? "Prateleira de palha de aço reposta" : "Prateleira reposta");
         if (_empty.Count == 0)
             _refill = 4.0;
         else if (_empty.Count < 2)

@@ -31,3 +31,5 @@ out/
 launcher/app/_test.gd.uid
 
 Notes/
+# Godot cria .uid ao ver scripts; em docs/ não há scripts de verdade (modelos são .cs.txt).
+docs/**/*.uid

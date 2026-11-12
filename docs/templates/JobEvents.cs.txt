@@ -1,0 +1,21 @@
+// Scripts/Jobs/JobEvents.cs  (modelo — ver docs/tech/01_ARQUITETURA_MODO_HISTORIA.md)
+// Ponte entre as profissões e quem quiser saber delas (Modo História, conquistas, estatísticas).
+// As profissões só disparam; não sabem quem escuta. Quem assina TEM que desassinar em _ExitTree().
+using System;
+
+namespace DeadFrequency;
+
+public static class JobEvents
+{
+    /// <summary>Uma tarefa foi paga. job = id de Professions (ex.: "taxista"), what = descrição, payment = valor.</summary>
+    public static event Action<string, string, int> TaskDone;
+
+    /// <summary>Uma caixa do turno quebrou (entregador).</summary>
+    public static event Action<string> CargoBroken;
+
+    // Chamado em ProfessionManager.Credited e no DeliveryManager (onde emite DeliveryCompleted).
+    public static void RaiseTaskDone(string job, string what, int payment) => TaskDone?.Invoke(job, what, payment);
+
+    // Chamado no DeliveryManager quando dispara JobCargoDestroyed.
+    public static void RaiseCargoBroken(string cargoName) => CargoBroken?.Invoke(cargoName);
+}

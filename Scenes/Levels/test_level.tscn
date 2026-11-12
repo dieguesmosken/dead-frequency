@@ -87,6 +87,14 @@ VendorName = "Eletrônicos da Dona Cida"
 CanopyColor = Color(0.15, 0.45, 0.7, 1)
 ShirtColor = Color(0.6, 0.2, 0.45, 1)
 
+[node name="VendorPrimo" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 0.15, 31.6)
+script = ExtResource("17_vendor")
+VendorName = "Conserta-Tudo do Primo"
+CanopyColor = Color(0.3, 0.38, 0.45, 1)
+ShirtColor = Color(0.25, 0.3, 0.55, 1)
+Stock = 5
+
 [node name="VendorChurrasco" type="Area3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 0.15, 31.6)
 script = ExtResource("17_vendor")

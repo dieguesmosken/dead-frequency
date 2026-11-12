@@ -1,5 +1,7 @@
 // Scripts/UI/MainMenu.cs
 // Tela de título. Montada em código (ver UiStyle); a cena main_menu.tscn só tem este nó.
+// v0.9.9: além do clássico, três visuais liberados por código (MenuStyles): Órbita, Cinema e Terminal
+// (MainMenu.Styles.cs). Os botões e painéis são os mesmos; só muda a disposição e o fundo.
 using Godot;
 
 namespace DeadFrequency;
@@ -13,7 +15,12 @@ public partial class MainMenu : Control
     public string MenuMusic { get; set; } = "res://Audio/Music/music_menu.wav";
 
     private Label _title;
-    private VBoxContainer _menu;
+    private BoxContainer _menu;
+    private Control _background;
+    private CenterContainer _center;
+    private VBoxContainer _stack;
+    private HBoxContainer _footer;
+    private MenuStyle _style;
     private OptionsPanel _options;
     private PanelContainer _optionsPanel;
     private PanelContainer _characterPanel;
@@ -45,17 +52,21 @@ public partial class MainMenu : Control
         Theme = UiStyle.Theme;
         SetAnchorsPreset(LayoutPreset.FullRect);
 
+        _style = (MenuStyle)Mathf.Clamp(GameSettings.Instance?.MenuStyle ?? 0, 0, MenuStyles.Names.Length - 1);
         var background = new ColorRect { Color = new Color(0.015f, 0.025f, 0.02f), MouseFilter = MouseFilterEnum.Ignore };
         background.SetAnchorsPreset(LayoutPreset.FullRect);
         AddChild(background);
+        _background = background;
 
         var center = new CenterContainer { MouseFilter = MouseFilterEnum.Ignore };
         center.SetAnchorsPreset(LayoutPreset.FullRect);
         AddChild(center);
+        _center = center;
 
         var stack = new VBoxContainer();
         stack.AddThemeConstantOverride("separation", 14);
         center.AddChild(stack);
+        _stack = stack;
 
         _title = UiStyle.MakeLabel("DEAD FREQUENCY", 72);
         stack.AddChild(_title);
@@ -66,7 +77,7 @@ public partial class MainMenu : Control
         _header.AddChild(UiStyle.MakeLabel("escolha sua profissão, sintonize a 96.6 e boa sorte", 16, color: UiStyle.PhosphorDim));
         _header.AddChild(new Control { CustomMinimumSize = new Vector2(0, 30) });
 
-        _menu = new VBoxContainer();
+        _menu = new BoxContainer { Vertical = true };
         _menu.AddThemeConstantOverride("separation", 12);
         stack.AddChild(_menu);
 
@@ -154,6 +165,7 @@ public partial class MainMenu : Control
             footerRow.AddChild(UiStyle.MakeLabel("·   " + save, 14, HorizontalAlignment.Left, UiStyle.PhosphorDim));
         AddChild(footerRow);
         footerRow.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomLeft, LayoutPresetMode.Minsize, 16);
+        _footer = footerRow;
 
         // Aviso de versão nova no GitHub (canto inferior direito).
         _updateBox = new HBoxContainer { Visible = false };
@@ -173,6 +185,7 @@ public partial class MainMenu : Control
             });
         }
 
+        ApplyStyle();
         AddChild(UiStyle.MakeScanlines());
 
         _startButton.GrabFocus();
@@ -210,6 +223,7 @@ public partial class MainMenu : Control
 
     public override void _Process(double delta)
     {
+        UpdateStyle(delta);
         // Falha de sinal ocasional no título.
         _glitchTimer -= delta;
         if (_glitchTimer > 0)
@@ -285,7 +299,7 @@ public partial class MainMenu : Control
     {
         _menu.Visible = false;
         _header.Visible = false;
-        _title.AddThemeFontSizeOverride("font_size", 40);
+        _title.AddThemeFontSizeOverride("font_size", Mathf.Min(40, TitleSize));
         _optionsPanel.Visible = true;
         _options.FocusFirst();
     }
@@ -294,7 +308,7 @@ public partial class MainMenu : Control
     {
         _menu.Visible = false;
         _header.Visible = false;
-        _title.AddThemeFontSizeOverride("font_size", 40);
+        _title.AddThemeFontSizeOverride("font_size", Mathf.Min(40, TitleSize));
         _characterPanel.Visible = true;
         _character.FocusFirst();
     }
@@ -304,7 +318,7 @@ public partial class MainMenu : Control
         _menu.Visible = false;
         // A tela do multiplayer é alta: some com o subtítulo e o título fica menor.
         _header.Visible = false;
-        _title.AddThemeFontSizeOverride("font_size", 40);
+        _title.AddThemeFontSizeOverride("font_size", Mathf.Min(40, TitleSize));
         _multiplayerPanel.Visible = true;
         _multiplayer.FocusFirst();
     }
@@ -318,8 +332,14 @@ public partial class MainMenu : Control
         _levelPanel.Visible = false;
         _profPanel.Visible = false;
         _header.Visible = true;
-        _title.AddThemeFontSizeOverride("font_size", 72);
+        _title.AddThemeFontSizeOverride("font_size", TitleSize);
         _menu.Visible = true;
+        // Mudou o menu inicial nas Opções (código): monta a tela de novo com o visual novo.
+        if ((GameSettings.Instance?.MenuStyle ?? 0) != (int)_style)
+        {
+            Callable.From(() => GetTree().ReloadCurrentScene()).CallDeferred();
+            return;
+        }
         _startButton.GrabFocus();
     }
 }

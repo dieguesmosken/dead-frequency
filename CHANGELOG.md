@@ -2,14 +2,27 @@
 
 Todas as atualizações do Dead Frequency. O jogo mostra a mesma lista em **Novidades** no menu.
 
+## v0.9.9 — Lojas de verdade  (12/11/2026)
+
+- Táxi amarelo da cooperativa Rádio Táxi Sintonia no pátio da central (com o adesivo do app 66): o taxista agora faz as corridas com ele, e o passageiro só embarca no táxi.
+- Van de viagem anos 80, a Fórdi Viajante, estacionada no pátio da central: é a van do futuro Modo História e já dá para dirigir.
+- Shopping Marconi com oito balcões, dois pisos e escada para subir a pé; as fachadas comerciais viraram lojas térreas do tamanho certo.
+- Central de entregas com portão novo do lado esquerdo e grade de metal em cima do muro; ninguém estaciona mais na frente dos portões.
+- Rádio 96.6 com muro e grade, e um portãozinho de pedestre na lateral.
+- Céu novo: nuvens, sol, lua com relevo e estrelas que acompanham o ciclo de dia e noite.
+- Online: táxi e van de viagem sincronizados. Atualize o servidor com npm run deploy.
+
 ## v0.9.8 — Rua de verdade  (10/11/2026)
 
-- Meio-fio branco nos trechos permitidos e amarelo nos cruzamentos e pontos proibidos; carros gerados só estacionam junto às marcações brancas.
-- Placas de proibido estacionar nos trechos amarelos, com identificação de POLÍCIA e BOMBEIROS nas respectivas áreas.
+- Meio-fio de concreto cinza com faixas brancas intercaladas e tinta gasta pelo tempo; amarelo nos cruzamentos e trechos proibidos, com a linha amarela oficial no asfalto junto à sarjeta (como manda a Resolução CONTRAN 973/2022). Carros gerados só estacionam onde é permitido.
+- Placas de proibido estacionar finas e chapadas nos trechos amarelos, de frente para quem vem pela rua, com POLÍCIA e BOMBEIROS nas respectivas áreas; pontos de ônibus com a placa azul de ÔNIBUS.
 - Céu procedural com nuvens em movimento, estrelas e transição de cores sincronizada ao ciclo de dia e noite.
 - Bocas de lobo com grades, tampas de bueiro nas ruas e som de água corrente audível nas proximidades.
 - Ciclovias pintadas e ciclista que percorre a cidade sincronizado pelo relógio; ele toca o sino quando há alguém à frente.
 - Delegacia identificada na fachada e no minimapa, com policiais figurantes fardados.
+- Roda do mouse alterna entre a câmera em primeira e em terceira pessoa; Ctrl + roda ajusta o campo de visão.
+- Online: salas separadas por versão do protocolo (7 e 8), com aviso claro quando a sua versão não bate com a da sala. Atualize o servidor com npm run deploy.
+- Correções: a caixa na mão de outro jogador não aparece mais duplicada, o boneco sentado reconhece mais animações e a placa de proibido estacionar da concessionária saiu da frente da saída dos carros.
 
 ## v0.9.7 — Mãos ocupadas  (10/11/2026)
 

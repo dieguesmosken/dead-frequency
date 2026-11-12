@@ -12,6 +12,13 @@ public partial class StreetVendor : Area3D, IInteractable
     [Export] public Color ShirtColor { get; set; } = new(0.55f, 0.35f, 0.15f);
     /// <summary>Churrasquinho do Duvidoso (v0.9.5): chapa com fumaça depois das 18h, gente em volta e só comida.</summary>
     [Export] public bool Churrasco { get; set; }
+    /// <summary>O que a barraca vende (v0.9.9). O Churrasco acima continua valendo para o churrasquinho.</summary>
+    [Export] public ShopStock Stock { get; set; } = ShopStock.Ze;
+
+    /// <summary>Barracas na fase (o gari procura o Conserta-Tudo do Primo para vender sucata).</summary>
+    public static readonly System.Collections.Generic.List<StreetVendor> All = new();
+    public override void _EnterTree() => All.Add(this);
+    public override void _ExitTree() => All.Remove(this);
 
     private CpuParticles3D _smoke;
     private AudioStreamPlayer3D _sizzle;
@@ -45,6 +52,31 @@ public partial class StreetVendor : Area3D, IInteractable
         parent.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = size }, Position = pos, MaterialOverride = mat });
     }
 
+    /// <summary>Conserta-Tudo do Primo: pilha de pneus, TV velha e ferro-velho do lado da barraca.</summary>
+    private void BuildScrapPile(StandardMaterial3D metal)
+    {
+        var rubber = Mat(new Color(0.06f, 0.06f, 0.06f));
+        var rust = Mat(new Color(0.45f, 0.24f, 0.12f), 0.8f);
+        var tvCase = Mat(new Color(0.3f, 0.26f, 0.22f), 0.6f);
+        for (int i = 0; i < 3; i++)
+            AddChild(new MeshInstance3D { Mesh = new TorusMesh { InnerRadius = 0.2f, OuterRadius = 0.36f, Rings = 10, RingSegments = 6 }, MaterialOverride = rubber, Position = new Vector3(1.9f, 0.08f + i * 0.17f, 0.2f) });
+        Box(this, new Vector3(-1.85f, 0.25f, 0.25f), new Vector3(0.55f, 0.45f, 0.45f), tvCase);
+        Box(this, new Vector3(-1.85f, 0.27f, 0.025f), new Vector3(0.42f, 0.32f, 0.01f), Mat(new Color(0.12f, 0.14f, 0.13f), 0.2f));
+        var pipe = new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.05f, BottomRadius = 0.05f, Height = 1.4f }, MaterialOverride = rust, Position = new Vector3(1.6f, 0.06f, 0.75f), Rotation = new Vector3(0f, 0.4f, Mathf.Pi * 0.5f) };
+        AddChild(pipe);
+        Box(this, new Vector3(-1.6f, 0.12f, 0.85f), new Vector3(0.6f, 0.24f, 0.4f), metal);
+        AddChild(new Label3D
+        {
+            Text = "COMPRO SUCATA",
+            FontSize = 40,
+            PixelSize = 0.004f,
+            Modulate = new Color(1f, 0.85f, 0.2f),
+            OutlineSize = 6,
+            Position = new Vector3(1.9f, 0.75f, 0.2f),
+            Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+        });
+    }
+
     private void BuildStall()
     {
         var wood = Mat(new Color(0.42f, 0.28f, 0.16f));
@@ -62,7 +94,11 @@ public partial class StreetVendor : Area3D, IInteractable
         Box(this, new Vector3(0f, 0.92f, 0f), new Vector3(2.5f, 0.05f, 0.9f), white);
         string[] goods = Churrasco
             ? new[] { ItemCatalog.Guarana, ItemCatalog.Coffee, ItemCatalog.Marmitex, ItemCatalog.Guarana, ItemCatalog.Marmitex }
+            : Stock == ShopStock.ConsertaTudo
+            ? new[] { ItemCatalog.StrongFlashlight, ItemCatalog.RepairKit, ItemCatalog.DuctTape, ItemCatalog.Nail, ItemCatalog.StrongFlashlight }
             : new[] { ItemCatalog.Radar, ItemCatalog.NightVision, ItemCatalog.Gloves, ItemCatalog.EnergyDrink, ItemCatalog.RepairKit };
+        if (Stock == ShopStock.ConsertaTudo)
+            BuildScrapPile(metal);
         for (int i = 0; i < goods.Length; i++)
         {
             ItemDef def = ItemCatalog.Get(goods[i]);
@@ -232,5 +268,5 @@ public partial class StreetVendor : Area3D, IInteractable
 
     public bool CanInteract(PlayerController player) => ShopScreen.Instance != null && !player.IsHolding;
 
-    public void Interact(PlayerController player) => ShopScreen.Instance?.OpenFor(VendorName, Churrasco ? ShopStock.Churrasco : ShopStock.Ze);
+    public void Interact(PlayerController player) => ShopScreen.Instance?.OpenFor(VendorName, Churrasco ? ShopStock.Churrasco : Stock);
 }

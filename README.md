@@ -103,8 +103,18 @@ O servidor também tem estatísticas públicas (só números somados) em `/api/s
 ## Site
 
 O site fica em [`site/`](site/) e é publicado pelo GitHub Actions no GitHub Pages a cada push.
-`python3 site/build.py` gera `site/data/site.json` com o changelog do `GameVersion.cs` e as fotos de
+A central [Atualizações](https://www.teuzin.com.br/dead-frequency/updates.html) lê os GitHub Releases:
+versões estáveis da `main`, pré-releases da `Internal`, notas, downloads e commits do comparativo entre tags.
+A aba Próximas novidades carrega o `ROADMAP.md`. Para ocultar um Release do site, inclua
+`SITE_VISIBILITY: PRIVATE` no corpo da publicação (GitHub Release); isso só oculta no site — o Release
+continua público no GitHub se estiver publicado em um repositório público.
+`python3 site/build.py` continua gerando `site/data/site.json` com o changelog do `GameVersion.cs` e as fotos de
 `site/assets/shots/vX.Y.Z/` (legendas em `captions.json`). O texto dos releases sai de `site/release_notes.py`.
+
+## Contribuindo
+
+Fluxo de branches, padrão de commits, pull requests e como lançar versão: [CONTRIBUTING.md](CONTRIBUTING.md).
+Achou uma falha de segurança? Veja o [SECURITY.md](SECURITY.md).
 
 ## Apoie
 
@@ -117,7 +127,7 @@ O código do Dead Frequency (jogo, launcher, servidor, site e os scripts que ger
 é software livre sob a **[GNU GPL v3.0](LICENSE)**: você pode usar, estudar, modificar e redistribuir, desde que
 qualquer versão distribuída continue com o código aberto e sob a mesma licença.
 
-- Os modelos 3D de terceiros em `Assets/Kenney`, `Assets/KayKit` e `Assets/Quaternius` são **CC0** (domínio público),
+- Os modelos 3D de terceiros em `Assets/Kenney`, `Assets/KayKit`, `Assets/Quaternius` e `Assets/GGBot` são **CC0** (domínio público),
   cada pasta com o seu `LICENSE.txt`. O Godot Engine é MIT.
 - A GPL cobre o código, não o nome: "Dead Frequency" e a identidade visual do projeto são de Matheus (teuzin0dev).
   Versões modificadas devem usar outro nome para não confundir os jogadores.
@@ -129,6 +139,7 @@ qualquer versão distribuída continue com o código aberto e sob a mesma licen�
 - [Kenney](https://kenney.nl): Starter Kit Racing (CC0).
 - [KayKit](https://kaylousberg.com), de Kay Lousberg: City Builder, Furniture, Halloween e Restaurant Bits (CC0).
 - [Quaternius](https://quaternius.com): personagens animados, animais, prédios da fazenda, natureza e viaturas (CC0).
+- [GGBot](https://ggbot.itch.io/psx-style-cars): táxi do pacote PSX Style Cars (CC0).
 - Músicas, efeitos, letreiros e anúncios: gerados por código (`Audio/*.py.txt`, `Assets/Textures/Stores/*.py.txt`).
 - Rádio 96.6: cinco músicas originais de bandas fictícias, geradas por `Audio/synth_radio.py.txt` (livres de direitos autorais).
 - Siga [twitch.tv/teuzin0dev](https://twitch.tv/teuzin0dev) · [github.com/dieguesmosken](https://github.com/dieguesmosken) · [recadin.com.br](https://recadin.com.br)
