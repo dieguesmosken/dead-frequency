@@ -103,12 +103,26 @@ Ideias para depois (pesquisa de 12/11 sobre as regras do CTB):
 | **Conserta-Tudo do Primo** | O gari junta sucata nas calçadas e vende aqui, ou troca por melhorias (lanterna de longo alcance, pilhas para a visão noturna). |
 | **Lã de Aço 1001 Utilidades** | Carga leve do repositor; no apartamento, melhora a imagem chiada da TV. |
 
-### v0.10 — Carreira
+### v0.10 — Dead Frequency no celular (Android)
+Planejado em 12/11/2026 (antes a v0.10 era a Carreira, que passou para a v0.11). Objetivo: jogar e testar no
+celular, nos dois aparelhos do Matheus e em outros. Depende da otimização para PC fraco (`hotfix/pc-fraco`,
+streaming por chunks) estar na Internal.
+
+| Ideia | Como funciona no jogo |
+|---|---|
+| **Exportar para Android** | Preset Android no `export_presets.cfg` (C#/.NET, arm64), APK de teste gerado pelo CI junto com o prerelease da Internal. A chave de assinatura de release fica com o Matheus (segredo no GitHub, nunca no repositório). |
+| **Controles de toque** | Joystick virtual à esquerda (andar e dirigir), arrastar à direita (câmera) e botões grandes para E (interagir), pular/freio, R (rádio), N (visão noturna) e inventário. Só aparecem em tela de toque; controle Bluetooth também funciona. |
+| **Modo gráfico leve** | Renderizador Compatibility/Mobile, resolução interna baixa (combina com o visual PS1 de 320x240/640x480), sombras desligadas, neblina mais perto e menos luzes acesas. Meta: 30 fps estáveis. |
+| **Menus e HUD para tela pequena** | Botões e fontes maiores, menu e pausa por toque, respeito ao entalhe da câmera (safe area) e opção de tamanho dos controles. |
+| **Online entre PC e celular** | Mesmo servidor e protocolo (WebSocket): sem mudança no `server/`. Testar sala com PC e celular juntos. |
+| **Distribuição** | No Android não tem launcher: o site ganha o link do APK de cada versão. Play Store fica para depois. |
+
+### v0.11 — Carreira
 | Ideia | Como funciona no jogo |
 |---|---|
 | **Níveis de profissão** | Cada tarefa dá experiência na profissão. A cada nível: bônus em dinheiro por tarefa e itens de presente (ex.: luvas no nível 3 de entregador, café grátis para o taxista da madrugada). Salvo no save e conferido pelo servidor no online. |
 
-### v0.10.x — Trânsito de verdade
+### v0.11.x — Trânsito de verdade
 | Ideia | Como funciona no jogo |
 |---|---|
 | **Trânsito procedural** | Carros andando pelas ruas, parando no semáforo e no PARE. |
@@ -181,7 +195,7 @@ Cada profissão nova = um `JobBase` em `Scripts/Jobs/` + a regra em `PROFESSIONS
 
 As fases abaixo são propostas de planejamento; a ordem pode mudar conforme testes, dependências e escopo das builds.
 
-### v0.11 — Bairros e infraestrutura urbana
+### v0.12 — Bairros e infraestrutura urbana
 - **Área residencial simplificada:** bairro de casas térreas, sem prédios altos, inspirado em conjuntos habitacionais como CDHU ou em um condomínio simples. Avaliar como uma área separada/mapa para manter a cidade principal mais leve.
 - **Praça e parque:** área de convivência com bancos, árvores, iluminação e eventos comunitários.
 - **Playground:** parquinho próximo ao bairro residencial.
@@ -195,13 +209,13 @@ As fases abaixo são propostas de planejamento; a ordem pode mudar conforme test
 - **Infraestrutura de internet:** cabos ADSL antigos abandonados e fibra óptica chegando às casas.
 - **Antenas e parabólicas:** modelos de 60 cm convencionais; antenas clandestinas de TV a cabo ("gato Net") com identidade visual fictícia; marcas fictícias inspiradas em operadoras populares (Céu, Escuro, Antena da Tchau e Antena da Morto); parabólica amarela Centauro de 150 cm; modelos rurais de tela/grade Centauro de 200 e 340 cm.
 
-### v0.12 — Zona rural, água e pesca
+### v0.13 — Zona rural, água e pesca
 - **Rios e lagos rurais:** corpos d'água distribuídos pelo mapa rural, com margens e vegetação próprias.
 - **Pontos de pesca:** locais acessíveis nas margens, com áreas apropriadas para pescar.
 - **Sistema de pesca:** varas, iscas, espera/ fisgada e diferentes espécies de peixes, com raridades e valores distintos.
 - **Agricultura:** plantações e áreas cultivadas, ampliando as atividades do sítio e as entregas rurais.
 
-### v0.13 — Comércio, indústria e energia
+### v0.14 — Comércio, indústria e energia
 - **Rodoviária/terminal de ônibus:** terminal como origem e ponto de organização das linhas intermunicipais/urbanas.
 - **Restaurantes:** estabelecimentos com identidade própria, salão, balcão e refeições.
 - **Área industrial:** galpões, pátios de carga e circulação de veículos de serviço.
