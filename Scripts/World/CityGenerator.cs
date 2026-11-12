@@ -96,6 +96,7 @@ public partial class CityGenerator : Node3D
     private WorldChunkCoordinate? _activeChunkCoordinate;
     private readonly Dictionary<WorldChunkCoordinate, Node3D> _chunkRoots = new();
     private readonly Dictionary<WorldChunkCoordinate, Node3D> _chunkLightRoots = new();
+    private readonly Dictionary<WorldChunkCoordinate, List<Vector3>> _chunkObstaclePositions = new();
     private readonly Dictionary<WorldChunkCoordinate, int> _pinnedChunkCounts = new();
     private WorldChunkManager _chunkManager;
 
@@ -259,19 +260,23 @@ public partial class CityGenerator : Node3D
                 lights.QueueFree();
         }
 
-        // Remove referências mantidas fora da árvore junto com os visuais do chunk.
-        SidewalkObstacles.RemoveAll(position => WorldData.GetChunkCoordinate(position) == coordinate);
-        _noParking.RemoveAll(entry => entry.owner == coordinate);
-        for (int i = _parkedCars.Count - 1; i >= 0; i--)
+        // Remove referências auxiliares pela propriedade do chunk, não pela posição do objeto:
+        // sinais e obstáculos podem ficar sobre a divisa entre dois chunks.
+        if (_chunkObstaclePositions.Remove(coordinate, out List<Vector3> obstacles))
         {
-            Node3D car = _parkedCars[i];
-            if (!GodotObject.IsInstanceValid(car))
-            {
-                _parkedCars.RemoveAt(i);
-                continue;
-            }
-            if (WorldData.GetChunkCoordinate(car.GlobalPosition) == coordinate)
-                _parkedCars.RemoveAt(i);
+            foreach (Vector3 position in obstacles)
+                SidewalkObstacles.Remove(position);
+        }
+        _noParking.RemoveAll(entry => entry.owner == coordinate);
+        if (_chunkRoots.TryGetValue(coordinate, out Node3D currentRoot) &&
+            GodotObject.IsInstanceValid(currentRoot))
+        {
+            _parkedCars.RemoveAll(car =>
+                !GodotObject.IsInstanceValid(car) || car.GetParent() == currentRoot);
+        }
+        else
+        {
+            _parkedCars.RemoveAll(car => !GodotObject.IsInstanceValid(car));
         }
     }
 
