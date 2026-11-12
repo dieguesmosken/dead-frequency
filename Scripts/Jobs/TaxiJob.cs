@@ -256,11 +256,8 @@ public partial class TaxiJob : JobBase
             tw.TweenCallback(Callable.From(() =>
             {
                 p.QueueFree();
-                if (releaseDestinationPin)
-                {
+                if (releaseDestinationPin && _pendingPassengerPins.Remove(destinationPin))
                     City?.UnpinChunkForPosition(destinationPin);
-                    _pendingPassengerPins.Remove(destinationPin);
-                }
             }));
             if (releaseDestinationPin)
                 _pendingPassengerPins.Add(destinationPin);
