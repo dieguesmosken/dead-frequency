@@ -16,6 +16,9 @@ public static class WorldDataGenerator
     private const ulong FnvOffset = 14695981039346656037UL;
     private const ulong FnvPrime = 1099511628211UL;
     private const uint DeliveryPointStream = 0x444C5652;
+    private const uint BlockTypeStream = 0x424C4B54;
+    private const uint BlockVisualStream = 0x56495355;
+    private const uint BlockDecorationStream = 0x4445434F;
     private static readonly string[] StreetNamesX =
         { "Rua das Antenas", "Rua Estática", "Rua do Chiado", "Rua Ruído Branco", "Rua da Interferência", "Rua Onda Curta", "Rua do Sintonizador", "Rua Válvula", "Rua do Eco" };
     private static readonly string[] StreetNamesZ =
@@ -31,6 +34,15 @@ public static class WorldDataGenerator
         float curbHeight,
         Vector2I marketBlock,
         Vector2I radioStationBlock,
+        Vector2I fireStationBlock,
+        Vector2I policeStationBlock,
+        Vector2I shoppingMallBlock,
+        Vector2I apartmentBlock,
+        Vector2I dealerBlock,
+        Vector2I waterTowerBlock,
+        Vector2I carWashBlock,
+        float parkChance,
+        float parkingLotChance,
         IReadOnlyList<(Vector2I Block, string Id)> gasStations,
         bool prepareLogicalDeliveryPoints,
         Action<WorldGenerationProgress> progress = null)
@@ -38,6 +50,7 @@ public static class WorldDataGenerator
         float chunkSize = biome == WorldBiome.City ? blockSize + roadWidth : FarmChunkSize;
         bool centeredGrid = biome == WorldBiome.City;
         var chunks = new List<WorldChunkData>();
+        var blocks = new List<WorldBlockData>();
         var deliveryPoints = new List<WorldDeliveryPointData>();
         var spawnPoints = new Dictionary<string, WorldSpawnPoint>(StringComparer.Ordinal);
 
@@ -63,6 +76,11 @@ public static class WorldDataGenerator
                 }
             }
 
+            BuildCityBlockPlans(
+                seed, cityRadius, parkChance, parkingLotChance, blocks,
+                fireStationBlock, policeStationBlock, radioStationBlock, marketBlock,
+                shoppingMallBlock, apartmentBlock, dealerBlock, waterTowerBlock, carWashBlock,
+                gasStations, progress);
             if (prepareLogicalDeliveryPoints)
                 BuildCityDeliveryPoints(seed, cityRadius, blockSize, chunkSize, curbHeight, deliveryPoints, progress);
             BuildCitySpawnPoints(
@@ -99,7 +117,105 @@ public static class WorldDataGenerator
 
         progress?.Invoke(new WorldGenerationProgress("Preparando pontos de início", 1, 1));
         return new WorldGenerationData(
-            seed, CurrentGeneratorVersion, biome, chunkSize, centeredGrid, chunks, deliveryPoints, spawnPoints);
+            seed, CurrentGeneratorVersion, biome, chunkSize, centeredGrid, chunks, blocks, deliveryPoints, spawnPoints);
+    }
+
+    private static void BuildCityBlockPlans(
+        int worldSeed,
+        int radius,
+        float parkChance,
+        float parkingLotChance,
+        List<WorldBlockData> destination,
+        Vector2I fireStationBlock,
+        Vector2I policeStationBlock,
+        Vector2I radioStationBlock,
+        Vector2I marketBlock,
+        Vector2I shoppingMallBlock,
+        Vector2I apartmentBlock,
+        Vector2I dealerBlock,
+        Vector2I waterTowerBlock,
+        Vector2I carWashBlock,
+        IReadOnlyList<(Vector2I Block, string Id)> gasStations,
+        Action<WorldGenerationProgress> progress)
+    {
+        int width = radius * 2 + 1;
+        int total = width * width;
+        int completed = 0;
+
+        // A classificação segue a prioridade original de CityGenerator.BuildBlock/TryBuildServiceBlock.
+        for (int bx = -radius; bx <= radius; bx++)
+        {
+            for (int bz = -radius; bz <= radius; bz++)
+            {
+                var coordinate = new WorldChunkCoordinate(bx, bz);
+                var block = new Vector2I(bx, bz);
+                WorldBlockKind kind;
+
+                if (bx == 0 && bz == 0)
+                    kind = WorldBlockKind.Depot;
+                else if (block == fireStationBlock)
+                    kind = WorldBlockKind.FireStation;
+                else if (block == policeStationBlock)
+                    kind = WorldBlockKind.PoliceStation;
+                else if (block == radioStationBlock)
+                    kind = WorldBlockKind.RadioStation;
+                else if (block == marketBlock)
+                    kind = WorldBlockKind.Supermarket;
+                else if (block == shoppingMallBlock)
+                    kind = WorldBlockKind.ShoppingMall;
+                else if (block == apartmentBlock)
+                    kind = WorldBlockKind.ApartmentBuilding;
+                else if (block == dealerBlock)
+                    kind = WorldBlockKind.VehicleDealer;
+                else if (block == waterTowerBlock)
+                    kind = WorldBlockKind.WaterTower;
+                else if (TryGetGasStation(gasStations, block, out _))
+                    kind = block == carWashBlock ? WorldBlockKind.CarWash : WorldBlockKind.GasStation;
+                else
+                {
+                    var typeRng = new RandomNumberGenerator
+                    {
+                        Seed = DeriveChunkSeed(worldSeed, coordinate, BlockTypeStream),
+                    };
+                    float roll = typeRng.Randf();
+                    kind = roll < parkChance
+                        ? WorldBlockKind.Park
+                        : roll < parkChance + parkingLotChance
+                            ? WorldBlockKind.ParkingLot
+                            : WorldBlockKind.Buildings;
+                }
+
+                destination.Add(new WorldBlockData(
+                    coordinate,
+                    kind,
+                    DeriveChunkSeed(worldSeed, coordinate, BlockVisualStream),
+                    DeriveChunkSeed(worldSeed, coordinate, BlockDecorationStream)));
+
+                completed++;
+                progress?.Invoke(new WorldGenerationProgress("Distribuindo tipos de quarteirão", completed, total));
+            }
+        }
+    }
+
+    private static bool TryGetGasStation(
+        IReadOnlyList<(Vector2I Block, string Id)> gasStations,
+        Vector2I block,
+        out string id)
+    {
+        if (gasStations != null)
+        {
+            foreach ((Vector2I stationBlock, string stationId) in gasStations)
+            {
+                if (stationBlock == block)
+                {
+                    id = stationId;
+                    return true;
+                }
+            }
+        }
+
+        id = null;
+        return false;
     }
 
     private static void BuildCityDeliveryPoints(
