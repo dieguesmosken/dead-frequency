@@ -112,6 +112,11 @@ public partial class CityGenerator
             BuildSupermarket(block, center);
             return true;
         }
+        if (bx == ShoppingMallBlock.X && bz == ShoppingMallBlock.Y)
+        {
+            BuildShoppingMall(block, center);
+            return true;
+        }
         if (bx == ApartmentBlock.X && bz == ApartmentBlock.Y)
         {
             BuildApartmentBuilding(block, center);

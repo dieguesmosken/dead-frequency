@@ -157,19 +157,20 @@ public partial class CityGenerator
 
     // ================================================================ prédios comuns
 
-    private void DecorateBuilding(Node3D parent, Vector3 baseCenter, float width, float depth, float height, Vector3 blockCenter)
+    private Vector3 GetBuildingFront(Vector3 baseCenter, Vector3 blockCenter)
     {
         // Fachada principal = lado do lote mais perto da rua.
         Vector3 toLot = baseCenter - blockCenter;
-        Vector3 front;
         if (Mathf.Abs(toLot.X) < 0.5f && Mathf.Abs(toLot.Z) < 0.5f)
-            front = _decoRng.Randf() < 0.5f ? Vector3.Back : Vector3.Right; // lote único: qualquer lado
-        else if (Mathf.Abs(toLot.X) > Mathf.Abs(toLot.Z))
-            front = new Vector3(Mathf.Sign(toLot.X), 0f, 0f);
-        else
-            front = new Vector3(0f, 0f, Mathf.Sign(toLot.Z));
+            return _decoRng.Randf() < 0.5f ? Vector3.Back : Vector3.Right; // lote único: qualquer lado
+        if (Mathf.Abs(toLot.X) > Mathf.Abs(toLot.Z))
+            return new Vector3(Mathf.Sign(toLot.X), 0f, 0f);
+        return new Vector3(0f, 0f, Mathf.Sign(toLot.Z));
+    }
 
-        if (_decoRng.Randf() < StorefrontChance)
+    private void DecorateBuilding(Node3D parent, Vector3 baseCenter, float width, float depth, float height, Vector3 blockCenter, Vector3 front, bool hasStorefront)
+    {
+        if (hasStorefront)
             BuildStorefront(parent, baseCenter, width, depth, front, blockCenter);
 
         if (_decoRng.Randf() < WallAcChance && height > 6f)

@@ -93,8 +93,8 @@ Ideias para depois (pesquisa de 12/11 sobre as regras do CTB):
 ### v0.9.9 — Lojas de verdade
 | Ideia | Como funciona no jogo |
 |---|---|
-| **Prédios do tamanho da loja** | Mercados, lojas e postos deixam de ser "térreo de prédio": cada um ganha o próprio prédio, com o tamanho da loja. |
-| **Shopping** | Shopping com várias lojas, dois andares e escada (a primeira construção com andar de cima andável). |
+| ✅ **Prédios do tamanho da loja** | Fachadas comerciais aleatórias agora são lojas térreas independentes; o Atacadinho e os postos já ocupam quarteirões próprios. |
+| ✅ **Shopping** | Shopping Marconi com oito balcões interativos, dois pisos e escada com rampa física walkable. |
 | **Táxi amarelo** | O taxista ganha o próprio carro: táxi amarelo com placa luminosa "TÁXI" no teto e o nome de uma cooperativa fictícia. |
 | **Agro-Tudão (casa de rações)** | Na estrada de terra entre a cidade e o sítio: entregas de sacos de ração para os cercados. |
 | **Conserta-Tudo do Primo** | O gari junta sucata nas calçadas e vende aqui, ou troca por melhorias (lanterna de longo alcance, pilhas para a visão noturna). |
