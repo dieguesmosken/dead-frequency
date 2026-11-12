@@ -1023,6 +1023,33 @@ public partial class CityGenerator
         var cap = Flat(new Color(0.38f, 0.36f, 0.33f), 0.95f);
         var mountainMat = Flat(new Color(0.22f, 0.33f, 0.17f), 1f);
         var cone = new CylinderMesh { TopRadius = 0.05f, BottomRadius = 0.5f, Height = 1f, RadialSegments = 7, Rings = 2 };
+
+        if (_useLogicalWorldData && WorldData != null)
+        {
+            foreach (WorldFarmBoundaryPlan plan in WorldData.FarmBoundary)
+            {
+                switch (plan.Kind)
+                {
+                    case "wall":
+                        AddInstance("muro", _unitBox, stone,
+                            new Transform3D(Basis.FromScale(plan.Scale), plan.Position), plan.Tint);
+                        break;
+                    case "pillar":
+                        AddInstance("muro_pilar", _unitBox, cap,
+                            new Transform3D(Basis.FromScale(plan.Scale), plan.Position), Colors.White);
+                        break;
+                    case "mountain":
+                        AddInstance("serra", cone, mountainMat,
+                            new Transform3D(
+                                new Basis(Vector3.Up, plan.RotationY) * Basis.FromScale(plan.Scale),
+                                plan.Position),
+                            plan.Tint);
+                        break;
+                }
+            }
+            return;
+        }
+
         float wallX = limit - 0.6f;
         foreach ((Vector3 dir, Vector3 along) in new[] { (Vector3.Right, Vector3.Back), (Vector3.Left, Vector3.Back), (Vector3.Back, Vector3.Right), (Vector3.Forward, Vector3.Right) })
         {
