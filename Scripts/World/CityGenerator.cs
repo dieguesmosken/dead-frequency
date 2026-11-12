@@ -42,6 +42,7 @@ public partial class CityGenerator : Node3D
     public WorldGenerationData WorldData { get; private set; }
     public int ChunkPinVersion { get; private set; }
     public bool UsesChunkStreaming => _useLogicalBlockPlans && Biome == WorldBiome.City;
+    public int StoreBrandCount => _brands.Count;
     public event Action<WorldGenerationProgress> WorldDataProgress;
     public event Action<WorldChunkCoordinate> ChunkVisualized;
     public event Action<WorldChunkCoordinate> ChunkUnloaded;
@@ -378,7 +379,7 @@ public partial class CityGenerator : Node3D
         if (Biome == WorldBiome.City)
         {
             logicalOffsets["Indexando chunks da cidade"] = 0;
-            logicalOffsets["Distribuindo tipos de quarteirão"] = logicalChunkCount;
+            logicalOffsets["Planejando quarteirões e prédios"] = logicalChunkCount;
             logicalOffsets["Calculando locais de serviço"] = logicalChunkCount + logicalBlockCount;
             logicalOffsets["Calculando endereços e entregas"] =
                 logicalChunkCount + logicalBlockCount + logicalServiceCount;
@@ -401,10 +402,10 @@ public partial class CityGenerator : Node3D
 
         // Esta etapa não cria Nodes nem geometria; os dados ficam prontos antes dos sistemas de missão.
         WorldData = WorldDataGenerator.Generate(
-            Seed, Biome, Radius, BlockSize, RoadWidth, FarmExtent, CurbHeight,
+            Seed, Biome, Radius, BlockSize, SidewalkWidth, RoadWidth, FarmExtent, CurbHeight,
             MarketBlock, RadioStationBlock, FireStationBlock, PoliceStationBlock,
             ShoppingMallBlock, ApartmentBlock, DealerBlock, WaterTowerBlock, CarWashBlock,
-            ParkChance, ParkingLotChance, GasStations, _useLogicalWorldData,
+            ParkChance, ParkingLotChance, GasStations, StoreBrandCount, StorefrontChance, _useLogicalWorldData,
             progress =>
             {
                 WorldDataProgress?.Invoke(progress);
