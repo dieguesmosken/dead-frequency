@@ -109,6 +109,12 @@ public partial class CityGenerator : Node3D
     private readonly Dictionary<WorldChunkCoordinate, int> _pinnedChunkCounts = new();
     private WorldChunkManager _chunkManager;
 
+    private sealed class ChunkBuildRandomState
+    {
+        public RandomNumberGenerator Visual;
+        public RandomNumberGenerator Decoration;
+    }
+
     private Node3D ActiveLightsRoot
     {
         get
@@ -240,6 +246,171 @@ public partial class CityGenerator : Node3D
             _rng = previousRng;
             _decoRng = previousDecoRng;
         }
+    }
+
+
+    /// <summary>
+    /// Constrói um chunk de cidade em etapas distribuídas entre frames.
+    /// O gerador síncrono continua disponível para a região inicial, durante a tela de loading.
+    /// </summary>
+    public async Task<bool> BuildChunkVisualsAsync(WorldChunkData chunk)
+    {
+        if (!_useLogicalBlockPlans || WorldData == null || IsChunkVisualized(chunk.Coordinate))
+            return false;
+
+        if (Biome == WorldBiome.Farm)
+            return BuildFarmChunkVisuals(chunk);
+        if (Biome != WorldBiome.City)
+            return false;
+
+        var root = new Node3D { Name = $"Chunk_{chunk.Coordinate.X}_{chunk.Coordinate.Z}" };
+        _staticRoot.AddChild(root);
+        _chunkRoots[chunk.Coordinate] = root;
+
+        if (!WorldData.TryGetBlock(chunk.Coordinate, out WorldBlockData plan))
+        {
+            root.QueueFree();
+            _chunkRoots.Remove(chunk.Coordinate);
+            return false;
+        }
+
+        var chunkRandom = new ChunkBuildRandomState
+        {
+            Visual = new RandomNumberGenerator { Seed = plan.VisualSeed },
+            Decoration = new RandomNumberGenerator { Seed = plan.DecorationSeed },
+        };
+
+        try
+        {
+            if (plan.Kind == WorldBlockKind.Buildings)
+            {
+                // A base e o ponto lógico são leves; cada prédio é criado em seu próprio frame.
+                await RunChunkVisualStepAsync(
+                    chunk.Coordinate, root, chunkRandom,
+                    () =>
+                    {
+                        int bx = chunk.Coordinate.X;
+                        int bz = chunk.Coordinate.Z;
+                        Vector3 center = BlockCenter(bx, bz);
+                        var block = new Node3D { Name = $"Block_{bx}_{bz}" };
+                        root.AddChild(block);
+                        AddBox(
+                            block,
+                            center + new Vector3(0f, CurbHeight * 0.5f, 0f),
+                            new Vector3(BlockSize, CurbHeight, BlockSize),
+                            _sidewalkMaterial);
+                        RegisterDeliveryPoint(bx, bz);
+                    });
+
+                foreach (WorldBuildingPlan building in plan.Buildings)
+                {
+                    var buildingRandom = new ChunkBuildRandomState
+                    {
+                        Visual = new RandomNumberGenerator { Seed = building.VisualSeed },
+                        Decoration = new RandomNumberGenerator { Seed = building.DecorationSeed },
+                    };
+                    await RunChunkVisualStepAsync(
+                        chunk.Coordinate, root, buildingRandom,
+                        () =>
+                        {
+                            Vector3 center = BlockCenter(chunk.Coordinate.X, chunk.Coordinate.Z);
+                            Node block = root.GetNodeOrNull($"Block_{chunk.Coordinate.X}_{chunk.Coordinate.Z}");
+                            if (block == null)
+                                return;
+
+                            BuildBuilding(
+                                block,
+                                building.BaseCenter,
+                                building.Width,
+                                building.Depth,
+                                building.Height,
+                                building.HasStorefront);
+                            DecorateBuilding(
+                                block,
+                                building.BaseCenter,
+                                building.Width,
+                                building.Depth,
+                                building.Height,
+                                center,
+                                building.Front,
+                                building.HasStorefront,
+                                building.StoreBrandIndex);
+                        });
+                }
+            }
+            else
+            {
+                await RunChunkVisualStepAsync(
+                    chunk.Coordinate, root, chunkRandom,
+                    () =>
+                    {
+                        if (plan.Kind == WorldBlockKind.Depot)
+                            BuildDepot(parent: root);
+                        else
+                            BuildBlockCore(chunk.Coordinate.X, chunk.Coordinate.Z, plan.Kind, plan);
+                    });
+            }
+
+            int x = chunk.Coordinate.X;
+            int z = chunk.Coordinate.Z;
+            await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildStreetLampForBlock(x, z));
+            await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildBikeLanesForBlock(x, z));
+            await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildStreetDrainageForBlock(x, z));
+            await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildParkedCarsForBlock(x, z));
+            await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildStreetSignsForBlock(x, z));
+            await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildPhoneBoothsForBlock(x, z));
+            await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildHydrantsForBlock(x, z));
+            await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildStreetPropsForBlock(x, z));
+            await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildStrayDogsForBlock(x, z));
+            await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildNoParkingSignsForBlock(x, z));
+            await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildCurbMarkingsForBlock(x, z));
+
+            OptimizeVisibility(root);
+            if (_chunkLightRoots.TryGetValue(chunk.Coordinate, out Node3D chunkLights) &&
+                GodotObject.IsInstanceValid(chunkLights))
+                OptimizeVisibility(chunkLights);
+
+            ChunkVisualized?.Invoke(chunk.Coordinate);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            GD.PushError($"Falha ao construir chunk {chunk.Coordinate.X},{chunk.Coordinate.Z} em etapas: {ex}");
+            UnloadChunkVisuals(chunk.Coordinate);
+            return false;
+        }
+    }
+
+    private async Task RunChunkVisualStepAsync(
+        WorldChunkCoordinate coordinate,
+        Node3D root,
+        ChunkBuildRandomState randomState,
+        Action action)
+    {
+        Node3D previousRoot = _activeChunkRoot;
+        WorldChunkCoordinate? previousCoordinate = _activeChunkCoordinate;
+        RandomNumberGenerator previousRng = _rng;
+        RandomNumberGenerator previousDecoRng = _decoRng;
+
+        try
+        {
+            _activeChunkRoot = root;
+            _activeChunkCoordinate = coordinate;
+            _rng = randomState.Visual;
+            _decoRng = randomState.Decoration;
+            action();
+            randomState.Visual = _rng;
+            randomState.Decoration = _decoRng;
+        }
+        finally
+        {
+            _activeChunkRoot = previousRoot;
+            _activeChunkCoordinate = previousCoordinate;
+            _rng = previousRng;
+            _decoRng = previousDecoRng;
+        }
+
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
     }
 
     private void BuildChunkDecorations(WorldChunkCoordinate coordinate)
