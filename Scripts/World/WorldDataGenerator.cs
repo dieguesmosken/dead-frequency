@@ -10,7 +10,7 @@ namespace DeadFrequency;
 /// </summary>
 public static class WorldDataGenerator
 {
-    public const int CurrentGeneratorVersion = 2;
+    public const int CurrentGeneratorVersion = 3;
     public const float FarmChunkSize = 64f;
 
     private const ulong FnvOffset = 14695981039346656037UL;
