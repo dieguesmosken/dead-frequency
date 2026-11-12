@@ -10,8 +10,42 @@ namespace DeadFrequency;
 /// </summary>
 public static class WorldDataGenerator
 {
-    public const int CurrentGeneratorVersion = 5;
+    public const int CurrentGeneratorVersion = 6;
     public const float FarmChunkSize = 64f;
+
+    /// <summary>
+    /// RNG managed, determinístico e sem dependência do motor. O planejador lógico pode rodar
+    /// em worker thread; a renderização continua usando os RNGs próprios da SceneTree.
+    /// </summary>
+    private sealed class WorldRandom
+    {
+        private ulong _state;
+        public WorldRandom(ulong seed) => _state = seed;
+
+        private uint NextUInt()
+        {
+            unchecked
+            {
+                _state += 0x9E3779B97F4A7C15UL;
+                ulong value = _state;
+                value = (value ^ (value >> 30)) * 0xBF58476D1CE4E5B9UL;
+                value = (value ^ (value >> 27)) * 0x94D049BB133111EBUL;
+                value ^= value >> 31;
+                return (uint)(value >> 32);
+            }
+        }
+
+        public float Randf() => (NextUInt() >> 8) * (1f / 16777216f);
+        public float RandfRange(float from, float to) => from + (to - from) * Randf();
+
+        public int RandiRange(int from, int to)
+        {
+            if (to < from)
+                throw new ArgumentOutOfRangeException(nameof(to), "O limite superior precisa ser maior ou igual ao inferior.");
+            uint range = (uint)((long)to - from + 1L);
+            return from + (int)(NextUInt() % range);
+        }
+    }
 
     private const ulong FnvOffset = 14695981039346656037UL;
     private const ulong FnvPrime = 1099511628211UL;
@@ -221,10 +255,7 @@ public static class WorldDataGenerator
         int completed = 0;
         int safeBrandCount = Mathf.Max(1, storeBrandCount);
         var brandQueue = new Queue<int>();
-        var brandRng = new RandomNumberGenerator
-        {
-            Seed = DeriveChunkSeed(worldSeed, new WorldChunkCoordinate(0, 0), StoreBrandStream),
-        };
+        var brandRng = new WorldRandom(DeriveChunkSeed(worldSeed, new WorldChunkCoordinate(0, 0), StoreBrandStream))
 
         // A classificação segue a prioridade original de CityGenerator.BuildBlock/TryBuildServiceBlock.
         for (int bx = -radius; bx <= radius; bx++)
@@ -257,10 +288,7 @@ public static class WorldDataGenerator
                     kind = block == carWashBlock ? WorldBlockKind.CarWash : WorldBlockKind.GasStation;
                 else
                 {
-                    var typeRng = new RandomNumberGenerator
-                    {
-                        Seed = DeriveChunkSeed(worldSeed, coordinate, BlockTypeStream),
-                    };
+                    var typeRng = new WorldRandom(DeriveChunkSeed(worldSeed, coordinate, BlockTypeStream))
                     float roll = typeRng.Randf();
                     kind = roll < parkChance
                         ? WorldBlockKind.Park
@@ -309,20 +337,14 @@ public static class WorldDataGenerator
         float storefrontChance,
         int storeBrandCount,
         Queue<int> brandQueue,
-        RandomNumberGenerator brandRng)
+        WorldRandom brandRng)
     {
         float inner = blockSize - sidewalkWidth * 2f;
         float half = inner * 0.5f;
         Vector3 center = new(coordinate.X * (blockSize + roadWidth), 0f, coordinate.Z * (blockSize + roadWidth));
 
-        var layoutRng = new RandomNumberGenerator
-        {
-            Seed = DeriveChunkSeed(worldSeed, coordinate, BlockLayoutStream),
-        };
-        var lotDecorationRng = new RandomNumberGenerator
-        {
-            Seed = DeriveChunkSeed(worldSeed, coordinate, BlockDecorationStream),
-        };
+        var layoutRng = new WorldRandom(DeriveChunkSeed(worldSeed, coordinate, BlockLayoutStream))
+        var lotDecorationRng = new WorldRandom(DeriveChunkSeed(worldSeed, coordinate, BlockDecorationStream))
 
         var lots = new List<Rect2>();
         float split = layoutRng.Randf();
@@ -430,10 +452,7 @@ public static class WorldDataGenerator
     {
         float inner = blockSize - sidewalkWidth * 2f;
         Vector3 center = new(coordinate.X * period, 0f, coordinate.Z * period);
-        var rng = new RandomNumberGenerator
-        {
-            Seed = DeriveChunkSeed(worldSeed, coordinate, ParkLayoutStream),
-        };
+        var rng = new WorldRandom(DeriveChunkSeed(worldSeed, coordinate, ParkLayoutStream))
 
         int count = rng.RandiRange(7, 14);
         var result = new List<WorldParkTreePlan>(count);
@@ -462,10 +481,7 @@ public static class WorldDataGenerator
     {
         float inner = blockSize - sidewalkWidth * 2f;
         Vector3 center = new(coordinate.X * period, 0f, coordinate.Z * period);
-        var rng = new RandomNumberGenerator
-        {
-            Seed = DeriveChunkSeed(worldSeed, coordinate, ParkLayoutStream ^ 0x42454E43u),
-        };
+        var rng = new WorldRandom(DeriveChunkSeed(worldSeed, coordinate, ParkLayoutStream ^ 0x42454E43u))
 
         var result = new List<WorldParkBenchPlan>(3);
         for (int i = 0; i < 3; i++)
@@ -490,10 +506,7 @@ public static class WorldDataGenerator
     {
         float inner = blockSize - sidewalkWidth * 2f;
         Vector3 center = new(coordinate.X * period, 0f, coordinate.Z * period);
-        var rng = new RandomNumberGenerator
-        {
-            Seed = DeriveChunkSeed(worldSeed, coordinate, ParkingLayoutStream),
-        };
+        var rng = new WorldRandom(DeriveChunkSeed(worldSeed, coordinate, ParkingLayoutStream))
 
         int count = rng.RandiRange(3, 7);
         int stalls = Mathf.FloorToInt(inner * 0.86f / 3f);
@@ -602,10 +615,7 @@ public static class WorldDataGenerator
             + (uint)(road + radius + 1) * 4u
             + (side > 0 ? 2u : 0u)
             + (vertical ? 0u : 1u));
-        var random = new RandomNumberGenerator
-        {
-            Seed = DeriveChunkSeed(worldSeed, new WorldChunkCoordinate(seedX, seedZ), stream),
-        };
+        var random = new WorldRandom(DeriveChunkSeed(worldSeed, new WorldChunkCoordinate(seedX, seedZ), stream))
         if (random.Randf() >= parkedCarChance)
             return;
 
@@ -836,10 +846,7 @@ public static class WorldDataGenerator
                     continue;
 
                 var coordinate = new WorldChunkCoordinate(bx, bz);
-                var rng = new RandomNumberGenerator
-                {
-                    Seed = DeriveChunkSeed(worldSeed, coordinate, DeliveryPointStream),
-                };
+                var rng = new WorldRandom(DeriveChunkSeed(worldSeed, coordinate, DeliveryPointStream))
 
                 int side = rng.RandiRange(0, 3);
                 Vector3 offset;
@@ -1017,10 +1024,7 @@ public static class WorldDataGenerator
             ? CopyNames(farmNames)
             : new[] { "Fazenda Rancho Fundo" };
         var names = new List<string>(fallbackNames);
-        var rng = new RandomNumberGenerator
-        {
-            Seed = DeriveChunkSeed(worldSeed, new WorldChunkCoordinate(0, 0), FarmSiteStream),
-        };
+        var rng = new WorldRandom(DeriveChunkSeed(worldSeed, new WorldChunkCoordinate(0, 0), FarmSiteStream))
 
         for (int i = names.Count - 1; i > 0; i--)
         {
@@ -1140,10 +1144,7 @@ public static class WorldDataGenerator
         foreach (WorldFarmSitePlan site in farmSites)
             occupied.Add((new Vector2(site.Center.X, site.Center.Z), site.OccupiedRadius));
 
-        var rng = new RandomNumberGenerator
-        {
-            Seed = DeriveChunkSeed(worldSeed, new WorldChunkCoordinate(0, 0), FarmTreeStream),
-        };
+        var rng = new WorldRandom(DeriveChunkSeed(worldSeed, new WorldChunkCoordinate(0, 0), FarmTreeStream))
 
         int placed = 0;
         for (int attempt = 0; attempt < 1600 && placed < 900; attempt++)
@@ -1206,7 +1207,7 @@ public static class WorldDataGenerator
         float farmExtent,
         List<WorldFarmBoundaryPlan> destination)
     {
-        var rng = new RandomNumberGenerator { Seed = 3220 };
+        var rng = new WorldRandom(3220)
         float limit = farmExtent + 4f;
         float wallX = limit - 0.6f;
 
@@ -1288,7 +1289,7 @@ public static class WorldDataGenerator
         foreach (WorldFarmSitePlan site in farmSites)
             occupied.Add((new Vector2(site.Center.X, site.Center.Z), site.OccupiedRadius));
 
-        var rng = new RandomNumberGenerator { Seed = 96601 };
+        var rng = new WorldRandom(96601)
         int placed = 0;
         for (int attempt = 0; attempt < 9000 && placed < 2600; attempt++)
         {
@@ -1315,10 +1316,7 @@ public static class WorldDataGenerator
 
     private static void BuildFarmReedPlans(int worldSeed, List<WorldFarmReedPlan> destination)
     {
-        var rng = new RandomNumberGenerator
-        {
-            Seed = DeriveChunkSeed(worldSeed, new WorldChunkCoordinate(-1, -1), FarmReedStream),
-        };
+        var rng = new WorldRandom(DeriveChunkSeed(worldSeed, new WorldChunkCoordinate(-1, -1), FarmReedStream))
         Vector3 lakeCenter = new(-95f, 0f, -120f);
         const float lakeRadius = 32f;
         for (int i = 0; i < 70; i++)
