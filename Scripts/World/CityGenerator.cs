@@ -656,6 +656,8 @@ public partial class CityGenerator : Node3D
                         Target = farmPlayer,
                         InitialPosition = _initialChunkPosition,
                         HasInitialPosition = _hasInitialChunkPosition,
+                        LoadRadius = 1,
+                        UnloadRadius = 2,
                     };
                     AddChild(_chunkManager);
                 }
@@ -677,8 +679,11 @@ public partial class CityGenerator : Node3D
                 : fallback;
             _hasInitialChunkPosition = true;
 
+            // A cidade prepara uma faixa maior ainda sob a tela de carregamento.
+            // O rancho mantém o raio curto por causa do custo da vegetação.
+            int initialLoadRadius = Biome == WorldBiome.City ? 2 : 1;
             IReadOnlyList<WorldChunkData> initialChunks =
-                WorldData.GetChunksAround(_initialChunkPosition, radius: 1);
+                WorldData.GetChunksAround(_initialChunkPosition, radius: initialLoadRadius);
             int totalChunkVisuals = Mathf.Max(1, initialChunks.Count);
             int completedChunks = 0;
             foreach (WorldChunkData chunk in initialChunks)
@@ -718,6 +723,8 @@ public partial class CityGenerator : Node3D
                     Target = player,
                     InitialPosition = _initialChunkPosition,
                     HasInitialPosition = _hasInitialChunkPosition,
+                    LoadRadius = 2,
+                    UnloadRadius = 3,
                 };
                 AddChild(_chunkManager);
             }
