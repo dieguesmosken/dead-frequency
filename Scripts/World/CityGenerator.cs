@@ -235,6 +235,7 @@ public partial class CityGenerator : Node3D
         BuildPhoneBoothsForBlock(bx, bz);
         BuildHydrantsForBlock(bx, bz);
         BuildStreetPropsForBlock(bx, bz);
+        BuildStrayDogsForBlock(bx, bz);
         BuildCurbMarkingsForBlock(bx, bz);
     }
 
@@ -881,6 +882,9 @@ public partial class CityGenerator : Node3D
     /// <summary>Caramelos de rua (v0.9.5) nas esquinas: dê um espetinho e um deles segue você.</summary>
     private void BuildStrayDogs()
     {
+        if (_useLogicalBlockPlans)
+            return; // Os animais da cidade acompanham o chunk onde aparecem.
+
         var root = new Node3D { Name = "Caramelos" };
         _staticRoot.AddChild(root);
         float corner = BlockSize * 0.5f - 1.3f;
@@ -901,6 +905,52 @@ public partial class CityGenerator : Node3D
         }
         // Um sempre perto do depósito, do lado da barraca do Zé.
         root.AddChild(FarmAnimal.Create("ShibaInu.gltf", 0.9f, new Vector3(-4.5f, CurbHeight, 31.4f), 0.4f, 1.2f));
+    }
+
+    private void BuildStrayDogsForBlock(int bx, int bz)
+    {
+        int rank = 0;
+        bool selected = false;
+        int selectedHash = 0;
+
+        // Preserva a regra antiga: somente os primeiros oito quarteirões elegíveis recebem cão.
+        for (int x = -Radius; x <= Radius && !selected; x++)
+        {
+            for (int z = -Radius; z <= Radius; z++)
+            {
+                int hash = AssetProps.Hash(BlockCenter(x, z), 21);
+                if (hash % 5 != 0)
+                    continue;
+
+                if (x == bx && z == bz)
+                {
+                    selected = rank < 8;
+                    selectedHash = hash;
+                    break;
+                }
+                rank++;
+            }
+        }
+
+        bool hasDepotDog = bx == 0 && bz == 1;
+        if (!selected && !hasDepotDog)
+            return;
+
+        var root = new Node3D { Name = $"Caramelos_{bx}_{bz}" };
+        (_activeChunkRoot ?? _staticRoot).AddChild(root);
+
+        if (selected)
+        {
+            float corner = BlockSize * 0.5f - 1.3f;
+            float sx = selectedHash % 2 == 0 ? 1f : -1f;
+            float sz = (selectedHash / 2) % 2 == 0 ? 1f : -1f;
+            Vector3 pos = BlockCenter(bx, bz) + new Vector3(sx * corner, CurbHeight, sz * corner);
+            root.AddChild(FarmAnimal.Create("ShibaInu.gltf", 0.9f, pos, selectedHash % 628 / 100f, 1.2f));
+        }
+
+        if (hasDepotDog)
+            root.AddChild(FarmAnimal.Create("ShibaInu.gltf", 0.9f,
+                new Vector3(-4.5f, CurbHeight, 31.4f), 0.4f, 1.2f));
     }
 
     private void BuildPark(Node3D block, Vector3 center, float inner)
