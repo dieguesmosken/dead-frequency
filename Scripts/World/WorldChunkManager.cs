@@ -66,7 +66,7 @@ public partial class WorldChunkManager : Node
         }
 
         LoadRadius = Mathf.Max(0, LoadRadius);
-        UnloadRadius = Mathf.Max(LoadRadius + 1, UnloadRadius);
+        UnloadRadius = Mathf.Max(LoadRadius, UnloadRadius);
         RebuildQueues();
         _lastPinVersion = City.ChunkPinVersion;
         ProcessQueues();
