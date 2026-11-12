@@ -943,18 +943,22 @@ public partial class CityGenerator : Node3D
 
     private void BuildStreetLamps()
     {
-        float edge = BlockSize * 0.5f - 0.7f;
+        if (_useLogicalBlockPlans)
+            return; // Os postes são criados junto com cada chunk.
+
         for (int bx = -Radius; bx <= Radius; bx++)
-        {
             for (int bz = -Radius; bz <= Radius; bz++)
-            {
-                Vector3 c = BlockCenter(bx, bz);
-                float y = (bx == 0 && bz == 0) ? 0f : CurbHeight;
-                // Lado +X (ilumina a rua vertical) e lado +Z (ilumina a avenida).
-                BuildLamp(c + new Vector3(edge, y, -BlockSize * 0.25f), Vector3.Right);
-                BuildLamp(c + new Vector3(-BlockSize * 0.25f, y, edge), Vector3.Back);
-            }
-        }
+                BuildStreetLampForBlock(bx, bz);
+    }
+
+    private void BuildStreetLampForBlock(int bx, int bz)
+    {
+        float edge = BlockSize * 0.5f - 0.7f;
+        Vector3 c = BlockCenter(bx, bz);
+        float y = (bx == 0 && bz == 0) ? 0f : CurbHeight;
+        // Lado +X (ilumina a rua vertical) e lado +Z (ilumina a avenida).
+        BuildLamp(c + new Vector3(edge, y, -BlockSize * 0.25f), Vector3.Right);
+        BuildLamp(c + new Vector3(-BlockSize * 0.25f, y, edge), Vector3.Back);
     }
 
     private void BuildLamp(Vector3 basePos, Vector3 towardRoad)
@@ -969,7 +973,7 @@ public partial class CityGenerator : Node3D
         AddBox(lamp, armCenter, armSize, _darkMetal, false);
         Vector3 headPos = towardRoad * 1.5f + new Vector3(0f, height - 0.25f, 0f);
         AddBox(lamp, headPos, new Vector3(0.6f, 0.15f, 0.6f), _lampHead, false);
-        _staticRoot.AddChild(lamp);
+        (_activeChunkRoot ?? _staticRoot).AddChild(lamp);
 
         var light = new OmniLight3D
         {
@@ -982,7 +986,7 @@ public partial class CityGenerator : Node3D
             DistanceFadeBegin = 70f,
             DistanceFadeLength = 25f,
         };
-        _lightsRoot.AddChild(light);
+        ActiveLightsRoot.AddChild(light);
     }
 
     // ------------------------------------------------------------------ carros
@@ -1043,23 +1047,39 @@ public partial class CityGenerator : Node3D
 
     private void BuildCurbMarkings()
     {
-        _curbWhite = Flat(new Color(0.88f, 0.87f, 0.82f), 0.8f);
-        _curbYellow = Flat(new Color(0.95f, 0.74f, 0.08f), 0.75f);
+        if (_useLogicalBlockPlans)
+            return; // Cada chunk recebe suas próprias marcações.
+
+        EnsureCurbMaterials();
         for (int bx = -Radius; bx <= Radius; bx++)
-        {
             for (int bz = -Radius; bz <= Radius; bz++)
-            {
-                Vector3 center = BlockCenter(bx, bz);
-                PaintCurbEdge(center, Vector3.Right, Vector3.Back);
-                PaintCurbEdge(center, Vector3.Left, Vector3.Forward);
-                PaintCurbEdge(center, Vector3.Back, Vector3.Left);
-                PaintCurbEdge(center, Vector3.Forward, Vector3.Right);
-            }
-        }
+                BuildCurbMarkingsForBlock(bx, bz);
 
         _curbMarkingsBuilt = true;
         foreach ((Vector3 center, Vector3 dir, float halfLength) in _noParking)
             PaintNoParkingCurb(center, dir, halfLength);
+    }
+
+    private void EnsureCurbMaterials()
+    {
+        _curbWhite ??= Flat(new Color(0.88f, 0.87f, 0.82f), 0.8f);
+        _curbYellow ??= Flat(new Color(0.95f, 0.74f, 0.08f), 0.75f);
+    }
+
+    private void BuildCurbMarkingsForBlock(int bx, int bz)
+    {
+        EnsureCurbMaterials();
+        Vector3 center = BlockCenter(bx, bz);
+        PaintCurbEdge(center, Vector3.Right, Vector3.Back);
+        PaintCurbEdge(center, Vector3.Left, Vector3.Forward);
+        PaintCurbEdge(center, Vector3.Back, Vector3.Left);
+        PaintCurbEdge(center, Vector3.Forward, Vector3.Right);
+
+        foreach ((Vector3 noParkingCenter, Vector3 dir, float halfLength) in _noParking)
+            if (WorldData.GetChunkCoordinate(noParkingCenter) == new WorldChunkCoordinate(bx, bz))
+                PaintNoParkingCurb(noParkingCenter, dir, halfLength);
+
+        _curbMarkingsBuilt = true;
     }
 
     private void PaintCurbEdge(Vector3 blockCenter, Vector3 outward, Vector3 along)
@@ -1093,7 +1113,7 @@ public partial class CityGenerator : Node3D
         Vector3 size = Mathf.Abs(outward.X) > 0.5f
             ? new Vector3(0.03f, CurbHeight, length)
             : new Vector3(length, CurbHeight, 0.03f);
-        AddBox(_staticRoot, position, size, material, false);
+        AddBox(_activeChunkRoot ?? _staticRoot, position, size, material, false);
     }
 
     private void PaintNoParkingCurb(Vector3 center, Vector3 dir, float halfLength)
@@ -1108,7 +1128,7 @@ public partial class CityGenerator : Node3D
                 if (!InNoParking(parkingSpot))
                     continue;
                 Vector3 curb = new(roadX + side * (RoadWidth * 0.5f - 0.045f), CurbHeight * 0.5f, center.Z);
-                AddBox(_staticRoot, curb, new Vector3(0.03f, CurbHeight, length), _curbYellow, false);
+                AddBox(_activeChunkRoot ?? _staticRoot, curb, new Vector3(0.03f, CurbHeight, length), _curbYellow, false);
             }
         }
         else
@@ -1120,7 +1140,7 @@ public partial class CityGenerator : Node3D
                 if (!InNoParking(parkingSpot))
                     continue;
                 Vector3 curb = new(center.X, CurbHeight * 0.5f, roadZ + side * (RoadWidth * 0.5f - 0.045f));
-                AddBox(_staticRoot, curb, new Vector3(length, CurbHeight, 0.03f), _curbYellow, false);
+                AddBox(_activeChunkRoot ?? _staticRoot, curb, new Vector3(length, CurbHeight, 0.03f), _curbYellow, false);
             }
         }
     }
@@ -1177,19 +1197,24 @@ public partial class CityGenerator : Node3D
     /// <summary>Placa de PARE em uma esquina de cada cruzamento e semáforo de pedestre na esquina oposta.</summary>
     private void BuildStreetSigns()
     {
-        float corner = BlockSize * 0.5f - 0.6f;
+        if (_useLogicalBlockPlans)
+            return; // Placas são vinculadas ao ciclo de vida do chunk.
+
         for (int bx = -Radius; bx <= Radius; bx++)
-        {
             for (int bz = -Radius; bz <= Radius; bz++)
-            {
-                if (bx == 0 && bz == 0)
-                    continue;
-                Vector3 c = BlockCenter(bx, bz) + new Vector3(0f, CurbHeight, 0f);
-                // PARE virada para quem vem pela rua vertical (indo para +Z).
-                BuildStopSign(c + new Vector3(corner, 0f, corner - 1.2f), 0f);
-                BuildCrosswalkSign(c + new Vector3(-corner, 0f, -corner + 1.2f), Mathf.Pi);
-            }
-        }
+                BuildStreetSignsForBlock(bx, bz);
+    }
+
+    private void BuildStreetSignsForBlock(int bx, int bz)
+    {
+        if (bx == 0 && bz == 0)
+            return;
+
+        float corner = BlockSize * 0.5f - 0.6f;
+        Vector3 c = BlockCenter(bx, bz) + new Vector3(0f, CurbHeight, 0f);
+        // PARE virada para quem vem pela rua vertical (indo para +Z).
+        BuildStopSign(c + new Vector3(corner, 0f, corner - 1.2f), 0f);
+        BuildCrosswalkSign(c + new Vector3(-corner, 0f, -corner + 1.2f), Mathf.Pi);
     }
 
     private void BuildNoParkingSigns(Vector3 center, Vector3 dir, string label)
@@ -1274,7 +1299,7 @@ public partial class CityGenerator : Node3D
             });
         }
 
-        _staticRoot.AddChild(sign);
+        (_activeChunkRoot ?? _staticRoot).AddChild(sign);
     }
 
     private void BuildStopSign(Vector3 basePos, float rotationY)
@@ -1304,14 +1329,14 @@ public partial class CityGenerator : Node3D
             Position = new Vector3(0f, 2.55f, -0.08f),
             RotationDegrees = new Vector3(0f, 180f, 0f),
         });
-        _staticRoot.AddChild(sign);
+        (_activeChunkRoot ?? _staticRoot).AddChild(sign);
     }
 
     /// <summary>Semáforo de pedestre (fica vermelho quando vem veículo). Era uma placa "faixa de pedestre".</summary>
     private void BuildCrosswalkSign(Vector3 basePos, float rotationY)
     {
         RegisterObstacle(basePos);
-        _staticRoot.AddChild(new PedestrianSignal { Name = "SemaforoPedestre", Position = basePos });
+        (_activeChunkRoot ?? _staticRoot).AddChild(new PedestrianSignal { Name = "SemaforoPedestre", Position = basePos });
     }
 
     // ------------------------------------------------------------------ marcos e limites
