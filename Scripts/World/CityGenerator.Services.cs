@@ -188,7 +188,8 @@ public partial class CityGenerator
             });
         }
 
-        GasSpots.Add((st.Position + new Vector3(0f, 0f, 5f), brand));
+        if (!_useLogicalWorldData)
+            GasSpots.Add((st.Position + new Vector3(0f, 0f, 5f), brand));
         // Ilhas de bombas.
         foreach (float x in new[] { -3f, 3f })
         {
