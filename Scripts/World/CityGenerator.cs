@@ -87,6 +87,7 @@ public partial class CityGenerator : Node3D
 
     private Node3D _staticRoot;
     private Node3D _lightsRoot;
+    private bool _useLogicalDeliveryPoints;
 
     public override void _Ready()
     {
@@ -97,12 +98,17 @@ public partial class CityGenerator : Node3D
 
         // Primeira etapa: indexa o mundo e calcula os spawns sem criar Nodes, malhas ou colisões.
         // O RNG legado de renderização permanece separado para preservar o mapa visual atual.
+        // V7 precisa preservar exatamente os pontos de entrega do gerador legado.
+        // V8 pode usar o plano lógico, já que seus clientes usam a mesma geração atualizada.
+        _useLogicalDeliveryPoints = NetClient.Instance?.IsOnline == true
+            && NetClient.Instance.ActiveProtocolVersion >= NetClient.PreferredProtocolVersion;
+
         WorldData = WorldDataGenerator.Generate(
             Seed, Biome, Radius, BlockSize, RoadWidth, FarmExtent, CurbHeight,
-            MarketBlock, RadioStationBlock, GasStations,
+            MarketBlock, RadioStationBlock, GasStations, _useLogicalDeliveryPoints,
             progress => WorldDataProgress?.Invoke(progress));
 
-        if (Biome == WorldBiome.City)
+        if (Biome == WorldBiome.City && _useLogicalDeliveryPoints)
         {
             _deliveryPoints.Clear();
             foreach (WorldDeliveryPointData point in WorldData.DeliveryPoints)
@@ -619,10 +625,34 @@ public partial class CityGenerator : Node3D
 
     private void RegisterDeliveryPoint(int bx, int bz)
     {
-        // Os pontos da cidade já foram calculados na fase lógica e populados antes da geometria.
-        // Consome os dois sorteios antigos para manter idêntica a sequência do RNG visual legado.
-        _ = _rng.RandiRange(0, 3);
-        _ = _rng.RandiRange(10, 999);
+        if (_useLogicalDeliveryPoints)
+        {
+            // Os pontos da cidade já foram calculados na fase lógica.
+            // Consome os dois sorteios antigos para manter idêntica a sequência do RNG visual legado.
+            _ = _rng.RandiRange(0, 3);
+            _ = _rng.RandiRange(10, 999);
+            return;
+        }
+
+        // Compatibilidade V7/offline: mantém os pontos legados até a migração completa do gerador.
+        int side = _rng.RandiRange(0, 3);
+        Vector3 center = BlockCenter(bx, bz);
+        float edge = BlockSize * 0.5f - 1.5f;
+        Vector3 offset;
+        string street;
+        switch (side)
+        {
+            case 0: offset = new Vector3(edge, 0f, 0f); street = StreetX(bx); break;
+            case 1: offset = new Vector3(-edge, 0f, 0f); street = StreetX(bx - 1); break;
+            case 2: offset = new Vector3(0f, 0f, edge); street = StreetZ(bz); break;
+            default: offset = new Vector3(0f, 0f, -edge); street = StreetZ(bz - 1); break;
+        }
+
+        _deliveryPoints.Add(new DeliveryPoint
+        {
+            Position = center + offset + new Vector3(0f, CurbHeight, 0f),
+            Address = $"{street}, nº {_rng.RandiRange(10, 999)}",
+        });
     }
 
     // ------------------------------------------------------------------ depósito
