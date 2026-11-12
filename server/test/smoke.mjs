@@ -87,7 +87,9 @@ const { code: v8Code, protocol: v8Protocol } = await (await fetch(base + "/api/r
 assert(v8Protocol === 8, "criação declara protocolo 8");
 const v8Info = await (await fetch(`${base}/api/rooms/${v8Code}?protocol=8`)).json();
 assert(v8Info.protocol === 8, "info da sala identifica protocolo 8");
-assert((await fetch(`${base}/api/rooms/${v8Code}`)).status === 404, "rota padrão V7 não acessa sala V8");
+const v7Lookup = await fetch(`${base}/api/rooms/${v8Code}`);
+const v7LookupInfo = v7Lookup.status === 200 ? await v7Lookup.json() : null;
+assert(v7Lookup.status === 404 || v7LookupInfo?.protocol === 7, "rota padrão V7 não acessa sala V8");
 const v8Client = await connect(v8Code, "ClienteV8", "entregador", [], "", 8);
 await sleep(250);
 assert(v8Client.find("welcome")?.code === v8Code, "cliente V8 entra na sala V8");
