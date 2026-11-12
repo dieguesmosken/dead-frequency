@@ -70,6 +70,7 @@ public static class WorldDataGenerator
         var farmSites = new List<WorldFarmSitePlan>();
         var farmTrees = new List<WorldFarmTreePlan>();
         var farmReeds = new List<WorldFarmReedPlan>();
+        var farmUndergrowth = new List<WorldFarmUndergrowthPlan>();
         WorldServiceData services = WorldServiceData.Empty();
         var spawnPoints = new Dictionary<string, WorldSpawnPoint>(StringComparer.Ordinal);
 
@@ -149,6 +150,7 @@ public static class WorldDataGenerator
             progress?.Invoke(new WorldGenerationProgress("Planejando árvores e vegetação do rancho", 0, 1));
             BuildFarmTreePlans(seed, farmExtent, farmSites, farmTrees);
             BuildFarmReedPlans(seed, farmReeds);
+            BuildFarmUndergrowthPlans(farmExtent, farmSites, farmUndergrowth);
             progress?.Invoke(new WorldGenerationProgress("Planejando árvores e vegetação do rancho", 1, 1));
 
             BuildFarmSpawnPoints(spawnPoints, blockSize);
@@ -157,7 +159,7 @@ public static class WorldDataGenerator
         progress?.Invoke(new WorldGenerationProgress("Preparando pontos de início", 1, 1));
         return new WorldGenerationData(
             seed, CurrentGeneratorVersion, biome, chunkSize, centeredGrid,
-            chunks, blocks, deliveryPoints, farmSites, farmTrees, farmReeds, services, spawnPoints);
+            chunks, blocks, deliveryPoints, farmSites, farmTrees, farmReeds, farmUndergrowth, services, spawnPoints);
     }
 
     private static void BuildCityBlockPlans(
@@ -1050,6 +1052,49 @@ public static class WorldDataGenerator
                     new Vector3(edgePoint.X + jitter.X, 0f, edgePoint.Y + jitter.Y),
                     pine, false, 0, 0f, 1f, visualSeed));
             }
+        }
+    }
+
+    private static void BuildFarmUndergrowthPlans(
+        float farmExtent,
+        IReadOnlyList<WorldFarmSitePlan> farmSites,
+        List<WorldFarmUndergrowthPlan> destination)
+    {
+        List<FarmRoadPlan> roads = CreateFarmRoadPlans();
+        var occupied = new List<(Vector2 Center, float Radius)>
+        {
+            (Vector2.Zero, 34f),
+            (new Vector2(-95f, -120f), 42f),
+            (new Vector2(17f, 146f), 18f),
+            (new Vector2(-14f, 140f), 10f),
+            (new Vector2(-10f, 26f), 8f),
+            (new Vector2(36f, 146f), 14f),
+        };
+        foreach (WorldFarmSitePlan site in farmSites)
+            occupied.Add((new Vector2(site.Center.X, site.Center.Z), site.OccupiedRadius));
+
+        var rng = new RandomNumberGenerator { Seed = 96601 };
+        int placed = 0;
+        for (int attempt = 0; attempt < 9000 && placed < 2600; attempt++)
+        {
+            Vector2 point = new(
+                rng.RandfRange(-farmExtent + 4f, farmExtent - 4f),
+                rng.RandfRange(-farmExtent + 4f, farmExtent - 4f));
+            if (DistanceToFarmRoads(point, roads) < 3.2f ||
+                !IsFarmSiteFree(point, 1.2f, farmExtent, occupied))
+                continue;
+
+            bool isRock = rng.Randf() < 0.06f;
+            string model = isRock
+                ? NatureKit.Rocks[rng.RandiRange(0, NatureKit.Rocks.Length - 1)]
+                : NatureKit.Ground[rng.RandiRange(0, NatureKit.Ground.Length - 1)];
+            float scale = isRock
+                ? rng.RandfRange(0.25f, 0.6f)
+                : rng.RandfRange(0.6f, 1.2f);
+            float rotation = rng.Randf() * Mathf.Tau;
+            destination.Add(new WorldFarmUndergrowthPlan(
+                new Vector3(point.X, 0f, point.Y), model, scale, rotation, isRock));
+            placed++;
         }
     }
 
