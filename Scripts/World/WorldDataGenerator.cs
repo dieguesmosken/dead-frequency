@@ -113,7 +113,7 @@ public static class WorldDataGenerator
                 noParkingZones = BuildCityNoParkingZones(
                     cityRadius, blockSize, chunkSize, fireStationBlock, policeStationBlock, gasStations, blocks);
                 progress?.Invoke(new WorldGenerationProgress(
-                    "Calculando regras de estacionamento", noParkingZones.Count, noParkingZones.Count));
+                    "Calculando regras de estacionamento", 1, 1));
 
                 Dictionary<WorldChunkCoordinate, List<WorldRoadCarPlan>> roadCars =
                     BuildCityRoadCarPlans(seed, cityRadius, blockSize, roadWidth, parkedCarChance, noParkingZones);
@@ -130,11 +130,8 @@ public static class WorldDataGenerator
                         blockRoadCars ?? new List<WorldRoadCarPlan>());
                 }
 
-                int plannedRoadCars = 0;
-                foreach (List<WorldRoadCarPlan> roadCarList in roadCars.Values)
-                    plannedRoadCars += roadCarList.Count;
                 progress?.Invoke(new WorldGenerationProgress(
-                    "Calculando veículos estacionados", plannedRoadCars, plannedRoadCars));
+                    "Calculando veículos estacionados", 1, 1));
 
                 BuildCityDeliveryPoints(seed, cityRadius, blockSize, chunkSize, curbHeight, deliveryPoints);
             }
