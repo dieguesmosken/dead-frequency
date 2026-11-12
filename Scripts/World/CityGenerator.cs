@@ -261,7 +261,7 @@ public partial class CityGenerator : Node3D
 
         // Remove referências mantidas fora da árvore junto com os visuais do chunk.
         SidewalkObstacles.RemoveAll(position => WorldData.GetChunkCoordinate(position) == coordinate);
-        _noParking.RemoveAll(entry => WorldData.GetChunkCoordinate(entry.center) == coordinate);
+        _noParking.RemoveAll(entry => entry.owner == coordinate);
         for (int i = _parkedCars.Count - 1; i >= 0; i--)
         {
             Node3D car = _parkedCars[i];
@@ -1295,14 +1295,16 @@ public partial class CityGenerator : Node3D
     }
 
     private readonly List<Node3D> _parkedCars = new();
-    private readonly List<(Vector3 center, Vector3 dir, float halfLength)> _noParking = new();
+    private readonly List<(Vector3 center, Vector3 dir, float halfLength, WorldChunkCoordinate owner)> _noParking = new();
     private bool _curbMarkingsBuilt;
 
     /// <summary>Proíbe estacionar num trecho de rua e pinta o meio-fio correspondente de amarelo.</summary>
     public void ForbidParking(Vector3 center, Vector3 dir, float halfLength, string signLabel = null)
     {
         Vector3 normalizedDir = dir.Normalized();
-        _noParking.Add((center, normalizedDir, halfLength));
+        WorldChunkCoordinate owner = _activeChunkCoordinate
+            ?? (WorldData != null ? WorldData.GetChunkCoordinate(center) : default);
+        _noParking.Add((center, normalizedDir, halfLength, owner));
         for (int i = _parkedCars.Count - 1; i >= 0; i--)
         {
             if (IsInstanceValid(_parkedCars[i]) && InNoParking(_parkedCars[i].Position))
@@ -1337,7 +1339,7 @@ public partial class CityGenerator : Node3D
         }
 
         _curbMarkingsBuilt = true;
-        foreach ((Vector3 center, Vector3 dir, float halfLength) in _noParking)
+        foreach ((Vector3 center, Vector3 dir, float halfLength, WorldChunkCoordinate owner) in _noParking)
             PaintNoParkingCurb(center, dir, halfLength);
     }
 
@@ -1356,8 +1358,9 @@ public partial class CityGenerator : Node3D
         PaintCurbEdge(center, Vector3.Back, Vector3.Left);
         PaintCurbEdge(center, Vector3.Forward, Vector3.Right);
 
-        foreach ((Vector3 noParkingCenter, Vector3 dir, float halfLength) in _noParking)
-            if (WorldData.GetChunkCoordinate(noParkingCenter) == new WorldChunkCoordinate(bx, bz))
+        WorldChunkCoordinate coordinate = new(bx, bz);
+        foreach ((Vector3 noParkingCenter, Vector3 dir, float halfLength, WorldChunkCoordinate owner) in _noParking)
+            if (owner == coordinate)
                 PaintNoParkingCurb(noParkingCenter, dir, halfLength);
 
         _curbMarkingsBuilt = true;
