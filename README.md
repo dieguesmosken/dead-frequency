@@ -111,6 +111,11 @@ continua público no GitHub se estiver publicado em um repositório público.
 `python3 site/build.py` continua gerando `site/data/site.json` com o changelog do `GameVersion.cs` e as fotos de
 `site/assets/shots/vX.Y.Z/` (legendas em `captions.json`). O texto dos releases sai de `site/release_notes.py`.
 
+## Contribuindo
+
+Fluxo de branches, padrão de commits, pull requests e como lançar versão: [CONTRIBUTING.md](CONTRIBUTING.md).
+Achou uma falha de segurança? Veja o [SECURITY.md](SECURITY.md).
+
 ## Apoie
 
 O jogo é grátis. Para ajudar com o servidor e as próximas versões: **Pix `contato@badwolf3d.com.br`**
