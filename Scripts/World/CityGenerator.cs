@@ -329,7 +329,15 @@ public partial class CityGenerator : Node3D
     {
         HomeGuide.Clear();
         if (NetClient.Instance?.IsOnline == true)
+        {
             Seed = NetClient.Instance.Seed;
+        }
+        else if (SaveManager.Load() is SaveData savedWorld &&
+                 savedWorld.WorldGeneratorVersion > 0 &&
+                 string.Equals(savedWorld.Level, Biome.ToString().ToLowerInvariant(), StringComparison.Ordinal))
+        {
+            Seed = savedWorld.WorldSeed;
+        }
 
         _useLogicalWorldData = NetClient.Instance?.IsOnline != true
             || NetClient.Instance.ActiveProtocolVersion >= NetClient.PreferredProtocolVersion;
