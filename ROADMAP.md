@@ -1,6 +1,6 @@
 # Dead Frequency — roadmap da cidade simulada
 
-Atualizado em 10/11/2026 (v0.9.8 em andamento). A partir da v0.9 o jogo deixa de ser só "entregas" e vira uma
+Atualizado em 12/11/2026 (v0.9.8 lançada). A partir da v0.9 o jogo deixa de ser só "entregas" e vira uma
 **cidade simulada na zona morta**: cada jogador escolhe uma profissão, ganha um apartamento, ouve a
 rádio 96.6 e ajuda a cidade a funcionar. Ordem sugerida: de cima para baixo; cada fase deixa o jogo jogável.
 
@@ -75,7 +75,7 @@ Já feito nesta build (feedback de 08/11):
 | ✅ **Chat da sala (T)** | Mensagens de texto na sala, com limite de 3 mensagens a cada 5 s no servidor. O painel admin mostra totais por dia UTC/sala (retenção de 30 dias), sem guardar o conteúdo. |
 | ✅ **Salas permanentes do admin** | No painel admin: criar salas fixas, públicas ou com senha; senhas são geradas na criação e mostradas uma vez. Já existem `ADMNA`/`ADMNB` (privadas) e `SERVA`/`SERVB` (públicas); salas permanentes não expiram nem podem ser encerradas. Protocolo 6 valida a senha na entrada. |
 
-### v0.9.8 — Rua de verdade 🚧
+### v0.9.8 — Rua de verdade ✅
 | Ideia | Como funciona no jogo |
 |---|---|
 | ✅ **Céu procedural** | Nuvens em movimento, estrelas e cores sincronizadas ao ciclo de dia e noite. |
