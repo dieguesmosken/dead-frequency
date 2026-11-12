@@ -40,6 +40,7 @@ public partial class CityGenerator : Node3D
 
     /// <summary>Plano lógico calculado antes da criação de qualquer geometria do mundo.</summary>
     public WorldGenerationData WorldData { get; private set; }
+    public int ChunkPinVersion { get; private set; }
     public bool UsesChunkStreaming => _useLogicalBlockPlans && Biome == WorldBiome.City;
     public event Action<WorldGenerationProgress> WorldDataProgress;
     public event Action<WorldChunkCoordinate> ChunkVisualized;
@@ -130,7 +131,7 @@ public partial class CityGenerator : Node3D
         new List<WorldChunkCoordinate>(_chunkRoots.Keys);
 
     /// <summary>Impede o descarregamento do chunk que contém uma missão/objeto ativo.</summary>
-    public bool PinChunkForPosition(Vector3 position, bool refresh = true)
+    public bool PinChunkForPosition(Vector3 position)
     {
         if (WorldData == null || Biome != WorldBiome.City)
             return false;
@@ -140,14 +141,14 @@ public partial class CityGenerator : Node3D
             return false;
 
         _pinnedChunkCounts.TryGetValue(coordinate, out int count);
+        if (count == 0)
+            ChunkPinVersion++;
         _pinnedChunkCounts[coordinate] = count + 1;
-        if (refresh)
-            _chunkManager?.RequestRefresh();
         return true;
     }
 
     /// <summary>Libera uma reserva feita por PinChunkForPosition.</summary>
-    public void UnpinChunkForPosition(Vector3 position, bool refresh = true)
+    public void UnpinChunkForPosition(Vector3 position)
     {
         if (WorldData == null || Biome != WorldBiome.City)
             return;
@@ -157,12 +158,14 @@ public partial class CityGenerator : Node3D
             return;
 
         if (count <= 1)
+        {
             _pinnedChunkCounts.Remove(coordinate);
+            ChunkPinVersion++;
+        }
         else
+        {
             _pinnedChunkCounts[coordinate] = count - 1;
-
-        if (refresh)
-            _chunkManager?.RequestRefresh();
+        }
     }
 
     public bool IsChunkPinned(WorldChunkCoordinate coordinate) =>
