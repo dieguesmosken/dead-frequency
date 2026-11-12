@@ -37,6 +37,8 @@ public partial class CityGenerator
         "Sítio Antena Torta", "Rancho do Chiado", "Fazenda Estática", "Sítio Galinha Morta",
         "Fazenda Vaca Mugindo", "Chácara do Seu Quinzinho", "Sítio Onda Curta", "Fazenda Válvula Queimada",
     };
+    internal static IReadOnlyList<string> FarmNameCatalog => FarmNames;
+
 
     private static readonly Color[] HousePalette =
     {
@@ -239,6 +241,25 @@ public partial class CityGenerator
 
     private void PlaceFarms()
     {
+        if (_useLogicalWorldData && WorldData != null && WorldData.FarmSites.Count > 0)
+        {
+            RandomNumberGenerator previousRng = _rng;
+            foreach (WorldFarmSitePlan site in WorldData.FarmSites)
+            {
+                _occupied.Add((new Vector2(site.Center.X, site.Center.Z), site.OccupiedRadius));
+                _rng = new RandomNumberGenerator { Seed = site.VisualSeed };
+                BuildFarmstead(
+                    site.GatePosition,
+                    site.TowardRoad,
+                    site.Width,
+                    site.Depth,
+                    site.Name,
+                    site.Address);
+            }
+            _rng = previousRng;
+            return;
+        }
+
         var names = new List<string>(FarmNames);
         for (int i = names.Count - 1; i > 0; i--)
         {
@@ -287,8 +308,9 @@ public partial class CityGenerator
         Transform3D xf = farm.Transform;
         float hw = width * 0.5f;
 
-        // Ponto de entrega logo depois da porteira.
-        _deliveryPoints.Add(new DeliveryPoint { Position = xf * new Vector3(0f, 0f, -2.5f), Address = address });
+        // Em mundos lógicos o destino já foi registrado antes de carregar as meshes.
+        if (!_useLogicalWorldData)
+            _deliveryPoints.Add(new DeliveryPoint { Position = xf * new Vector3(0f, 0f, -2.5f), Address = address });
 
         // Cerca com porteira aberta na frente.
         Fence(xf, new Vector3(-hw, 0f, 0f), new Vector3(-4f, 0f, 0f));
@@ -683,11 +705,14 @@ public partial class CityGenerator
         AddBox(boat, new Vector3(0f, 0.2f, 0f), new Vector3(1.2f, 0.4f, 3f), _signWhite, false);
         AddBox(boat, new Vector3(0f, 0.32f, 0f), new Vector3(1.0f, 0.2f, 2.8f), _signBlue, false);
 
-        _deliveryPoints.Add(new DeliveryPoint
+        if (!_useLogicalWorldData)
         {
-            Position = _lakeCenter + new Vector3(-LakeRadius - 4f, 0f, 0f),
-            Address = "Pesqueiro Lambari Feliz · Trilha do Pesqueiro",
-        });
+            _deliveryPoints.Add(new DeliveryPoint
+            {
+                Position = _lakeCenter + new Vector3(-LakeRadius - 4f, 0f, 0f),
+                Address = "Pesqueiro Lambari Feliz · Trilha do Pesqueiro",
+            });
+        }
         var poi = new Node3D { Position = new Vector3(-LakeRadius - 4f, 0f, 0f) };
         lake.AddChild(poi);
         MarkPoi(poi, "P", new Color(0.2f, 0.55f, 0.85f));
