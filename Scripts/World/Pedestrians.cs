@@ -40,12 +40,25 @@ public partial class Pedestrians : Node3D
     };
 
     private readonly List<Walker> _walkers = new();
+    private readonly Dictionary<WorldChunkCoordinate, List<Walker>> _chunkWalkers = new();
+    private bool _streamingMode;
+    private const uint PedestrianStream = 0x50454453;
 
     public override void _Ready()
     {
         if (City == null)
         {
             GD.PushWarning("Pedestrians: defina City no Inspector.");
+            return;
+        }
+
+        if (City.UsesChunkStreaming)
+        {
+            _streamingMode = true;
+            City.ChunkVisualized += OnChunkVisualized;
+            City.ChunkUnloaded += OnChunkUnloaded;
+            foreach (WorldChunkCoordinate coordinate in City.GetLoadedChunkCoordinates())
+                OnChunkVisualized(coordinate);
             return;
         }
 
@@ -86,6 +99,83 @@ public partial class Pedestrians : Node3D
             walker.Obstacles = _obstacles.TryGetValue(new Vector2I(bx, bz), out List<Vector3> obs) ? obs : new List<Vector3>();
             AddChild(walker.Model);
             _walkers.Add(walker);
+        }
+    }
+
+    public override void _ExitTree()
+    {
+        if (City != null && GodotObject.IsInstanceValid(City))
+        {
+            City.ChunkVisualized -= OnChunkVisualized;
+            City.ChunkUnloaded -= OnChunkUnloaded;
+        }
+    }
+
+    private void OnChunkVisualized(WorldChunkCoordinate coordinate)
+    {
+        if (!_streamingMode || _chunkWalkers.ContainsKey(coordinate) ||
+            (coordinate.X == 0 && coordinate.Z == 0))
+            return;
+
+        int totalBlocks = Mathf.Max(1, (City.Radius * 2 + 1) * (City.Radius * 2 + 1) - 1);
+        float expectedPerBlock = (float)Mathf.Max(0, Count) / totalBlocks;
+        int walkersInBlock = Mathf.FloorToInt(expectedPerBlock);
+        float remainder = expectedPerBlock - walkersInBlock;
+
+        var rng = new RandomNumberGenerator
+        {
+            Seed = WorldDataGenerator.DeriveChunkSeed(City.Seed, coordinate, PedestrianStream),
+        };
+        if (rng.Randf() < remainder)
+            walkersInBlock++;
+
+        var obstacles = new List<Vector3>();
+        foreach (Vector3 obstacle in City.SidewalkObstacles)
+        {
+            var key = new Vector2I(
+                Mathf.RoundToInt(obstacle.X / City.Period),
+                Mathf.RoundToInt(obstacle.Z / City.Period));
+            if (key.X == coordinate.X && key.Y == coordinate.Z)
+                obstacles.Add(obstacle);
+        }
+
+        var spawned = new List<Walker>(walkersInBlock);
+        for (int i = 0; i < walkersInBlock; i++)
+        {
+            var walker = new Walker
+            {
+                Center = new Vector3(coordinate.X * City.Period, City.CurbHeight, coordinate.Z * City.Period),
+                Half = City.BlockSize * 0.5f - rng.RandfRange(1.0f, 2.2f),
+                Speed = rng.RandfRange(1.0f, 1.6f),
+                Phase = rng.RandfRange(0f, 1000f),
+                Direction = rng.Randf() < 0.5f ? 1 : -1,
+                Model = CharacterModel.Create(
+                    Shirts[rng.RandiRange(0, Shirts.Length - 1)],
+                    Shirts[rng.RandiRange(0, Shirts.Length - 1)].Darkened(0.5f),
+                    Skins[rng.RandiRange(0, Skins.Length - 1)]),
+                Obstacles = obstacles,
+            };
+            walker.Model.Chatty = true;
+            walker.Model.Scale = Vector3.One * rng.RandfRange(0.9f, 1.08f);
+            walker.CurbDistance = City.BlockSize * 0.5f - walker.Half;
+            AddChild(walker.Model);
+            _walkers.Add(walker);
+            spawned.Add(walker);
+        }
+
+        _chunkWalkers[coordinate] = spawned;
+    }
+
+    private void OnChunkUnloaded(WorldChunkCoordinate coordinate)
+    {
+        if (!_chunkWalkers.Remove(coordinate, out List<Walker> walkers))
+            return;
+
+        foreach (Walker walker in walkers)
+        {
+            _walkers.Remove(walker);
+            if (walker.Model != null && GodotObject.IsInstanceValid(walker.Model))
+                walker.Model.QueueFree();
         }
     }
 
