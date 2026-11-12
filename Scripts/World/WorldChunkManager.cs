@@ -38,6 +38,7 @@ public partial class WorldChunkManager : Node
     private readonly Dictionary<ulong, Vector3> _trackedObjectPins = new();
 
     private WorldChunkCoordinate _lastCenter;
+    private int _lastPinVersion = -1;
     private bool _hasCenter;
 
     public override void _Ready()
@@ -54,6 +55,7 @@ public partial class WorldChunkManager : Node
         LoadRadius = Mathf.Max(0, LoadRadius);
         UnloadRadius = Mathf.Max(LoadRadius + 1, UnloadRadius);
         RebuildQueues();
+        _lastPinVersion = City.ChunkPinVersion;
         ProcessQueues();
     }
 
@@ -65,6 +67,7 @@ public partial class WorldChunkManager : Node
             return;
 
         RebuildQueues();
+        _lastPinVersion = City.ChunkPinVersion;
         ProcessQueues();
     }
 
@@ -78,8 +81,12 @@ public partial class WorldChunkManager : Node
 
         Vector3 targetPosition = GetTargetPosition();
         WorldChunkCoordinate center = City.WorldData.GetChunkCoordinate(targetPosition);
-        if (!_hasCenter || center != _lastCenter || pinsChanged)
+        if (!_hasCenter || center != _lastCenter || pinsChanged ||
+            _lastPinVersion != City.ChunkPinVersion)
+        {
             RebuildQueues();
+            _lastPinVersion = City.ChunkPinVersion;
+        }
 
         ProcessQueues();
     }
@@ -102,7 +109,7 @@ public partial class WorldChunkManager : Node
             if (activeIds.Contains(instanceId))
                 continue;
 
-            City.UnpinChunkForPosition(_trackedObjectPins[instanceId], refresh: false);
+            City.UnpinChunkForPosition(_trackedObjectPins[instanceId]);
             _trackedObjectPins.Remove(instanceId);
             changed = true;
         }
@@ -126,12 +133,12 @@ public partial class WorldChunkManager : Node
                 if (previous == next)
                     continue;
 
-                City.UnpinChunkForPosition(previousPosition, refresh: false);
+                City.UnpinChunkForPosition(previousPosition);
                 _trackedObjectPins.Remove(instanceId);
                 changed = true;
             }
 
-            if (City.PinChunkForPosition(position, refresh: false))
+            if (City.PinChunkForPosition(position))
             {
                 _trackedObjectPins[instanceId] = position;
                 changed = true;
