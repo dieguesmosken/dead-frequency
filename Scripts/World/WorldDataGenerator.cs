@@ -96,6 +96,8 @@ public static class WorldDataGenerator
             // Regras de estacionamento e pontos de profissão ficam disponíveis antes de qualquer mesh.
             List<WorldNoParkingZoneData> noParkingZones = BuildCityNoParkingZones(
                 cityRadius, blockSize, chunkSize, fireStationBlock, policeStationBlock, gasStations, blocks);
+            progress?.Invoke(new WorldGenerationProgress(
+                "Calculando regras de estacionamento", noParkingZones.Count, noParkingZones.Count));
             // Os endereços V7 continuam sendo gerados pelo RNG legado, sem alterar a sequência visual.
             services = BuildCityServiceData(
                 cityRadius, blockSize, chunkSize, curbHeight, marketBlock,
