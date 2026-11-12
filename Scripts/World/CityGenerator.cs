@@ -264,7 +264,6 @@ public partial class CityGenerator : Node3D
         }
 
         // Esta etapa não cria Nodes nem geometria; os dados ficam prontos antes dos sistemas de missão.
-        WorldGenerationProgress lastLogicalProgress = new("Preparando mundo", 0, 1);
         WorldData = WorldDataGenerator.Generate(
             Seed, Biome, Radius, BlockSize, RoadWidth, FarmExtent, CurbHeight,
             MarketBlock, RadioStationBlock, FireStationBlock, PoliceStationBlock,
@@ -272,7 +271,6 @@ public partial class CityGenerator : Node3D
             ParkChance, ParkingLotChance, GasStations, _useLogicalWorldData,
             progress =>
             {
-                lastLogicalProgress = progress;
                 WorldDataProgress?.Invoke(progress);
                 loading?.SetProgress(progress.Stage, progress.Completed, progress.Total);
             });
@@ -1025,7 +1023,7 @@ public partial class CityGenerator : Node3D
                 SpotAngle = 50f,
                 ShadowEnabled = true,
             };
-            _lightsRoot.AddChild(spot);
+            ActiveLightsRoot.AddChild(spot);
         }
 
         // Muro baixo (cerca de madeira no rancho) com portões para as ruas de +X e +Z.
