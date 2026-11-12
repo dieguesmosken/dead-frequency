@@ -145,7 +145,7 @@ public partial class NetClient : Node
 
     private void ProbeRoomProtocol()
     {
-        var probe = new HttpRequest { Timeout = 5 };
+        var probe = new HttpRequest { Timeout = 2 };
         AddChild(probe);
         probe.RequestCompleted += (result, responseCode, headers, body) =>
         {
