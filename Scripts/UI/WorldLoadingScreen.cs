@@ -9,6 +9,7 @@ public partial class WorldLoadingScreen : CanvasLayer
     private Label _stage;
     private Label _detail;
     private ProgressBar _progress;
+    private float _lastOverallProgress;
 
     public override void _Ready()
     {
@@ -85,16 +86,22 @@ public partial class WorldLoadingScreen : CanvasLayer
         layout.AddChild(_detail);
     }
 
-    public void SetProgress(string stage, int completed, int total)
+    public void SetProgress(string stage, int completed, int total, float? overallRatio = null)
     {
         if (!IsInsideTree())
             return;
 
         int safeTotal = Mathf.Max(1, total);
         int safeCompleted = Mathf.Clamp(completed, 0, safeTotal);
+        float localRatio = (float)safeCompleted / safeTotal;
+        float requestedRatio = overallRatio.HasValue
+            ? Mathf.Clamp(overallRatio.Value, 0f, 1f)
+            : localRatio;
+
+        _lastOverallProgress = Mathf.Max(_lastOverallProgress, requestedRatio);
         _stage.Text = stage;
         _detail.Text = $"{safeCompleted:N0} / {safeTotal:N0}";
-        _progress.Value = (double)safeCompleted / safeTotal * 100.0;
+        _progress.Value = _lastOverallProgress * 100.0;
     }
 
     public void SetFailure(string message)
