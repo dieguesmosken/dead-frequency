@@ -225,6 +225,35 @@ A rádio deve anunciar os próprios estabelecimentos e acontecimentos do mundo d
 
 ---
 
+## Modo História e novas fases (planejado em 12/11/2026)
+
+Documentação completa em [`docs/README_PARA_IAS.md`](docs/README_PARA_IAS.md). Tom: cotidiano e aventura leve, **sem terror**.
+
+### Em andamento — Mundo e polimento (foco atual)
+- [ ] **Fase 1 · Cidade (ambientação Brazilcore):** lombadas com física de suspensão, asfalto remendado/bueiros, postes com fios e cartazes, orelhões, lixeiras de grade, calçadas irregulares e árvores com a base pintada de branco.
+- [ ] **Fase 2 · Rancho (reconstrução):** estradas de terra vermelha em circuito, sítios, *packing house* de banana/palmito, lago com pesqueiro e sinalização rústica.
+
+### Próximas — Imersão e novos cenários (cenas isoladas)
+- [ ] **IK nos personagens:** `TwoBoneIK3D` para mãos na caixa/saco/volante e `LookAtModifier3D` para NPCs olharem o jogador.
+- [ ] **Otimização de renderização:** `MultiMeshInstance3D` para vegetação/postes e *occlusion culling*.
+- [ ] **Fase 3 · O Bananal (`Bananal.tscn`):** navegação pelo sinal da 96.6 (radar sonoro).
+- [ ] **Fase 4 · Gruta da Estática (`Gruta.tscn`):** caverna de calcário com salas modulares, lanterna e visão noturna.
+- [ ] **Fase 5 · Estrada da Serra (`Serra.tscn`):** subida sinuosa com neblina e teste de integridade da carga.
+
+### Modo História (offline)
+- [ ] Progressão desacoplada (`StoryManager` + `JobEvents`), salva no `save.tzn`.
+- [ ] Piloto automático na `VanController` + `ChapterTransitionZone` (loading disfarçado na estrada, rádio ligado e banner retrô).
+- [ ] Campanha em 7 capítulos ligando Cidade, Rancho, Bananal, Gruta, Serra e Rádio 96.6 (capítulos a definir).
+
+### Backlog opcional — vida urbana
+- [ ] Praça da Matriz à noite com barracas de pastel/lanche e carro de som anunciando eventos.
+- [ ] Festivais sazonais na praça (Festa da Colheita, Bon Odori) e travessia de balsa.
+
+### Pós-v1.0
+- [ ] Testar servidor dedicado com Colyseus (Oracle Cloud Free Tier), cliente via NuGet `Colyseus` + `schema-codegen`.
+
+---
+
 ## Notas técnicas
 - **Sorteios da cidade:** `_rng` (layout e endereços) e `_decoRng` (detalhes). Quarteirões especiais pulam o `_rng`; mexer neles muda a cidade: suba `PROTOCOL_VERSION` (servidor) e `NetClient.ProtocolVersion` juntos (o LocalServer usa o do NetClient).
 - **Quarteirões especiais:** depósito (0,0), bombeiros (1,-1), delegacia (-1,1), caixa d'água (-1,-1), postos (2,1) com lava-jato, (-2,-2) e (-3,1), **rádio (1,2)**, **mercado (-2,2)**, **Edifício Sintonia (2,-2)**.

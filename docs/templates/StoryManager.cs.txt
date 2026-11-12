@@ -1,0 +1,106 @@
+// Scripts/Story/StoryManager.cs  (modelo — ver docs/tech/01_ARQUITETURA_MODO_HISTORIA.md)
+// Autoload do Modo História (offline). Conta o progresso pelos JobEvents e libera o avanço de capítulo.
+// Não troca de cena: quem faz a viagem é a ChapterTransitionZone.
+// project.godot → [autoload] StoryManager="*res://Scripts/Story/StoryManager.cs"
+using System;
+using System.Collections.Generic;
+using Godot;
+
+namespace DeadFrequency;
+
+public partial class StoryManager : Node
+{
+    public static StoryManager Instance { get; private set; }
+
+    public int CurrentChapter { get; private set; } = 1;
+    public bool CanAdvance { get; private set; }
+    public IReadOnlyCollection<int> CompletedChapters => _completed;
+
+    /// <summary>O capítulo atual cumpriu a meta (a UI pode avisar: "siga pela estrada").</summary>
+    public event Action<int> ChapterReady;
+    /// <summary>Entrou num capítulo novo.</summary>
+    public event Action<int> ChapterChanged;
+
+    private readonly HashSet<int> _completed = new();
+    private readonly Dictionary<string, int> _progress = new();
+
+    // Meta de cada capítulo: profissão → quantidade de tarefas.
+    // FALTA: metas de verdade (docs/lore/01_LORE_E_CAPITULOS.md). Depois pode virar Resource .tres ([GlobalClass] ChapterData).
+    private static readonly Dictionary<int, (string Job, int Count)> ChapterGoals = new()
+    {
+        { 1, (Professions.Entregador, 5) },
+    };
+
+    public override void _Ready()
+    {
+        Instance = this;
+        JobEvents.TaskDone += OnTaskDone;
+    }
+
+    public override void _ExitTree()
+    {
+        JobEvents.TaskDone -= OnTaskDone;
+        if (Instance == this)
+            Instance = null;
+    }
+
+    private static bool Offline => NetClient.Instance == null || !NetClient.Instance.IsOnline;
+
+    private void OnTaskDone(string job, string what, int payment)
+    {
+        if (!Offline || CanAdvance)
+            return;
+        _progress[job] = _progress.GetValueOrDefault(job) + 1;
+        if (ChapterGoals.TryGetValue(CurrentChapter, out var goal) && _progress.GetValueOrDefault(goal.Job) >= goal.Count)
+        {
+            CanAdvance = true;
+            ChapterReady?.Invoke(CurrentChapter);
+        }
+    }
+
+    /// <summary>A ChapterTransitionZone pergunta antes de começar a viagem.</summary>
+    public bool CanTriggerTransition(int requiredChapter) =>
+        Offline && CurrentChapter == requiredChapter && CanAdvance && !_completed.Contains(requiredChapter);
+
+    /// <summary>Chamado pela ChapterTransitionZone logo antes de trocar de cena.</summary>
+    public void AdvanceToChapter(int nextChapter)
+    {
+        _completed.Add(CurrentChapter);
+        CurrentChapter = nextChapter;
+        CanAdvance = false;
+        _progress.Clear();
+        GD.Print($"[StoryManager] Capítulo {CurrentChapter}");
+        ChapterChanged?.Invoke(CurrentChapter);
+    }
+
+    // ── Save: vai em SaveData.Story (user://save.tzn, System.Text.Json) ──
+    public StorySave ToSave() => new()
+    {
+        Chapter = CurrentChapter,
+        CanAdvance = CanAdvance,
+        Completed = new List<int>(_completed),
+        Progress = new Dictionary<string, int>(_progress),
+    };
+
+    public void FromSave(StorySave s)
+    {
+        if (s == null)
+            return;
+        CurrentChapter = Mathf.Max(1, s.Chapter);
+        CanAdvance = s.CanAdvance;
+        _completed.Clear();
+        _completed.UnionWith(s.Completed ?? new List<int>());
+        _progress.Clear();
+        foreach (var kv in s.Progress ?? new Dictionary<string, int>())
+            _progress[kv.Key] = kv.Value;
+    }
+}
+
+// Vai junto do SaveData em Scripts/Core/SaveManager.cs:  public StorySave Story { get; set; } = new();
+public class StorySave
+{
+    public int Chapter { get; set; } = 1;
+    public bool CanAdvance { get; set; }
+    public List<int> Completed { get; set; } = new();
+    public Dictionary<string, int> Progress { get; set; } = new();
+}
