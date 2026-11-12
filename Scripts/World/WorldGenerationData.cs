@@ -34,6 +34,9 @@ public sealed class WorldChunkData
 /// <summary>Ponto lógico de início de uma profissão, sem depender de um Job ou Node visual.</summary>
 public readonly record struct WorldSpawnPoint(string Profession, Vector3 Position, float Yaw);
 
+/// <summary>Ponto de entrega lógico de um quarteirão, calculado sem objetos da SceneTree.</summary>
+public readonly record struct WorldDeliveryPointData(int BlockX, int BlockZ, Vector3 Position, string Address);
+
 /// <summary>Progresso de uma etapa real do preparo lógico do mundo.</summary>
 public readonly record struct WorldGenerationProgress(string Stage, int Completed, int Total)
 {
@@ -55,6 +58,7 @@ public sealed class WorldGenerationData
     public float ChunkSize { get; }
     public bool UsesCenteredGrid { get; }
     public IReadOnlyList<WorldChunkData> Chunks { get; }
+    public IReadOnlyList<WorldDeliveryPointData> DeliveryPoints { get; }
     public IReadOnlyDictionary<string, WorldSpawnPoint> SpawnPoints => _spawnPoints;
 
     internal WorldGenerationData(
@@ -64,6 +68,7 @@ public sealed class WorldGenerationData
         float chunkSize,
         bool usesCenteredGrid,
         List<WorldChunkData> chunks,
+        List<WorldDeliveryPointData> deliveryPoints,
         Dictionary<string, WorldSpawnPoint> spawnPoints)
     {
         Seed = seed;
@@ -72,6 +77,7 @@ public sealed class WorldGenerationData
         ChunkSize = chunkSize;
         UsesCenteredGrid = usesCenteredGrid;
         Chunks = Array.AsReadOnly(chunks.ToArray());
+        DeliveryPoints = Array.AsReadOnly(deliveryPoints.ToArray());
         _chunkIndex = new Dictionary<WorldChunkCoordinate, WorldChunkData>(chunks.Count);
         foreach (WorldChunkData chunk in chunks)
             _chunkIndex[chunk.Coordinate] = chunk;
