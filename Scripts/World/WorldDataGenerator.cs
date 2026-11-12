@@ -124,7 +124,9 @@ public static class WorldDataGenerator
                     new List<WorldParkingCarPlan>(block.ParkingCars),
                     blockRoadCars ?? new List<WorldRoadCarPlan>());
             }
-            int plannedRoadCars = roadCars.Values.Sum(list => list.Count);
+            int plannedRoadCars = 0;
+            foreach (List<WorldRoadCarPlan> roadCarList in roadCars.Values)
+                plannedRoadCars += roadCarList.Count;
             progress?.Invoke(new WorldGenerationProgress(
                 "Calculando veículos estacionados", plannedRoadCars, plannedRoadCars));
 
@@ -554,11 +556,11 @@ public static class WorldDataGenerator
                     float along = segment * period;
 
                     AddRoadCarPlan(
-                        worldSeed, radius, road, segment, side, vertical: true,
+                        worldSeed, radius, road, segment, side, true,
                         hasCurb, roadPosition, along, laneOffset, reach, parkedCarChance,
                         noParkingZones, result);
                     AddRoadCarPlan(
-                        worldSeed, radius, road, segment, side, vertical: false,
+                        worldSeed, radius, road, segment, side, false,
                         hasCurb, roadPosition, along, laneOffset, reach, parkedCarChance,
                         noParkingZones, result);
                 }
