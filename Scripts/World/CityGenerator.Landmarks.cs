@@ -267,6 +267,9 @@ public partial class CityGenerator
 
     private void BuildPhoneBooths()
     {
+        if (_useLogicalBlockPlans)
+            return; // O conteúdo acompanha cada chunk.
+
         float edge = BlockSize * 0.5f - 0.9f;
         var booths = new Node3D { Name = "PhoneBooths" };
         _staticRoot.AddChild(booths);
@@ -286,6 +289,26 @@ public partial class CityGenerator
         }
         // Um em frente ao portão do depósito, para quem acabou de chegar.
         AddPhoneBooth(booths, new Vector3(8f, 0f, BlockSize * 0.5f - 1.4f), Vector3.Back);
+    }
+
+    private void BuildPhoneBoothsForBlock(int bx, int bz)
+    {
+        var booths = new Node3D { Name = $"PhoneBooths_{bx}_{bz}" };
+        (_activeChunkRoot ?? _staticRoot).AddChild(booths);
+
+        if (bx == 0 && bz == 0)
+        {
+            // Um orelhão em frente ao portão do depósito, para quem acabou de chegar.
+            AddPhoneBooth(booths, new Vector3(8f, 0f, BlockSize * 0.5f - 1.4f), Vector3.Back);
+            return;
+        }
+
+        float edge = BlockSize * 0.5f - 0.9f;
+        Vector3 center = BlockCenter(bx, bz) + new Vector3(0f, CurbHeight, 0f);
+        if (_decoRng.Randf() < PhoneBoothChance)
+            AddPhoneBooth(booths, center + new Vector3(-edge, 0f, BlockSize * 0.25f), Vector3.Left);
+        if (_decoRng.Randf() < PhoneBoothChance * 0.5f)
+            AddPhoneBooth(booths, center + new Vector3(BlockSize * 0.25f, 0f, -edge), Vector3.Forward);
     }
 
     private void AddPhoneBooth(Node3D parent, Vector3 position, Vector3 towardRoad, PhoneBrand? forced = null)
@@ -312,6 +335,9 @@ public partial class CityGenerator
 
     private void BuildHydrants()
     {
+        if (_useLogicalBlockPlans)
+            return; // Hidrantes são gerados pelo chunk correspondente.
+
         var root = new Node3D { Name = "Hydrants" };
         _staticRoot.AddChild(root);
         float corner = BlockSize * 0.5f - 1.0f;
@@ -325,6 +351,18 @@ public partial class CityGenerator
                 AddHydrant(root, c + new Vector3(corner, 0f, -corner + 2.5f));
             }
         }
+    }
+
+    private void BuildHydrantsForBlock(int bx, int bz)
+    {
+        if ((bx == 0 && bz == 0) || _decoRng.Randf() > 0.35f)
+            return;
+
+        var root = new Node3D { Name = $"Hydrants_{bx}_{bz}" };
+        (_activeChunkRoot ?? _staticRoot).AddChild(root);
+        float corner = BlockSize * 0.5f - 1.0f;
+        Vector3 center = BlockCenter(bx, bz) + new Vector3(0f, CurbHeight, 0f);
+        AddHydrant(root, center + new Vector3(corner, 0f, -corner + 2.5f));
     }
 
     private void AddHydrant(Node3D parent, Vector3 position)
