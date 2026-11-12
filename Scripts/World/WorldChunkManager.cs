@@ -119,6 +119,7 @@ public partial class WorldChunkManager : Node
 
     private bool TrackGroup(string groupName, HashSet<ulong> activeIds)
     {
+        bool changed = false;
         foreach (Node node in GetTree().GetNodesInGroup(groupName))
         {
             if (node is not Node3D spatial || !GodotObject.IsInstanceValid(spatial))
