@@ -32,6 +32,7 @@ public static class WorldDataGenerator
         Vector2I marketBlock,
         Vector2I radioStationBlock,
         IReadOnlyList<(Vector2I Block, string Id)> gasStations,
+        bool prepareLogicalDeliveryPoints,
         Action<WorldGenerationProgress> progress = null)
     {
         float chunkSize = biome == WorldBiome.City ? blockSize + roadWidth : FarmChunkSize;
@@ -62,7 +63,8 @@ public static class WorldDataGenerator
                 }
             }
 
-            BuildCityDeliveryPoints(seed, cityRadius, blockSize, chunkSize, curbHeight, deliveryPoints, progress);
+            if (prepareLogicalDeliveryPoints)
+                BuildCityDeliveryPoints(seed, cityRadius, blockSize, chunkSize, curbHeight, deliveryPoints, progress);
             BuildCitySpawnPoints(
                 spawnPoints, blockSize, chunkSize, curbHeight, cityRadius,
                 marketBlock, radioStationBlock, gasStations);
