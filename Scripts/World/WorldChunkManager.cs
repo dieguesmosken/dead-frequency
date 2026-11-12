@@ -55,6 +55,17 @@ public partial class WorldChunkManager : Node
         ProcessQueues();
     }
 
+    /// <summary>Atualiza a fila quando uma missão reserva ou libera uma região distante.</summary>
+    public void RequestRefresh()
+    {
+        if (!IsInsideTree() || City == null || !GodotObject.IsInstanceValid(City) ||
+            Target == null || !GodotObject.IsInstanceValid(Target))
+            return;
+
+        RebuildQueues();
+        ProcessQueues();
+    }
+
     public override void _Process(double delta)
     {
         if (City == null || !GodotObject.IsInstanceValid(City) ||
@@ -98,8 +109,17 @@ public partial class WorldChunkManager : Node
         var prioritized = new List<WorldChunkData>(nearby.Count);
         foreach (WorldChunkData chunk in nearby)
         {
-            _desired.Add(chunk.Coordinate);
-            prioritized.Add(chunk);
+            if (_desired.Add(chunk.Coordinate))
+                prioritized.Add(chunk);
+        }
+
+        // Missões podem manter um chunk distante carregado enquanto houver objetos ativos nele.
+        foreach (WorldChunkCoordinate pinned in City.GetPinnedChunkCoordinates())
+        {
+            if (!_desired.Add(pinned))
+                continue;
+            if (City.WorldData.TryGetChunk(pinned, out WorldChunkData chunk))
+                prioritized.Add(chunk);
         }
 
         prioritized.Sort((a, b) =>
@@ -118,7 +138,7 @@ public partial class WorldChunkManager : Node
         {
             int dx = Math.Abs(loaded.X - _lastCenter.X);
             int dz = Math.Abs(loaded.Z - _lastCenter.Z);
-            if (Math.Max(dx, dz) <= UnloadRadius || _desired.Contains(loaded))
+            if (Math.Max(dx, dz) <= UnloadRadius || _desired.Contains(loaded) || City.IsChunkPinned(loaded))
                 continue;
 
             if (_queuedUnloads.Add(loaded))
@@ -136,7 +156,7 @@ public partial class WorldChunkManager : Node
 
             int dx = Math.Abs(coordinate.X - _lastCenter.X);
             int dz = Math.Abs(coordinate.Z - _lastCenter.Z);
-            if (Math.Max(dx, dz) > UnloadRadius && !_desired.Contains(coordinate))
+            if (Math.Max(dx, dz) > UnloadRadius && !_desired.Contains(coordinate) && !City.IsChunkPinned(coordinate))
                 City.UnloadChunkVisuals(coordinate);
         }
 
