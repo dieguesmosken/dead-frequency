@@ -285,16 +285,45 @@ public partial class CityGenerator : Node3D
     private void PrepareLogicalNoParkingZones()
     {
         _noParking.Clear();
+
         foreach ((Vector2I block, string _) in GasStations)
         {
-            if (Mathf.Abs(block.X) > Radius || Mathf.Abs(block.Y) > Radius)
+            if (!IsCityBlockInRange(block))
                 continue;
 
             Vector3 center = BlockCenter(block.X, block.Y);
             var owner = new WorldChunkCoordinate(block.X, block.Y);
-            _noParking.Add((center + new Vector3(12f, 0f, BlockSize * 0.5f), Vector3.Right, 5.5f, owner));
-            _noParking.Add((center + new Vector3(-13f, 0f, BlockSize * 0.5f), Vector3.Right, 5.5f, owner));
+            AddPreparedNoParkingZone(center + new Vector3(12f, 0f, BlockSize * 0.5f), 5.5f, owner);
+            AddPreparedNoParkingZone(center + new Vector3(-13f, 0f, BlockSize * 0.5f), 5.5f, owner);
         }
+
+        // Zonas especiais também precisam existir antes de qualquer chunk visual ser construído.
+        if (IsCityBlockInRange(FireStationBlock))
+        {
+            Vector3 center = BlockCenter(FireStationBlock.X, FireStationBlock.Y);
+            AddPreparedNoParkingZone(
+                center + new Vector3(0f, 0f, -BlockSize * 0.5f),
+                13f,
+                new WorldChunkCoordinate(FireStationBlock.X, FireStationBlock.Y));
+        }
+
+        if (IsCityBlockInRange(PoliceStationBlock))
+        {
+            Vector3 center = BlockCenter(PoliceStationBlock.X, PoliceStationBlock.Y);
+            AddPreparedNoParkingZone(
+                center + new Vector3(0f, 0f, BlockSize * 0.5f),
+                4.5f,
+                new WorldChunkCoordinate(PoliceStationBlock.X, PoliceStationBlock.Y));
+        }
+    }
+
+    private bool IsCityBlockInRange(Vector2I block) =>
+        block.X >= -Radius && block.X <= Radius &&
+        block.Y >= -Radius && block.Y <= Radius;
+
+    private void AddPreparedNoParkingZone(Vector3 center, float halfLength, WorldChunkCoordinate owner)
+    {
+        _noParking.Add((center, Vector3.Right, halfLength, owner));
     }
 
     private string GetInitialProfessionForWorld()
