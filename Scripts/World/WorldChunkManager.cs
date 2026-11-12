@@ -10,6 +10,7 @@ namespace DeadFrequency;
 /// </summary>
 public partial class WorldChunkManager : Node
 {
+    public const string TrackedObjectGroup = "streamed_world_objects";
     [Export(PropertyHint.Range, "0,5,1")]
     public int LoadRadius { get; set; } = 1;
 
@@ -93,6 +94,7 @@ public partial class WorldChunkManager : Node
         TrackGroup(VanController.GroupName, activeIds);
         TrackGroup(CargoItem.GroupName, activeIds);
         TrackGroup(WorldItem.GroupName, activeIds);
+        TrackGroup(TrackedObjectGroup, activeIds);
 
         foreach (ulong instanceId in new List<ulong>(_trackedObjectPins.Keys))
         {
