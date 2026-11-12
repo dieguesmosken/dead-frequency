@@ -10,6 +10,9 @@ Todas as atualizações do Dead Frequency. O jogo mostra a mesma lista em **Novi
 - Bocas de lobo com grades, tampas de bueiro nas ruas e som de água corrente audível nas proximidades.
 - Ciclovias pintadas e ciclista que percorre a cidade sincronizado pelo relógio; ele toca o sino quando há alguém à frente.
 - Delegacia identificada na fachada e no minimapa, com policiais figurantes fardados.
+- Roda do mouse alterna entre a câmera em primeira e em terceira pessoa; Ctrl + roda ajusta o campo de visão.
+- Online: salas separadas por versão do protocolo (7 e 8), com aviso claro quando a sua versão não bate com a da sala. Atualize o servidor com npm run deploy.
+- Correções: a caixa na mão de outro jogador não aparece mais duplicada e o boneco sentado reconhece mais animações.
 
 ## v0.9.7 — Mãos ocupadas  (10/11/2026)
 
