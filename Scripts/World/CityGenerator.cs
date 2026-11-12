@@ -89,6 +89,111 @@ public partial class CityGenerator : Node3D
     private Node3D _lightsRoot;
     private bool _useLogicalWorldData;
     private bool _useLogicalBlockPlans;
+    private Node3D _activeChunkRoot;
+    private WorldChunkCoordinate? _activeChunkCoordinate;
+    private readonly Dictionary<WorldChunkCoordinate, Node3D> _chunkRoots = new();
+    private readonly Dictionary<WorldChunkCoordinate, Node3D> _chunkLightRoots = new();
+
+    private Node3D ActiveLightsRoot
+    {
+        get
+        {
+            if (!_activeChunkCoordinate.HasValue)
+                return _lightsRoot;
+
+            WorldChunkCoordinate coordinate = _activeChunkCoordinate.Value;
+            if (!_chunkLightRoots.TryGetValue(coordinate, out Node3D root) || !GodotObject.IsInstanceValid(root))
+            {
+                root = new Node3D { Name = $"ChunkLights_{coordinate.X}_{coordinate.Z}" };
+                _lightsRoot.AddChild(root);
+                _chunkLightRoots[coordinate] = root;
+            }
+            return root;
+        }
+    }
+
+    public bool IsChunkVisualized(WorldChunkCoordinate coordinate) =>
+        _chunkRoots.TryGetValue(coordinate, out Node3D root)
+        && GodotObject.IsInstanceValid(root)
+        && !root.IsQueuedForDeletion();
+
+    public IReadOnlyList<WorldChunkCoordinate> GetLoadedChunkCoordinates() =>
+        new List<WorldChunkCoordinate>(_chunkRoots.Keys);
+
+    /// <summary>Cria a geometria de um único chunk na thread principal.</summary>
+    public bool BuildChunkVisuals(WorldChunkData chunk)
+    {
+        if (!_useLogicalBlockPlans || Biome != WorldBiome.City || IsChunkVisualized(chunk.Coordinate))
+            return false;
+
+        var root = new Node3D { Name = $"Chunk_{chunk.Coordinate.X}_{chunk.Coordinate.Z}" };
+        _staticRoot.AddChild(root);
+        _chunkRoots[chunk.Coordinate] = root;
+
+        Node3D previousRoot = _activeChunkRoot;
+        WorldChunkCoordinate? previousCoordinate = _activeChunkCoordinate;
+        _activeChunkRoot = root;
+        _activeChunkCoordinate = chunk.Coordinate;
+
+        try
+        {
+            if (chunk.Coordinate.X == 0 && chunk.Coordinate.Z == 0)
+                BuildDepot(parent: root);
+            else
+                BuildBlock(chunk.Coordinate.X, chunk.Coordinate.Z);
+
+            OptimizeVisibility(root);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            GD.PushError($"Falha ao construir chunk {chunk.Coordinate.X},{chunk.Coordinate.Z}: {ex}");
+            root.QueueFree();
+            _chunkRoots.Remove(chunk.Coordinate);
+            if (_chunkLightRoots.TryGetValue(chunk.Coordinate, out Node3D lights))
+            {
+                lights.QueueFree();
+                _chunkLightRoots.Remove(chunk.Coordinate);
+            }
+            return false;
+        }
+        finally
+        {
+            _activeChunkRoot = previousRoot;
+            _activeChunkCoordinate = previousCoordinate;
+        }
+    }
+
+    /// <summary>Descarta apenas a geometria do chunk; os dados lógicos permanecem na memória.</summary>
+    public void UnloadChunkVisuals(WorldChunkCoordinate coordinate)
+    {
+        if (_chunkRoots.TryGetValue(coordinate, out Node3D root))
+        {
+            _chunkRoots.Remove(coordinate);
+            if (GodotObject.IsInstanceValid(root))
+                root.QueueFree();
+        }
+
+        if (_chunkLightRoots.TryGetValue(coordinate, out Node3D lights))
+        {
+            _chunkLightRoots.Remove(coordinate);
+            if (GodotObject.IsInstanceValid(lights))
+                lights.QueueFree();
+        }
+    }
+
+    private string GetInitialProfessionForWorld()
+    {
+        string wanted = Professions.Current;
+        if (NetClient.Instance?.IsOnline != true)
+        {
+            SaveData save = SaveManager.Load();
+            if (save != null && !string.IsNullOrEmpty(save.Profession) &&
+                GameSettings.Instance?.Profession == save.Profession)
+                wanted = save.Profession;
+        }
+        return wanted;
+    }
 
     public override void _Ready()
     {
@@ -101,8 +206,8 @@ public partial class CityGenerator : Node3D
         // O RNG legado de renderização permanece separado para preservar o mapa visual atual.
         // V7 precisa preservar exatamente os pontos de entrega do gerador legado.
         // V8 pode usar o plano lógico, já que seus clientes usam a mesma geração atualizada.
-        _useLogicalWorldData = NetClient.Instance?.IsOnline == true
-            && NetClient.Instance.ActiveProtocolVersion >= NetClient.PreferredProtocolVersion;
+        _useLogicalWorldData = NetClient.Instance?.IsOnline != true
+            || NetClient.Instance.ActiveProtocolVersion >= NetClient.PreferredProtocolVersion;
         _useLogicalBlockPlans = _useLogicalWorldData;
 
         WorldData = WorldDataGenerator.Generate(
@@ -157,14 +262,29 @@ public partial class CityGenerator : Node3D
 
         BuildGround();
 
-        for (int bx = -Radius; bx <= Radius; bx++)
+        if (_useLogicalBlockPlans)
         {
-            for (int bz = -Radius; bz <= Radius; bz++)
+            PlayerController player = GetParent()?.GetNodeOrNull<PlayerController>("Player");
+            Vector3 fallback = player != null
+                ? player.GlobalPosition
+                : new Vector3(-3f, 0f, 8f);
+            string profession = GetInitialProfessionForWorld();
+            IReadOnlyList<WorldChunkData> initialChunks =
+                WorldData.GetInitialChunks(profession, fallback, radius: 1);
+            foreach (WorldChunkData chunk in initialChunks)
+                BuildChunkVisuals(chunk);
+        }
+        else
+        {
+            for (int bx = -Radius; bx <= Radius; bx++)
             {
-                if (bx == 0 && bz == 0)
-                    BuildDepot();
-                else
-                    BuildBlock(bx, bz);
+                for (int bz = -Radius; bz <= Radius; bz++)
+                {
+                    if (bx == 0 && bz == 0)
+                        BuildDepot();
+                    else
+                        BuildBlock(bx, bz);
+                }
             }
         }
 
@@ -183,6 +303,13 @@ public partial class CityGenerator : Node3D
         BuildBoundary();
         BuildBillboards();
         OptimizeVisibility(this);
+
+        if (_useLogicalBlockPlans)
+        {
+            PlayerController player = GetParent()?.GetNodeOrNull<PlayerController>("Player");
+            if (player != null)
+                AddChild(new WorldChunkManager { City = this, Target = player });
+        }
     }
 
     /// <summary>Otimização (v0.9.7): peça pequena (banco, placa, ar-condicionado, lixeira...) some além de
@@ -398,7 +525,7 @@ public partial class CityGenerator : Node3D
     {
         Vector3 center = BlockCenter(bx, bz);
         var block = new Node3D { Name = $"Block_{bx}_{bz}" };
-        _staticRoot.AddChild(block);
+        (_activeChunkRoot ?? _staticRoot).AddChild(block);
 
         // Calçada elevada (meio-fio).
         AddBox(block, center + new Vector3(0f, CurbHeight * 0.5f, 0f), new Vector3(BlockSize, CurbHeight, BlockSize), _sidewalkMaterial);
