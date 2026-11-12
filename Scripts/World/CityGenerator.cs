@@ -88,6 +88,7 @@ public partial class CityGenerator : Node3D
     private Node3D _staticRoot;
     private Node3D _lightsRoot;
     private bool _useLogicalDeliveryPoints;
+    private bool _useLogicalBlockPlans;
 
     public override void _Ready()
     {
@@ -102,10 +103,13 @@ public partial class CityGenerator : Node3D
         // V8 pode usar o plano lógico, já que seus clientes usam a mesma geração atualizada.
         _useLogicalDeliveryPoints = NetClient.Instance?.IsOnline == true
             && NetClient.Instance.ActiveProtocolVersion >= NetClient.PreferredProtocolVersion;
+        _useLogicalBlockPlans = _useLogicalDeliveryPoints;
 
         WorldData = WorldDataGenerator.Generate(
             Seed, Biome, Radius, BlockSize, RoadWidth, FarmExtent, CurbHeight,
-            MarketBlock, RadioStationBlock, GasStations, _useLogicalDeliveryPoints,
+            MarketBlock, RadioStationBlock, FireStationBlock, PoliceStationBlock,
+            ShoppingMallBlock, ApartmentBlock, DealerBlock, WaterTowerBlock, CarWashBlock,
+            ParkChance, ParkingLotChance, GasStations, _useLogicalDeliveryPoints,
             progress => WorldDataProgress?.Invoke(progress));
 
         if (Biome == WorldBiome.City && _useLogicalDeliveryPoints)
@@ -353,6 +357,32 @@ public partial class CityGenerator : Node3D
 
     private void BuildBlock(int bx, int bz)
     {
+        if (_useLogicalBlockPlans &&
+            WorldData.TryGetBlock(new WorldChunkCoordinate(bx, bz), out WorldBlockData plan))
+        {
+            // Cada quarteirão recebe RNGs próprios. A ordem de construção ou carregamento dos
+            // chunks deixa de alterar prédios, árvores, carros e decoração dos outros quarteirões.
+            RandomNumberGenerator previousRng = _rng;
+            RandomNumberGenerator previousDecoRng = _decoRng;
+            _rng = new RandomNumberGenerator { Seed = plan.VisualSeed };
+            _decoRng = new RandomNumberGenerator { Seed = plan.DecorationSeed };
+            try
+            {
+                BuildBlockCore(bx, bz, plan.Kind);
+            }
+            finally
+            {
+                _rng = previousRng;
+                _decoRng = previousDecoRng;
+            }
+            return;
+        }
+
+        BuildBlockCore(bx, bz, null);
+    }
+
+    private void BuildBlockCore(int bx, int bz, WorldBlockKind? plannedKind)
+    {
         Vector3 center = BlockCenter(bx, bz);
         var block = new Node3D { Name = $"Block_{bx}_{bz}" };
         _staticRoot.AddChild(block);
@@ -378,8 +408,24 @@ public partial class CityGenerator : Node3D
         if (TryBuildServiceBlock(block, center, bx, bz))
             return;
 
-        float roll = _rng.Randf();
+        if (plannedKind.HasValue)
+        {
+            switch (plannedKind.Value)
+            {
+                case WorldBlockKind.Park:
+                    BuildPark(block, center, inner);
+                    break;
+                case WorldBlockKind.ParkingLot:
+                    BuildParkingLot(block, center, inner);
+                    break;
+                default:
+                    BuildBuildings(block, center, inner, bx, bz);
+                    break;
+            }
+            return;
+        }
 
+        float roll = _rng.Randf();
         if (roll < ParkChance)
             BuildPark(block, center, inner);
         else if (roll < ParkChance + ParkingLotChance)
@@ -626,13 +672,7 @@ public partial class CityGenerator : Node3D
     private void RegisterDeliveryPoint(int bx, int bz)
     {
         if (_useLogicalDeliveryPoints)
-        {
-            // Os pontos da cidade já foram calculados na fase lógica.
-            // Consome os dois sorteios antigos para manter idêntica a sequência do RNG visual legado.
-            _ = _rng.RandiRange(0, 3);
-            _ = _rng.RandiRange(10, 999);
-            return;
-        }
+            return; // Os pontos da cidade já foram calculados na fase lógica.
 
         // Compatibilidade V7/offline: mantém os pontos legados até a migração completa do gerador.
         int side = _rng.RandiRange(0, 3);
