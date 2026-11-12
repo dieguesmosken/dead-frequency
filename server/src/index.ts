@@ -1381,7 +1381,7 @@ export class GameRoom extends DurableObject<Env> {
       room.cars = [...(room.cars ?? []), item];
     } else {
       const slot = ITEM_SLOTS[item];
-      const equipped = equipmentItems(me.equipment);
+      const equipped = equipmentItems(me.equipment ?? "");
       if (slot && !equipped.some((id) => ITEM_SLOTS[id] === slot)) {
         me.equipment = sanitizeEquipment([...equipped, item].join(","));
       } else {
