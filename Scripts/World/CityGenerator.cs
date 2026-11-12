@@ -200,6 +200,9 @@ public partial class CityGenerator : Node3D
 
             BuildChunkDecorations(chunk.Coordinate);
             OptimizeVisibility(root);
+            if (_chunkLightRoots.TryGetValue(chunk.Coordinate, out Node3D chunkLights) &&
+                GodotObject.IsInstanceValid(chunkLights))
+                OptimizeVisibility(chunkLights);
             return true;
         }
         catch (Exception ex)
