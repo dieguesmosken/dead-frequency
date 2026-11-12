@@ -25,6 +25,7 @@ public partial class StreetVendor : Area3D, IInteractable
 
     public override void _Ready()
     {
+        AddToGroup(WorldChunkManager.TrackedObjectGroup);
         CollisionLayer = 4; // Interactables
         CollisionMask = 0;
         Monitoring = false;
