@@ -14,6 +14,7 @@ public partial class GariJob : JobBase
 
     private readonly List<Node3D> _bags = new();
     private readonly List<Node3D> _dumpsters = new();
+    private readonly Dictionary<Node3D, Vector3> _bagPinPositions = new();
     private int _carrying;
     private double _respawn;
     private StandardMaterial3D _bagMat;
@@ -33,6 +34,9 @@ public partial class GariJob : JobBase
 
     public override void _ExitTree()
     {
+        foreach (Vector3 position in _bagPinPositions.Values)
+            City?.UnpinChunkForPosition(position);
+        _bagPinPositions.Clear();
         foreach (Node3D n in _bags)
             if (IsInstanceValid(n))
                 n.QueueFree();
@@ -75,6 +79,8 @@ public partial class GariJob : JobBase
             _ => PickBag(captured),
             p => _carrying < MaxCarry && !p.IsHolding && p.CurrentVehicle == null);
         _bags.Add(bag);
+        if (City.PinChunkForPosition(pos))
+            _bagPinPositions[bag] = pos;
     }
 
     private void PickBag(Node3D bag)
@@ -82,6 +88,8 @@ public partial class GariJob : JobBase
         if (_carrying >= MaxCarry || !_bags.Contains(bag))
             return;
         _bags.Remove(bag);
+        if (_bagPinPositions.Remove(bag, out Vector3 pinnedPosition))
+            City.UnpinChunkForPosition(pinnedPosition);
         bag.QueueFree();
         _carrying++;
         GameHud.Toast(this, $"Saco recolhido ({_carrying}/{MaxCarry})", Orange, 2.0);
