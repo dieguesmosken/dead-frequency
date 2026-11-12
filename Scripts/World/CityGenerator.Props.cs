@@ -38,7 +38,7 @@ public partial class CityGenerator
                 if (h / 100 % 100 < 40)
                 {
                     Vector3 p = c + new Vector3(-edge - 0.1f, 0f, -BlockSize * 0.3f);
-                    if (!_useLogicalWorldData)
+                    if (!_useLogicalServiceData)
                         DumpsterSpots.Add(p + new Vector3(0.9f, 0f, 0f));
                     RegisterObstacle(p + new Vector3(0f, 0f, -0.5f));
                     RegisterObstacle(p + new Vector3(0f, 0f, 0.5f));
