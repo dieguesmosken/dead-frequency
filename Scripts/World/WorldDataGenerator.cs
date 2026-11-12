@@ -93,11 +93,13 @@ public static class WorldDataGenerator
                 fireStationBlock, policeStationBlock, radioStationBlock, marketBlock,
                 shoppingMallBlock, apartmentBlock, dealerBlock, waterTowerBlock, carWashBlock,
                 gasStations, progress);
-            // Os endereços V7 continuam sendo gerados pelo RNG legado, mas os pontos fixos
-            // das profissões podem ser preparados sem alterar o protocolo nem a sequência visual.
+            // Regras de estacionamento e pontos de profissão ficam disponíveis antes de qualquer mesh.
+            List<WorldNoParkingZoneData> noParkingZones = BuildCityNoParkingZones(
+                cityRadius, blockSize, chunkSize, fireStationBlock, policeStationBlock, gasStations, blocks);
+            // Os endereços V7 continuam sendo gerados pelo RNG legado, sem alterar a sequência visual.
             services = BuildCityServiceData(
                 cityRadius, blockSize, chunkSize, curbHeight, marketBlock,
-                radioStationBlock, gasStations, progress);
+                radioStationBlock, gasStations, noParkingZones, progress);
 
             if (prepareLogicalCityData)
                 BuildCityDeliveryPoints(seed, cityRadius, blockSize, chunkSize, curbHeight, deliveryPoints, progress);
@@ -482,6 +484,82 @@ public static class WorldDataGenerator
         return false;
     }
 
+    private static List<WorldNoParkingZoneData> BuildCityNoParkingZones(
+        int radius,
+        float blockSize,
+        float period,
+        Vector2I fireStationBlock,
+        Vector2I policeStationBlock,
+        IReadOnlyList<(Vector2I Block, string Id)> gasStations,
+        IReadOnlyList<WorldBlockData> blocks)
+    {
+        var result = new List<WorldNoParkingZoneData>();
+        if (gasStations != null)
+        {
+            foreach ((Vector2I block, string _) in gasStations)
+            {
+                if (!IsInsideCity(block, radius))
+                    continue;
+
+                Vector3 center = new(block.X * period, 0f, block.Y * period);
+                var owner = new WorldChunkCoordinate(block.X, block.Y);
+                result.Add(new WorldNoParkingZoneData(
+                    center + new Vector3(12f, 0f, blockSize * 0.5f), Vector3.Right, 5.5f, owner));
+                result.Add(new WorldNoParkingZoneData(
+                    center + new Vector3(-13f, 0f, blockSize * 0.5f), Vector3.Right, 5.5f, owner));
+            }
+        }
+
+        if (IsInsideCity(fireStationBlock, radius))
+        {
+            Vector3 center = new(fireStationBlock.X * period, 0f, fireStationBlock.Y * period);
+            result.Add(new WorldNoParkingZoneData(
+                center + new Vector3(0f, 0f, -blockSize * 0.5f),
+                Vector3.Right,
+                13f,
+                new WorldChunkCoordinate(fireStationBlock.X, fireStationBlock.Y)));
+        }
+
+        if (IsInsideCity(policeStationBlock, radius))
+        {
+            Vector3 center = new(policeStationBlock.X * period, 0f, policeStationBlock.Y * period);
+            result.Add(new WorldNoParkingZoneData(
+                center + new Vector3(0f, 0f, blockSize * 0.5f),
+                Vector3.Right,
+                4.5f,
+                new WorldChunkCoordinate(policeStationBlock.X, policeStationBlock.Y)));
+        }
+
+        // Fachadas comerciais também reservam a guia, mesmo que o quarteirão esteja descarregado.
+        foreach (WorldBlockData block in blocks)
+        {
+            Vector3 blockCenter = new(block.Coordinate.X * period, 0f, block.Coordinate.Z * period);
+            foreach (WorldBuildingPlan building in block.Buildings)
+            {
+                if (!building.HasStorefront)
+                    continue;
+
+                Vector3 along = new(building.Front.Z, 0f, -building.Front.X);
+                float facadeWidth = Mathf.Abs(building.Front.X) > 0.5f
+                    ? building.Depth
+                    : building.Width;
+                float halfDepth = Mathf.Abs(building.Front.X) > 0.5f
+                    ? building.Width * 0.5f
+                    : building.Depth * 0.5f;
+                float signWidth = Mathf.Min(facadeWidth * 0.85f, 9f);
+                float alongOffset = (building.BaseCenter - blockCenter).Dot(along);
+                Vector3 curb = blockCenter + building.Front * (blockSize * 0.5f) + along * alongOffset;
+                result.Add(new WorldNoParkingZoneData(
+                    curb,
+                    along,
+                    Mathf.Max(2.5f, signWidth * 0.3f),
+                    block.Coordinate));
+            }
+        }
+
+        return result;
+    }
+
     private static WorldServiceData BuildCityServiceData(
         int radius,
         float blockSize,
@@ -490,6 +568,7 @@ public static class WorldDataGenerator
         Vector2I marketBlock,
         Vector2I radioStationBlock,
         IReadOnlyList<(Vector2I Block, string Id)> gasStations,
+        IReadOnlyList<WorldNoParkingZoneData> noParkingZones,
         Action<WorldGenerationProgress> progress)
     {
         var dumpsters = new List<Vector3>();
@@ -561,7 +640,9 @@ public static class WorldDataGenerator
         }
 
         return new WorldServiceData(
-            dumpsters, gasSpots, shelfSlots, marketStockPoint, marketEntrance, radioConsolePoint);
+            dumpsters, gasSpots, shelfSlots,
+            new List<WorldNoParkingZoneData>(noParkingZones),
+            marketStockPoint, marketEntrance, radioConsolePoint);
     }
 
     private static void BuildCityDeliveryPoints(
