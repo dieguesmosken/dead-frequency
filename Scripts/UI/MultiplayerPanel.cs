@@ -293,15 +293,19 @@ public partial class MultiplayerPanel : VBoxContainer
                 string roomName = string.IsNullOrEmpty(r.Name) ? GameLevels.Get(r.Level).Name : r.Name;
                 string permanent = r.Permanent ? " · permanente" : "";
                 string password = r.HasPassword ? " · senha" : "";
-                Label l = UiStyle.MakeLabel($"{r.Code}  {roomName}  {r.Players}/{r.Max}{host}{auto}{permanent}{password}", 15, HorizontalAlignment.Left);
+                Label l = UiStyle.MakeLabel($"{r.Code}  V{r.Protocol}  {roomName}  {r.Players}/{r.Max}{host}{auto}{permanent}{password}", 15, HorizontalAlignment.Left);
                 l.SizeFlagsHorizontal = SizeFlags.ExpandFill;
                 l.ClipText = true;
                 line.AddChild(l);
                 string code = r.Code;
+                int protocol = r.Protocol;
                 Button enter = UiStyle.MakeButton(r.Players >= r.Max ? "Cheia" : "Entrar", () =>
                 {
+                    if (NetClient.Instance == null || !SaveFields())
+                        return;
                     _code.Text = code;
-                    OnJoinPressed();
+                    SetBusy(true);
+                    NetClient.Instance.JoinRoom(CurrentServer(), code, PlayerName(), _roomPassword.Text, protocol);
                 }, 120, UiSound.Start);
                 enter.Disabled = r.Players >= r.Max;
                 line.AddChild(enter);
@@ -487,7 +491,7 @@ public partial class MultiplayerPanel : VBoxContainer
         if (server == null || !server.Running || NetClient.Instance == null)
             return;
         SetBusy(true);
-        NetClient.Instance.JoinRoom($"http://127.0.0.1:{server.Port}", server.Code, PlayerName());
+        NetClient.Instance.JoinRoom($"http://127.0.0.1:{server.Port}", server.Code, PlayerName(), protocol: NetClient.ProtocolVersion);
         // O convite do menu de pausa usa o link público, não o 127.0.0.1.
         TunnelService tunnel = TunnelService.Instance;
         NetClient.Instance.PublicServerUrl = tunnel?.State == TunnelService.TunnelState.Ready ? tunnel.PublicUrl : "";
