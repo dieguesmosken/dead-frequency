@@ -178,7 +178,7 @@ public partial class CityGenerator
         foreach (float x in new[] { -5f, 5f })
         {
             AddBox(st, new Vector3(x, ch * 0.5f, 5f), new Vector3(0.5f, ch, 0.5f), paint);
-            _lightsRoot.AddChild(new OmniLight3D
+            ActiveLightsRoot.AddChild(new OmniLight3D
             {
                 Position = st.Position + canopyPos + new Vector3(x, -0.8f, 0f),
                 LightColor = new Color(0.95f, 0.98f, 1f),
@@ -365,7 +365,7 @@ public partial class CityGenerator
         AddBox(plaza, new Vector3(0f, legH - 0.2f, 0f), new Vector3(tankR * 2f + 1.4f, 0.25f, tankR * 2f + 1.4f), _darkMetal, false); // passarela
         AddBox(plaza, new Vector3(0f, legH + tankH + 2.6f, 0f), new Vector3(0.5f, 0.5f, 0.5f), _redBeacon, false);
         var beacon = new OmniLight3D { Position = plaza.Position + new Vector3(0f, legH + tankH + 3f, 0f), LightColor = new Color(1f, 0.1f, 0.05f), LightEnergy = 2.5f, OmniRange = 14f };
-        _lightsRoot.AddChild(beacon);
+        ActiveLightsRoot.AddChild(beacon);
 
         // Nome pintado em volta do tanque (quatro lados).
         for (int i = 0; i < 4; i++)
@@ -383,7 +383,7 @@ public partial class CityGenerator
                 Rotation = new Vector3(0f, a, 0f),
             });
             // Refletores no chão apontando para o tanque (só à noite).
-            _lightsRoot.AddChild(new SpotLight3D
+            ActiveLightsRoot.AddChild(new SpotLight3D
             {
                 Position = plaza.Position + dir * 9f + new Vector3(0f, 0.4f, 0f),
                 Basis = Basis.LookingAt((new Vector3(0f, legH + 3f, 0f) - (dir * 9f)).Normalized(), Vector3.Up),
