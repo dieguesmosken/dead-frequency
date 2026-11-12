@@ -45,9 +45,9 @@ public partial class WorldChunkManager : Node
     {
         if (City == null || !GodotObject.IsInstanceValid(City) ||
             Target == null || !GodotObject.IsInstanceValid(Target) ||
-            City.WorldData == null || City.WorldData.Biome != WorldBiome.City)
+            City.WorldData == null || !City.UsesChunkStreaming)
         {
-            GD.PushWarning("WorldChunkManager: cidade, alvo ou dados lógicos indisponíveis; streaming desativado.");
+            GD.PushWarning("WorldChunkManager: mundo, alvo ou dados lógicos indisponíveis; streaming desativado.");
             SetProcess(false);
             return;
         }
