@@ -7,6 +7,7 @@
 // As ruas ficam entre eles, centradas em k*Period + Period/2. O quarteirão (0,0) é o depósito.
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Godot;
 
 namespace DeadFrequency;
@@ -409,23 +410,116 @@ public partial class CityGenerator : Node3D
             loading.SetProgress("Calculando os dados lógicos do mundo...", 0, 1, 0f);
         }
 
-        // Esta etapa não cria Nodes nem geometria; os dados ficam prontos antes dos sistemas de missão.
-        WorldData = WorldDataGenerator.Generate(
-            Seed, Biome, Radius, BlockSize, SidewalkWidth, RoadWidth, FarmExtent, CurbHeight,
-            MarketBlock, RadioStationBlock, FireStationBlock, PoliceStationBlock,
-            ShoppingMallBlock, ApartmentBlock, DealerBlock, WaterTowerBlock, CarWashBlock,
-            ParkChance, ParkingLotChance, GasStations, StoreBrandCount, StorefrontChance,
-            ParkedCarChance, FarmNameCatalog, _useLogicalWorldData,
-            progress =>
+        // Captura parâmetros simples na thread principal. A worker thread não acessa Nodes,
+        // recursos ou propriedades do motor; só calcula structs e coleções gerenciadas.
+        int generationSeed = Seed;
+        WorldBiome generationBiome = Biome;
+        int generationRadius = Radius;
+        float generationBlockSize = BlockSize;
+        float generationSidewalkWidth = SidewalkWidth;
+        float generationRoadWidth = RoadWidth;
+        float generationFarmExtent = FarmExtent;
+        float generationCurbHeight = CurbHeight;
+        Vector2I generationMarketBlock = MarketBlock;
+        Vector2I generationRadioBlock = RadioStationBlock;
+        Vector2I generationFireBlock = FireStationBlock;
+        Vector2I generationPoliceBlock = PoliceStationBlock;
+        Vector2I generationMallBlock = ShoppingMallBlock;
+        Vector2I generationApartmentBlock = ApartmentBlock;
+        Vector2I generationDealerBlock = DealerBlock;
+        Vector2I generationWaterTowerBlock = WaterTowerBlock;
+        Vector2I generationCarWashBlock = CarWashBlock;
+        float generationParkChance = ParkChance;
+        float generationParkingChance = ParkingLotChance;
+        IReadOnlyList<(Vector2I Block, string Id)> generationGasStations = GasStations;
+        int generationStoreBrandCount = StoreBrandCount;
+        float generationStorefrontChance = StorefrontChance;
+        float generationParkedCarChance = ParkedCarChance;
+        IReadOnlyList<string> generationFarmNames = FarmNameCatalog;
+        bool prepareLogicalCityData = _useLogicalWorldData;
+
+        WorldGenerationData GenerateWorldData(Action<WorldGenerationProgress> progress) =>
+            WorldDataGenerator.Generate(
+                generationSeed, generationBiome, generationRadius,
+                generationBlockSize, generationSidewalkWidth, generationRoadWidth,
+                generationFarmExtent, generationCurbHeight,
+                generationMarketBlock, generationRadioBlock, generationFireBlock, generationPoliceBlock,
+                generationMallBlock, generationApartmentBlock, generationDealerBlock,
+                generationWaterTowerBlock, generationCarWashBlock,
+                generationParkChance, generationParkingChance, generationGasStations,
+                generationStoreBrandCount, generationStorefrontChance, generationParkedCarChance,
+                generationFarmNames, prepareLogicalCityData, progress);
+
+        if (_useLogicalBlockPlans)
+        {
+            SceneTree generationTree = GetTree();
+            bool previousGenerationPaused = generationTree.Paused;
+            object progressLock = new();
+            WorldGenerationProgress latestProgress = new("Preparando dados lógicos", 0, 1);
+
+            try
             {
-                WorldDataProgress?.Invoke(progress);
-                if (loading != null)
+                // Deixa a interface aparecer antes de começar o trabalho pesado.
+                await ToSignal(generationTree, SceneTree.SignalName.ProcessFrame);
+                generationTree.Paused = true;
+
+                Task<WorldGenerationData> generationTask = Task.Run(() =>
+                    GenerateWorldData(progress =>
+                    {
+                        lock (progressLock)
+                            latestProgress = progress;
+                    }));
+
+                while (!generationTask.IsCompleted)
                 {
-                    int stageOffset = logicalOffsets.TryGetValue(progress.Stage, out int offset) ? offset : 0;
-                    float logicalRatio = (float)(stageOffset + progress.Completed) / logicalTotal;
-                    loading.SetProgress(progress.Stage, progress.Completed, progress.Total, logicalRatio * 0.68f);
+                    WorldGenerationProgress snapshot;
+                    lock (progressLock)
+                        snapshot = latestProgress;
+
+                    WorldDataProgress?.Invoke(snapshot);
+                    int stageOffset = logicalOffsets.TryGetValue(snapshot.Stage, out int offset) ? offset : 0;
+                    float logicalRatio = (float)(stageOffset + snapshot.Completed) / logicalTotal;
+                    loading.SetProgress(
+                        snapshot.Stage,
+                        snapshot.Completed,
+                        snapshot.Total,
+                        logicalRatio * 0.68f);
+
+                    await ToSignal(generationTree, SceneTree.SignalName.ProcessFrame);
                 }
-            });
+
+                WorldData = await generationTask;
+
+                // Publica a última etapa mesmo que a tarefa tenha terminado entre dois frames.
+                WorldGenerationProgress finalProgress;
+                lock (progressLock)
+                    finalProgress = latestProgress;
+                WorldDataProgress?.Invoke(finalProgress);
+                loading.SetProgress(
+                    finalProgress.Stage,
+                    finalProgress.Completed,
+                    finalProgress.Total,
+                    0.68f);
+            }
+            catch (Exception ex)
+            {
+                GD.PushError($"Falha na preparação lógica do mundo: {ex}");
+                loading?.SetFailure("Falha ao preparar os dados do mundo.");
+                await ToSignal(generationTree, SceneTree.SignalName.ProcessFrame);
+                if (GodotObject.IsInstanceValid(loading))
+                    loading.QueueFree();
+                return;
+            }
+            finally
+            {
+                generationTree.Paused = previousGenerationPaused;
+            }
+        }
+        else
+        {
+            // O protocolo V7 continua no gerador legado síncrono e com seus dados preservados.
+            WorldData = GenerateWorldData(progress => WorldDataProgress?.Invoke(progress));
+        }
 
         if (Biome == WorldBiome.City)
         {
