@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://lom3less2mlo"
-path="res://.godot/imported/ad_recadin.svg-f663ea69f0bae3dbe5089bee4436f6d6.ctex"
+uid="uid://ckgatmpmwrbq0"
+path="res://.godot/imported/proibido_estacionar_policia.png-8c6f735ae8422fc4def2a585990c7039.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://Assets/Textures/Ads/ad_recadin.svg"
-dest_files=["res://.godot/imported/ad_recadin.svg-f663ea69f0bae3dbe5089bee4436f6d6.ctex"]
+source_file="res://Assets/Textures/Signs/proibido_estacionar_policia.png"
+dest_files=["res://.godot/imported/proibido_estacionar_policia.png-8c6f735ae8422fc4def2a585990c7039.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""
@@ -37,7 +37,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=1
-svg/scale=1.0
-editor/scale_with_editor_scale=false
-editor/convert_colors_with_editor_theme=false
+detect_3d/compress_to=0

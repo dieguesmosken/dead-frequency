@@ -40,7 +40,20 @@ public partial class NetSync : Node
     private VanController VehicleOf(string id) =>
         id != null && _vehicles.TryGetValue(id, out VanController v) && IsInstanceValid(v) ? v : null;
     private double _tickTimer;
+    private bool _hasSentTick;
+    private Vector3 _lastSentPosition;
+    private float _lastSentYaw;
+    private float _lastSentPitch;
+    private int _lastSentState;
+    private string _lastSentLook = "";
+    private string _lastSentHeld = "";
+    private string _lastSentObjects = "";
+    private ulong _lastSentAtMsec;
+    private const float TickPositionEpsilonSquared = 0.0025f; // 5 cm
+    private const float TickRotationEpsilon = 0.015f; // ~0,86°
+    private const ulong IdleHeartbeatMsec = 1000;
     private bool _active;
+    private bool _onlineInventorySession;
 
     private static NetClient Net => NetClient.Instance;
     private int MyId => Net?.MyId ?? 0;
@@ -54,6 +67,8 @@ public partial class NetSync : Node
         }
         _active = true;
         Instance = this;
+        PlayerInventory.Instance?.BeginOnlineSession();
+        _onlineInventorySession = PlayerInventory.Instance != null;
         // A cena ainda está montando os filhos; criar caixas agora daria erro de add_child.
         Callable.From(Initialize).CallDeferred();
     }
@@ -96,12 +111,18 @@ public partial class NetSync : Node
     {
         if (Instance == this)
             Instance = null;
-        if (!_active || Net == null)
-            return;
-        if (PlayerInventory.Instance != null)
-            PlayerInventory.Instance.Changed -= SyncInventory;
-        Net.MessageReceived -= OnMessage;
-        Net.Disconnected -= OnDisconnected;
+        if (_active && Net != null)
+        {
+            if (PlayerInventory.Instance != null)
+                PlayerInventory.Instance.Changed -= SyncInventory;
+            Net.MessageReceived -= OnMessage;
+            Net.Disconnected -= OnDisconnected;
+        }
+        if (_onlineInventorySession)
+        {
+            PlayerInventory.Instance?.EndOnlineSession();
+            _onlineInventorySession = false;
+        }
     }
 
     // ================================================================ recebendo
@@ -115,6 +136,7 @@ public partial class NetSync : Node
 
     private void ApplyWelcome(JsonElement m)
     {
+        ApplyInventoryState(m);
         // Carros da sala (precisam existir antes de aplicar donos e posições).
         var cars = new System.Collections.Generic.List<string>();
         if (m.TryGetProperty("cars", out JsonElement carsEl) && carsEl.ValueKind == JsonValueKind.Array)
@@ -348,13 +370,16 @@ public partial class NetSync : Node
         foreach (JsonElement item in items.EnumerateArray())
             if (item.ValueKind == JsonValueKind.String)
                 result.Add(item.GetString());
-        PlayerInventory.Instance?.ApplyNetworkItems(result);
+        string equipment = message.TryGetProperty("equipment", out JsonElement eq) && eq.ValueKind == JsonValueKind.String
+            ? eq.GetString()
+            : "";
+        PlayerInventory.Instance?.ApplyNetworkState(result, equipment);
     }
 
     private void SyncInventory()
     {
-        if (Net?.IsOnline == true)
-            Net.Send(new { t = "inventory", items = PlayerInventory.Instance?.Items });
+        if (Net?.IsOnline == true && PlayerInventory.Instance != null)
+            Net.Send(new { t = "inventory", items = PlayerInventory.Instance.Items, eq = PlayerInventory.Instance.EquipmentCsv() });
     }
 
     private void ApplyObject(JsonElement o)
@@ -520,19 +545,51 @@ public partial class NetSync : Node
                 objs.Add(ObjectState(job.Id, job.Cargo, job.Cargo.Integrity));
         }
 
+        Vector3 position = Player.GlobalPosition;
         Vector3 look = Player.Camera.GlobalRotation;
+        float yaw = (float)Round(look.Y);
+        float pitch = (float)Round(look.X);
+        int state = Player.State == PlayerState.Driving ? 1 : Player.State == PlayerState.Riding ? 2 : 0;
+        string lookCode = CharacterLook.Local.Encode();
+        string held = Player.HeldItem?.NetId ?? (PlayerInventory.Instance?.SelectedHotbarItemId is string heldItem ? "item:" + heldItem : "");
+        string objectsSignature = JsonSerializer.Serialize(objs);
+        ulong now = Time.GetTicksMsec();
+
+        bool changed = !_hasSentTick
+            || position.DistanceSquaredTo(_lastSentPosition) > TickPositionEpsilonSquared
+            || Mathf.Abs(Mathf.Wrap(yaw - _lastSentYaw, -Mathf.Pi, Mathf.Pi)) > TickRotationEpsilon
+            || Mathf.Abs(pitch - _lastSentPitch) > TickRotationEpsilon
+            || state != _lastSentState
+            || lookCode != _lastSentLook
+            || held != _lastSentHeld
+            || objectsSignature != _lastSentObjects;
+
+        // Sem mudanças, basta um heartbeat por segundo. Em movimento, mantém o tick normal de 10 Hz.
+        if (!changed && now - _lastSentAtMsec < IdleHeartbeatMsec)
+            return;
+
         Net.Send(new
         {
             t = "tick",
-            p = Vec(Player.GlobalPosition),
-            ry = Round(look.Y),
-            hp = Round(look.X),
-            st = Player.State == PlayerState.Driving ? 1 : Player.State == PlayerState.Riding ? 2 : 0,
-            lk = CharacterLook.Local.Encode(),
-            held = Player.HeldItem?.NetId ?? (PlayerInventory.Instance?.SelectedHotbarItemId is string heldItem ? "item:" + heldItem : null),
+            p = Vec(position),
+            ry = yaw,
+            hp = pitch,
+            st = state,
+            lk = lookCode,
+            held = string.IsNullOrEmpty(held) ? null : held,
             eq = PlayerInventory.Instance?.EquipmentCsv() ?? "",
             objs,
         });
+
+        _hasSentTick = true;
+        _lastSentPosition = position;
+        _lastSentYaw = yaw;
+        _lastSentPitch = pitch;
+        _lastSentState = state;
+        _lastSentLook = lookCode;
+        _lastSentHeld = held;
+        _lastSentObjects = objectsSignature;
+        _lastSentAtMsec = now;
     }
 
     /// <summary>Quem dirige passa a simular as caixas que estão na caçamba (senão elas caem da van nos outros clientes).</summary>

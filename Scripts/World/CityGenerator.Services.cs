@@ -61,7 +61,7 @@ public partial class CityGenerator
         return _runAds;
     }
 
-    public static string AdTexturePath(string id) => id == "teuzin" ? "res://Assets/Textures/Ads/ad_teuzin.svg" : $"res://Assets/Textures/Ads/ad_{id}.png";
+    public static string AdTexturePath(string id) => $"res://Assets/Textures/Ads/ad_{id}.png";
 
     /// <summary>Material com textura (opcionalmente acesa), com cache por arquivo.</summary>
     private StandardMaterial3D TexMaterial(string path, float glow = 0f)
@@ -143,6 +143,8 @@ public partial class CityGenerator
     private void BuildGasStation(Node3D block, Vector3 center, string brand, bool withCarWash)
     {
         // Frente do posto para a avenida (+Z). y = topo da calçada.
+        ForbidParking(center + new Vector3(12f, 0f, BlockSize * 0.5f), Vector3.Right, 5.5f);
+        ForbidParking(center + new Vector3(-13f, 0f, BlockSize * 0.5f), Vector3.Right, 5.5f);
         var st = new Node3D { Name = "Posto_" + brand, Position = center + new Vector3(0f, CurbHeight, 0f) };
         block.AddChild(st);
         Color brandColor = brand switch

@@ -114,7 +114,7 @@ public partial class BusLine : Node3D
 
         var stop = new Node3D { Name = $"BusStop{segment}", Position = pos };
         // Só o ônibus da linha para aqui: nada de carro estacionado na frente do ponto.
-        City.ForbidParking(pos, dir, 11f);
+        City.ForbidParking(pos, dir, 11f, null, -9f); // placa no começo do trecho, não na frente do abrigo
         City.RegisterObstacle(pos + right * 0.6f + dir * 1.6f);
         City.RegisterObstacle(pos + right * 0.6f - dir * 1.6f);
         City.RegisterObstacle(pos + right * 0.6f);
@@ -143,20 +143,9 @@ public partial class BusLine : Node3D
 
         // Cartaz do recadin.com.br no vidro do abrigo.
         CityGenerator.Poster(stop, new Vector3(1.0f, 1.35f, 0.565f), Mathf.Pi);
-        // Placa do ponto.
-        var pole = new Vector3(2.4f, 0f, -0.4f);
-        CarModels.Box(stop, pole + new Vector3(0f, 1.4f, 0f), new Vector3(0.07f, 2.8f, 0.07f), metal);
-        CarModels.Box(stop, pole + new Vector3(0f, 2.65f, 0f), new Vector3(0.7f, 0.5f, 0.04f), roof);
-        stop.AddChild(new Label3D
-        {
-            Text = "PONTO DE\nÔNIBUS",
-            FontSize = 40,
-            PixelSize = 0.004f,
-            Modulate = Colors.White,
-            OutlineSize = 0,
-            Position = pole + new Vector3(0f, 2.66f, -0.03f),
-            RotationDegrees = new Vector3(0f, 180f, 0f),
-        });
+        // Placa do ponto (v0.9.8): a placa azul de "ÔNIBUS" de verdade, de frente para o ônibus que chega.
+        Vector3 localFacing = stop.Basis.Transposed() * -dir;
+        CityGenerator.SignOnPole(stop, new Vector3(2.5f, 0f, -1.15f), localFacing, 2.3f, new Vector2(0.4f, 0.6f), "onibus.png", null, metal);
         stop.AddChild(new Label3D
         {
             Text = LineName,

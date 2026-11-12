@@ -201,7 +201,7 @@ public partial class CharacterModel : Node3D
                 case "Walk" or "Walking": _walk = a; break;
                 case "Run" or "Running": _run = a; break;
                 case "Working" or "PickUp": _work = a; break;
-                case "SitIdle": _sit = a; break;
+                case "SitIdle" or "SittingIdle" or "Sit" or "Sitting" or "Sit_Idle": _sit = a; break;
                 default: continue;
             }
             _anim.GetAnimation(a).LoopMode = Animation.LoopModeEnum.Linear;

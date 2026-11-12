@@ -21,17 +21,11 @@
 [ext_resource type="Script" path="res://Scripts/UI/InventoryScreen.cs" id="19_inv"]
 [ext_resource type="Script" path="res://Scripts/UI/ShopScreen.cs" id="20_shop"]
 [ext_resource type="Script" path="res://Scripts/UI/GameOverScreen.cs" id="21_gameover"]
-
-[sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
-sky_top_color = Color(0.012, 0.016, 0.035, 1)
-sky_horizon_color = Color(0.07, 0.07, 0.09, 1)
-sky_energy_multiplier = 0.6
-ground_bottom_color = Color(0.02, 0.02, 0.02, 1)
-ground_horizon_color = Color(0.07, 0.07, 0.09, 1)
-sun_angle_max = 10.0
+[ext_resource type="Material" path="res://Shaders/Sky/sky_material.tres" id="22_sky_material"]
+[ext_resource type="Script" path="res://Scripts/World/Cyclist.cs" id="23_cyclist"]
 
 [sub_resource type="Sky" id="Sky_main"]
-sky_material = SubResource("SkyMat")
+sky_material = ExtResource("22_sky_material")
 
 [sub_resource type="Environment" id="Env_main"]
 background_mode = 2
@@ -72,6 +66,10 @@ City = NodePath("../City")
 
 [node name="BusLine" type="Node3D" parent="." node_paths=PackedStringArray("City")]
 script = ExtResource("15_bus")
+City = NodePath("../City")
+
+[node name="Cyclist" type="Node3D" parent="." node_paths=PackedStringArray("City")]
+script = ExtResource("23_cyclist")
 City = NodePath("../City")
 
 [node name="Pedestrians" type="Node3D" parent="." node_paths=PackedStringArray("City")]

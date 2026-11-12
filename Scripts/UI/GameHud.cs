@@ -663,7 +663,7 @@ public partial class GameHud : CanvasLayer
             parts.Add(Player.NightVisionOn ? "VISÃO NOTURNA [N]" : "[N] visão noturna");
         if (inv?.IsEquipped(ItemCatalog.Gloves) == true)
             parts.Add($"LUVAS · até {Player.MaxCarryWeightKg:0} kg");
-        parts.Add("[I] inventário");
+        parts.Add("[Roda] alternar câmera   [Ctrl + Roda] ajustar FOV   [I] inventário");
         _status.Text = string.Join("   ", parts);
     }
 

@@ -36,7 +36,8 @@ e o código da sala.
 
 ## Painel de admin
 Página com jogadores online, salas, entregas, dinheiro, detalhes de cada sala (quem está dirigindo,
-quem segura cada caixa), aviso para todas as salas e botão para encerrar uma sala.
+quem segura cada caixa), aviso para todas as salas, botão para encerrar uma sala e a aba **Uso e limites**
+(mensagens/conexões WebSocket recebidas, bytes, tipos de mensagem e estimativa parcial de requisições dos Durable Objects).
 
 1. Crie o token (uma senha longa qualquer):
    ```bash
@@ -49,9 +50,22 @@ No teste local, copie `.dev.vars.example` para `.dev.vars` e use o token `teste-
 em http://localhost:8787/admin.
 
 ## Limites do plano gratuito
-Cada mensagem recebida por WebSocket conta como 1/20 de requisição de Durable Object.
-O jogo manda 10 atualizações por segundo por jogador: uma partida de 1 hora com 4 jogadores
-dá cerca de 7 mil requisições, bem abaixo do limite diário gratuito.
+
+- **Workers Free:** 100.000 requisições de entrada por dia. Cada abertura de WebSocket conta como uma requisição do Worker; as mensagens WebSocket encaminhadas não contam como novas requisições do Worker.
+- **Durable Objects Free:** 100.000 requisições por dia. Para a cobrança de compute, 20 mensagens WebSocket recebidas equivalem a 1 requisição; mensagens enviadas pelo servidor não são cobradas como requisições. O upgrade inicial da conexão é uma requisição.
+- O painel **Uso e limites** registra mensagens e conexões WebSocket e calcula a parcela estimada desse tráfego no consumo de requisições dos Durable Objects, incluindo o RPC usado para gravar cada lote de métricas. A estimativa não inclui outros RPCs, requisições internas HTTP, alarmes nem o total oficial de requisições do Worker; consulte o Analytics da Cloudflare para os números oficiais.
+- Os contadores são persistidos em lotes de 100 mensagens ou 10 conexões para evitar gravar cada pacote individualmente. Hibernação ou reinicialização antes da gravação pode perder o lote ainda não persistido.
+- O cliente mantém 10 Hz durante mudanças de estado, mas agora omite ticks sem alteração relevante e envia um heartbeat de 1 segundo quando está parado. O painel administrativo atualiza automaticamente a cada 60 segundos para evitar polling excessivo.
+
+## Compatibilidade entre protocolos
+
+- O protocolo 7 continua sendo o padrão para clientes antigos: omitir `protocol` mantém o roteamento e os IDs históricos dos Durable Objects.
+- O protocolo 8 usa salas isoladas com IDs `v8:<codigo>`; o mesmo código pode existir em versões diferentes sem compartilhar jogadores, inventário ou estado de mundo.
+- Criar sala: envie `protocol: 8` no JSON de `POST /api/rooms`. Sem esse campo, a sala é criada no protocolo 7.
+- Listar, consultar ou conectar: use `?protocol=8` em `GET /api/rooms`, `/api/rooms/:code` e `/api/rooms/:code/ws`. O valor também deve corresponder ao `version` enviado em `hello`; divergências são recusadas.
+- A lista de versões habilitadas fica em `SUPPORTED_PROTOCOLS`. Protocolos 6 e anteriores permanecem desabilitados.
+- As salas permanentes e os códigos já existentes continuam no namespace V7. O Registry mantém as chaves históricas do V7 e grava novas versões em chaves próprias.
+- **Estado inicial:** V8 está isolado por versão, mas usa o mesmo contrato de mensagens e as mesmas validações do V7. Antes de introduzir mudanças incompatíveis no wire format do V8, implemente um adaptador explícito e testes de conversão. Não basta adicionar um número à lista de protocolos.
 
 ## Protocolo (JSON por WebSocket)
 | Cliente → servidor | Para quê |

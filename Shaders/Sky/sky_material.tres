@@ -1,0 +1,18 @@
+[gd_resource type="ShaderMaterial" load_steps=6 format=3]
+
+[ext_resource type="Shader" path="res://Shaders/Sky/main.gdshader" id="1_shader"]
+[ext_resource type="Texture2D" path="res://Shaders/Sky/clouds_01.tres" id="2_clouds_01"]
+[ext_resource type="Texture2D" path="res://Shaders/Sky/clouds_02.tres" id="3_clouds_02"]
+[ext_resource type="Texture2D" path="res://Shaders/Sky/night_noise_01.tres" id="4_night_01"]
+[ext_resource type="Texture2D" path="res://Shaders/Sky/night_noise_02.tres" id="5_night_02"]
+
+[resource]
+shader = ExtResource("1_shader")
+shader_parameter/day_night_mix = 0.8
+shader_parameter/use_directional_light = true
+shader_parameter/cloud_density = 1.2
+shader_parameter/cloud_shape_exponent = 1.3
+shader_parameter/cloud_tex_01 = ExtResource("2_clouds_01")
+shader_parameter/cloud_tex_02 = ExtResource("3_clouds_02")
+shader_parameter/night_noise_01 = ExtResource("4_night_01")
+shader_parameter/night_noise_02 = ExtResource("5_night_02")

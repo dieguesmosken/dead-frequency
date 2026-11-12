@@ -75,6 +75,9 @@ public partial class CityGenerator : Node3D
     private StandardMaterial3D _stopRed;
     private StandardMaterial3D _signBlue;
     private StandardMaterial3D _signWhite;
+    private Material _curbYellow;
+    /// <summary>Linha amarela contínua no asfalto junto à sarjeta (LPP, Resolução CONTRAN 973/2022).</summary>
+    private StandardMaterial3D _lppYellow;
     private CylinderMesh _octagon;
     private readonly Dictionary<Color, StandardMaterial3D> _carMaterials = new();
 
@@ -117,6 +120,9 @@ public partial class CityGenerator : Node3D
             }
         }
 
+        BuildCurbMarkings();
+        BuildBikeLanes();
+        BuildStreetDrainage();
         BuildStreetLamps();
         BuildStreetSigns();
         BuildPhoneBooths();
@@ -212,6 +218,8 @@ public partial class CityGenerator : Node3D
         _sidewalkMaterial.SetShaderParameter("slab_tex", GD.Load<Texture2D>("res://Assets/Textures/City/sidewalk.png"));
         _sidewalkMaterial.SetShaderParameter("pt_tex", GD.Load<Texture2D>("res://Assets/Textures/City/sidewalk_pt.svg"));
         _sidewalkMaterial.SetShaderParameter("block_period", Period);
+        _sidewalkMaterial.SetShaderParameter("block_half", BlockSize * 0.5f);
+        _sidewalkMaterial.SetShaderParameter("curb_height", CurbHeight);
 
         _darkMetal = Flat(new Color(0.12f, 0.12f, 0.13f), 0.6f);
         _concrete = Flat(new Color(0.38f, 0.37f, 0.35f));
@@ -737,12 +745,21 @@ public partial class CityGenerator : Node3D
                 float along = j * Period;
                 for (int side = -1; side <= 1; side += 2)
                 {
+                    bool hasCurb = side < 0
+                        ? k >= -Radius && k <= Radius
+                        : k + 1 >= -Radius && k + 1 <= Radius;
                     // Ruas paralelas a Z (x fixo).
                     if (_rng.Randf() < ParkedCarChance)
-                        BuildCar(_staticRoot, new Vector3(roadPos + side * laneOffset, 0f, along + _rng.RandfRange(-reach, reach)), 0f);
+                    {
+                        float offset = _rng.RandfRange(-reach, reach);
+                        BuildCar(_staticRoot, new Vector3(roadPos + side * laneOffset, 0f, along + offset), 0f, offset, hasCurb);
+                    }
                     // Avenidas paralelas a X (z fixo).
                     if (_rng.Randf() < ParkedCarChance)
-                        BuildCar(_staticRoot, new Vector3(along + _rng.RandfRange(-reach, reach), 0f, roadPos + side * laneOffset), Mathf.Pi * 0.5f);
+                    {
+                        float offset = _rng.RandfRange(-reach, reach);
+                        BuildCar(_staticRoot, new Vector3(along + offset, 0f, roadPos + side * laneOffset), Mathf.Pi * 0.5f, offset, hasCurb);
+                    }
                 }
             }
         }
@@ -750,18 +767,121 @@ public partial class CityGenerator : Node3D
 
     private readonly List<Node3D> _parkedCars = new();
     private readonly List<(Vector3 center, Vector3 dir, float halfLength)> _noParking = new();
+    private bool _curbMarkingsBuilt;
 
-    /// <summary>Proíbe estacionar num trecho de rua (ponto de ônibus, v0.9.7): tira os carros que já estão
-    /// lá e impede os próximos. Não mexe no sorteio da cidade (o carro é sorteado e só não aparece).</summary>
-    public void ForbidParking(Vector3 center, Vector3 dir, float halfLength)
+    /// <summary>Proíbe estacionar num trecho de rua e pinta o meio-fio correspondente de amarelo.</summary>
+    /// <param name="signShift">Desloca a placa ao longo do trecho (ex.: tirar da frente da saída da concessionária).</param>
+    public void ForbidParking(Vector3 center, Vector3 dir, float halfLength, string signLabel = null, float signShift = 0f)
     {
-        _noParking.Add((center, dir.Normalized(), halfLength));
+        Vector3 normalizedDir = dir.Normalized();
+        _noParking.Add((center, normalizedDir, halfLength));
         for (int i = _parkedCars.Count - 1; i >= 0; i--)
         {
             if (IsInstanceValid(_parkedCars[i]) && InNoParking(_parkedCars[i].Position))
             {
                 _parkedCars[i].QueueFree();
                 _parkedCars.RemoveAt(i);
+            }
+        }
+        if (_curbMarkingsBuilt)
+            PaintNoParkingCurb(center, normalizedDir, halfLength);
+        BuildNoParkingSigns(center + normalizedDir * signShift, normalizedDir, signLabel);
+    }
+
+    private void BuildCurbMarkings()
+    {
+        // v0.9.8: o meio-fio padrão (cinza com faixas brancas intercaladas) é desenhado pelo shader da
+        // calçada; aqui só entram os trechos amarelos, com a mesma tinta gasta.
+        var yellow = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/curb_paint.gdshader") };
+        yellow.SetShaderParameter("curb_height", CurbHeight);
+        _curbYellow = yellow;
+        _lppYellow = Flat(new Color(0.9f, 0.7f, 0.1f), 0.7f);
+        for (int bx = -Radius; bx <= Radius; bx++)
+        {
+            for (int bz = -Radius; bz <= Radius; bz++)
+            {
+                Vector3 center = BlockCenter(bx, bz);
+                PaintCurbEdge(center, Vector3.Right, Vector3.Back);
+                PaintCurbEdge(center, Vector3.Left, Vector3.Forward);
+                PaintCurbEdge(center, Vector3.Back, Vector3.Left);
+                PaintCurbEdge(center, Vector3.Forward, Vector3.Right);
+            }
+        }
+
+        _curbMarkingsBuilt = true;
+        foreach ((Vector3 center, Vector3 dir, float halfLength) in _noParking)
+            PaintNoParkingCurb(center, dir, halfLength);
+    }
+
+    private void PaintCurbEdge(Vector3 blockCenter, Vector3 outward, Vector3 along)
+    {
+        const float cornerClearance = 4f;
+        const float markLength = 5f;
+        const float markPitch = 7f;
+        float half = BlockSize * 0.5f;
+        float first = -half + cornerClearance;
+        float last = half - cornerClearance;
+
+        PaintCurbStripe(blockCenter, outward, along, -half + cornerClearance * 0.5f, cornerClearance, _curbYellow);
+        PaintCurbStripe(blockCenter, outward, along, half - cornerClearance * 0.5f, cornerClearance, _curbYellow);
+
+        for (float start = first; start < last; start += markPitch)
+        {
+            float length = Mathf.Min(markLength, last - start);
+            if (length <= 0f)
+                continue;
+            float midpoint = start + length * 0.5f;
+            Vector3 parkingSpot = blockCenter + outward * (half + RoadWidth * 0.5f - 1.4f) + along * midpoint;
+            // Onde pode parar fica o meio-fio padrão (cinza e branco, no shader da calçada).
+            if (InNoParking(parkingSpot))
+                PaintCurbStripe(blockCenter, outward, along, midpoint, length, _curbYellow);
+        }
+    }
+
+    private void PaintCurbStripe(Vector3 blockCenter, Vector3 outward, Vector3 along, float midpoint, float length, Material material)
+    {
+        Vector3 position = blockCenter + outward * (BlockSize * 0.5f + 0.015f) + along * midpoint;
+        position.Y = CurbHeight * 0.5f;
+        Vector3 size = Mathf.Abs(outward.X) > 0.5f
+            ? new Vector3(0.03f, CurbHeight, length)
+            : new Vector3(length, CurbHeight, 0.03f);
+        AddBox(_staticRoot, position, size, material, false);
+        if (material == _curbYellow)
+        {
+            // Linha amarela oficial no asfalto, 20 cm para dentro da pista.
+            Vector3 line = blockCenter + outward * (BlockSize * 0.5f + 0.2f) + along * midpoint;
+            line.Y = 0.006f;
+            AddBox(_staticRoot, line, Mathf.Abs(outward.X) > 0.5f ? new Vector3(0.1f, 0.012f, length) : new Vector3(length, 0.012f, 0.1f), _lppYellow, false);
+        }
+    }
+
+    private void PaintNoParkingCurb(Vector3 center, Vector3 dir, float halfLength)
+    {
+        float length = Mathf.Max(1f, halfLength * 2f + 0.2f);
+        if (Mathf.Abs(dir.Z) > 0.5f)
+        {
+            float roadX = Mathf.Round((center.X - Period * 0.5f) / Period) * Period + Period * 0.5f;
+            foreach (float side in new[] { -1f, 1f })
+            {
+                Vector3 parkingSpot = new(roadX + side * (RoadWidth * 0.5f - 1.4f), 0f, center.Z);
+                if (!InNoParking(parkingSpot))
+                    continue;
+                Vector3 curb = new(roadX + side * (RoadWidth * 0.5f - 0.045f), CurbHeight * 0.5f, center.Z);
+                AddBox(_staticRoot, curb, new Vector3(0.03f, CurbHeight, length), _curbYellow, false);
+                AddBox(_staticRoot, new Vector3(roadX + side * (RoadWidth * 0.5f - 0.2f), 0.006f, center.Z), new Vector3(0.1f, 0.012f, length), _lppYellow, false);
+            }
+        }
+        else
+        {
+            float roadZ = Mathf.Round((center.Z - Period * 0.5f) / Period) * Period + Period * 0.5f;
+            foreach (float side in new[] { -1f, 1f })
+            {
+                Vector3 parkingSpot = new(center.X, 0f, roadZ + side * (RoadWidth * 0.5f - 1.4f));
+                if (!InNoParking(parkingSpot))
+                    continue;
+                Vector3 curb = new(center.X, CurbHeight * 0.5f, roadZ + side * (RoadWidth * 0.5f - 0.045f));
+                AddBox(_staticRoot, curb, new Vector3(length, CurbHeight, 0.03f), _curbYellow, false);
+                AddBox(_staticRoot, new Vector3(center.X, 0.006f, roadZ + side * (RoadWidth * 0.5f - 0.2f)), new Vector3(length, 0.012f, 0.1f), _lppYellow, false);
             }
         }
     }
@@ -780,7 +900,22 @@ public partial class CityGenerator : Node3D
         return false;
     }
 
-    private void BuildCar(Node3D parent, Vector3 groundPos, float rotationY)
+    private bool HasWhiteCurbMarking(float along)
+    {
+        const float cornerClearance = 4f;
+        const float markLength = 5f;
+        const float markPitch = 7f;
+        float usableLength = BlockSize - cornerClearance * 2f;
+        float offset = along + BlockSize * 0.5f - cornerClearance;
+        if (offset < 0f || offset >= usableLength)
+            return false;
+
+        float start = Mathf.Floor(offset / markPitch) * markPitch;
+        float length = Mathf.Min(markLength, usableLength - start);
+        return offset - start < length;
+    }
+
+    private void BuildCar(Node3D parent, Vector3 groundPos, float rotationY, float? curbOffset = null, bool hasCurb = true)
     {
         Color color = CarPalette[_rng.RandiRange(0, CarPalette.Length - 1)];
         float roll = _rng.Randf();
@@ -789,7 +924,7 @@ public partial class CityGenerator : Node3D
         var car = new StaticBody3D { Position = groundPos, Rotation = new Vector3(0f, rotationY + (_rng.Randf() < 0.5f ? 0f : Mathf.Pi), 0f), CollisionLayer = 1, CollisionMask = 0 };
         Vector3 size = CarModels.Build(car, type, color);
         car.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(size.X, size.Y - 0.2f, size.Z) }, Position = new Vector3(0f, size.Y * 0.5f + 0.1f, 0f) });
-        if (InNoParking(groundPos))
+        if (InNoParking(groundPos) || (curbOffset.HasValue && (!hasCurb || !HasWhiteCurbMarking(curbOffset.Value))))
         {
             car.QueueFree();
             return;
@@ -816,6 +951,57 @@ public partial class CityGenerator : Node3D
                 BuildCrosswalkSign(c + new Vector3(-corner, 0f, -corner + 1.2f), Mathf.Pi);
             }
         }
+    }
+
+    private void BuildNoParkingSigns(Vector3 center, Vector3 dir, string label)
+    {
+        const float laneOffset = 1.4f;
+        const float sidewalkOffset = 1.1f;
+        if (Mathf.Abs(dir.Z) > 0.5f)
+        {
+            float roadX = Mathf.Round((center.X - Period * 0.5f) / Period) * Period + Period * 0.5f;
+            foreach (float side in new[] { -1f, 1f })
+            {
+                Vector3 parkingSpot = new(roadX + side * (RoadWidth * 0.5f - laneOffset), 0f, center.Z);
+                if (!InNoParking(parkingSpot))
+                    continue;
+
+                Vector3 roadNormal = new(-side, 0f, 0f);
+                Vector3 basePos = new(roadX + side * (RoadWidth * 0.5f + sidewalkOffset), CurbHeight, center.Z);
+                BuildNoParkingSign(basePos, roadNormal, label);
+            }
+        }
+        else
+        {
+            float roadZ = Mathf.Round((center.Z - Period * 0.5f) / Period) * Period + Period * 0.5f;
+            foreach (float side in new[] { -1f, 1f })
+            {
+                Vector3 parkingSpot = new(center.X, 0f, roadZ + side * (RoadWidth * 0.5f - laneOffset));
+                if (!InNoParking(parkingSpot))
+                    continue;
+
+                Vector3 roadNormal = new(0f, 0f, -side);
+                Vector3 basePos = new(center.X, CurbHeight, roadZ + side * (RoadWidth * 0.5f + sidewalkOffset));
+                BuildNoParkingSign(basePos, roadNormal, label);
+            }
+        }
+    }
+
+    private void BuildNoParkingSign(Vector3 basePos, Vector3 roadNormal, string label)
+    {
+        RegisterObstacle(basePos);
+        // v0.9.8: placa fina e chapada, de frente para quem vem pela pista (não mais virada para a rua).
+        var sign = new StaticBody3D { Position = basePos, CollisionLayer = 1, CollisionMask = 0 };
+        sign.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(0.1f, 2.6f, 0.1f) }, Position = new Vector3(0f, 1.3f, 0f) });
+        Vector3 facing = FacingOncomingTraffic(-roadNormal);
+        if (string.IsNullOrEmpty(label))
+            SignOnPole(sign, Vector3.Zero, facing, 2.25f, new Vector2(0.5f, 0.5f), "proibido_estacionar.png", "verso_redondo.png", _darkMetal);
+        else
+        {
+            string file = label == "BOMBEIROS" ? "proibido_estacionar_bombeiros.png" : "proibido_estacionar_policia.png";
+            SignOnPole(sign, Vector3.Zero, facing, 2.1f, new Vector2(0.5f, 0.75f), file, null, _darkMetal);
+        }
+        (_staticRoot ?? this).AddChild(sign);
     }
 
     private void BuildStopSign(Vector3 basePos, float rotationY)
