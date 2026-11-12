@@ -9,5 +9,7 @@
     <!-- O launcher é outro programa (launcher/DeadFrequencyLauncher.csproj): não entra no jogo. -->
     <Compile Remove="launcher/**" />
     <None Remove="launcher/**" />
+    <!-- docs/ é só documentação: modelos de código ficam como .cs.txt e nada aqui entra no jogo. -->
+    <Compile Remove="docs/**" />
   </ItemGroup>
 </Project>

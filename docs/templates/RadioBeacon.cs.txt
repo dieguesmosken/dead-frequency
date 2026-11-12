@@ -1,0 +1,25 @@
+// Scripts/World/Phases/RadioBeacon.cs  (modelo — Fase 3, Bananal)
+// "Radar sonoro": perto da antena a 96.6 toca limpa; longe, a música some e o chiado cresce.
+// Coloque na antena/repetidora. Os dois players são filhos dela (ou de quem preferir) e tocam em loop.
+using Godot;
+
+namespace DeadFrequency;
+
+public partial class RadioBeacon : Node3D
+{
+    [Export] public Node3D Player;                 // o PlayerController (ou a câmera) da fase
+    [Export] public AudioStreamPlayer MusicPlayer; // bus AudioManager.MusicBus
+    [Export] public AudioStreamPlayer StaticPlayer; // chiado, bus AudioManager.SfxBus
+    [Export] public float MaxSignalDistance = 120f;
+    [Export] public float ClearSignalDistance = 15f;
+
+    public override void _Process(double delta)
+    {
+        if (Player == null || MusicPlayer == null || StaticPlayer == null)
+            return;
+        float dist = GlobalPosition.DistanceTo(Player.GlobalPosition);
+        float t = Mathf.Clamp((dist - ClearSignalDistance) / (MaxSignalDistance - ClearSignalDistance), 0f, 1f);
+        MusicPlayer.VolumeDb = Mathf.Lerp(0f, -45f, t);
+        StaticPlayer.VolumeDb = Mathf.Lerp(-35f, -4f, t);
+    }
+}

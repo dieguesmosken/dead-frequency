@@ -86,7 +86,8 @@ Entregador solitário dirigindo uma van utilitária anos 90 por uma zona perigos
 
 ## Planejamento, Lore e Modo História
 
-- Antes de implementar missões, novos cenários (`Bananal`, `Gruta`, `Serra`), Inverse Kinematics ou transições de capítulo, leia obrigatoriamente `docs/dead-frequency-docs/README_PARA_IAS.md`.
+- Antes de implementar missões, novos cenários (`Bananal`, `Gruta`, `Serra`), Inverse Kinematics ou transições de capítulo, leia obrigatoriamente `docs/README_PARA_IAS.md` (índice de `docs/lore`, `docs/tech` e `docs/templates`).
+- `docs/` é só documentação: modelos de código ficam como `.cs.txt` em `docs/templates/` e o `DeadFrequency.csproj` ignora `docs/**`. Nunca criar `.cs` dentro de `docs/`.
 - **Tom do jogo:** Simulador de vida cotidiana e aventura leve estilo PS1 / anos 90–2000 (vale cercado por serra, mata preservada e minério que bloqueia internet/celular, mantendo a Rádio 96.6 FM como elo da comunidade). **NUNCA** adicionar elementos de terror, monstros ou sobrenatural.
 
 ## Foco Atual (Controle de Escopo)
@@ -98,12 +99,14 @@ Entregador solitário dirigindo uma van utilitária anos 90 por uma zona perigos
 
 - **Inverse Kinematics (IK):** Utilizar apenas os nós modernos de `SkeletonModifier3D` (`TwoBoneIK3D`, `LookAtModifier3D`, `FABRIK3D`). **Nunca** utilizar `SkeletonIK3D` (deprecated na Godot 4).
 - **Otimização:** Agrupar vegetação (bananeiras, capim, árvores), cercas e postes repetitivos em `MultiMeshInstance3D` e utilizar `OccluderInstance3D` nas áreas densas.
-- **Desacoplamento:** O Modo História (`StoryManager.cs`) deve escutar eventos das profissões (`JobEvents.cs`) sem acoplar lógica narrativa dentro dos scripts de trabalho.
-- **Multiplayer:** Manter a arquitetura atual em `server/` (Cloudflare Workers + Durable Objects + Cloudflare Tunnel). O **Colyseus** está planejado apenas para testes futuros pós-v1.0 na Oracle Cloud Free Tier (via pacote NuGet `Colyseus` no `DeadFrequency.csproj`, nunca plugin GDExtension).
+- **Desacoplamento:** O Modo História (`Scripts/Story/StoryManager.cs`, autoload) deve escutar eventos das profissões (`Scripts/Jobs/JobEvents.cs`) sem acoplar lógica narrativa dentro dos scripts de trabalho. O progresso salva em `SaveData.Story` (`user://save.tzn`). Detalhes em `docs/tech/01_ARQUITETURA_MODO_HISTORIA.md`.
+- **Modo História é offline:** `StoryManager` e `ChapterTransitionZone` não fazem nada com `NetClient.Instance.IsOnline`; o servidor não conhece capítulos.
+- **Multiplayer:** Manter a arquitetura atual em `server/` (Cloudflare Workers + Durable Objects; Cloudflare Tunnel só para hospedar no PC via `LocalServer`/`TunnelService`). O **Colyseus** está planejado apenas para testes futuros pós-v1.0 na Oracle Cloud Free Tier (via pacote NuGet `Colyseus` no `DeadFrequency.csproj`, nunca plugin GDExtension).
 
 ## Checklist ao Fechar uma Release
 
-1. Atualizar a versão em `Scripts/GameVersion.cs` (sem sufixo interno para releases públicos).
-2. Documentar as mudanças em `CHANGELOG.md` e atualizar o status em `ROADMAP.md`.
+1. Atualizar `GameVersion.Current` e a entrada em `GameVersion.Changelog` em `Scripts/Core/GameVersion.cs` (sem sufixo interno para releases públicos) e regenerar o `CHANGELOG.md`.
+2. Atualizar o status em `ROADMAP.md`.
 3. Adicionar screenshots em `site/assets/shots/vX.Y.Z/` com legendas em `captions.json` e rodar `python3 site/build.py` para atualizar `site/data/site.json`.
-4. Conferir build do projeto (`DeadFrequency.csproj`) e compatibilidade com o `launcher/` antes do push/tag.
+4. Conferir o build (`dotnet build DeadFrequency.csproj`) e a compatibilidade com o `launcher/`.
+5. Fluxo de branches: trabalho em branch própria → PR para `Internal` → PR da `Internal` para `main`. Depois do merge na `main`: commit "vX.Y.Z — título" e tag `vX.Y.Z`.
