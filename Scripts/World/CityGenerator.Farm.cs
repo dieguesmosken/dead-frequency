@@ -163,7 +163,7 @@ public partial class CityGenerator
         {
             foreach (WorldFarmSitePlan site in WorldData.FarmSites)
             {
-                if (WorldData.GetChunkCoordinate(site.Center) != chunk.Coordinate)
+                if (GetFarmPlanChunkCoordinate(site.Center) != chunk.Coordinate)
                     continue;
 
                 _rng = new RandomNumberGenerator { Seed = site.VisualSeed };
@@ -178,7 +178,7 @@ public partial class CityGenerator
 
             foreach (WorldFarmTreePlan treePlan in WorldData.FarmTrees)
             {
-                if (WorldData.GetChunkCoordinate(treePlan.Position) != chunk.Coordinate)
+                if (GetFarmPlanChunkCoordinate(treePlan.Position) != chunk.Coordinate)
                     continue;
 
                 RenderFarmTreePlan(treePlan);
@@ -186,7 +186,7 @@ public partial class CityGenerator
 
             foreach (WorldFarmUndergrowthPlan plan in WorldData.FarmUndergrowth)
             {
-                if (WorldData.GetChunkCoordinate(plan.Position) != chunk.Coordinate)
+                if (GetFarmPlanChunkCoordinate(plan.Position) != chunk.Coordinate)
                     continue;
 
                 if (NatureKit.Get(plan.Model) is not Mesh mesh)
@@ -218,6 +218,21 @@ public partial class CityGenerator
             _activeFarmBody = previousFarmBody;
             _rng = previousRng;
         }
+    }
+
+    private WorldChunkCoordinate GetFarmPlanChunkCoordinate(Vector3 position)
+    {
+        WorldChunkCoordinate coordinate = WorldData.GetChunkCoordinate(position);
+        if (WorldData.TryGetChunk(coordinate, out _))
+            return coordinate;
+
+        // Árvores da mata de borda recebem jitter e podem passar alguns centímetros
+        // do limite lógico do terreno. Atribuímos esses elementos ao chunk de borda mais próximo.
+        int min = Mathf.FloorToInt(-FarmExtent / WorldData.ChunkSize);
+        int max = Mathf.CeilToInt(FarmExtent / WorldData.ChunkSize) - 1;
+        return new WorldChunkCoordinate(
+            Mathf.Clamp(coordinate.X, min, max),
+            Mathf.Clamp(coordinate.Z, min, max));
     }
 
     private void RenderFarmTreePlan(WorldFarmTreePlan treePlan)
