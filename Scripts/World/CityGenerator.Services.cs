@@ -31,7 +31,20 @@ public partial class CityGenerator
     /// <summary>Anúncios sorteados nesta partida (outdoors e ônibus usam a mesma lista).</summary>
     private static List<string> _runAds;
 
-    public void RegisterObstacle(Vector3 position) => SidewalkObstacles.Add(position);
+    public void RegisterObstacle(Vector3 position)
+    {
+        SidewalkObstacles.Add(position);
+        if (!_activeChunkCoordinate.HasValue)
+            return;
+
+        WorldChunkCoordinate owner = _activeChunkCoordinate.Value;
+        if (!_chunkObstaclePositions.TryGetValue(owner, out List<Vector3> positions))
+        {
+            positions = new List<Vector3>();
+            _chunkObstaclePositions[owner] = positions;
+        }
+        positions.Add(position);
+    }
 
     // ---- pontos usados pelas profissões (v0.9)
     /// <summary>Caçambas de lixo (gari).</summary>
