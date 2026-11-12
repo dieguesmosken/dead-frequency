@@ -7,7 +7,7 @@ Guia do fluxo do projeto: branches, commits, pull requests e lançamento de vers
 | Branch | Para quê | Vai para |
 |---|---|---|
 | `main` | O que os jogadores recebem. **Só muda por pull request.** Cada merge com versão nova publica a release. | — |
-| `Internal` | Integração e testes (pré-alpha). Cada mudança de versão gera uma pré-release `internal-v…`. | `main` (PR) |
+| `Internal` | Integração e testes (pré-alpha). Cada PR mesclado gera uma pré-release `vX.Y.Z.N-pre` (ex.: `v0.9.9.1-pre`). | `main` (PR) |
 | `feature/nome` | Recurso novo — `feature/menus-codigo`, `feature/shopping` | `Internal` |
 | `fix/nome` | Correção sem pressa | `Internal` |
 | `hotfix/nome` | Correção urgente de algo que já está na release | `main`, depois `Internal` |
