@@ -98,45 +98,51 @@ public static class WorldDataGenerator
                 }
             }
 
-            BuildCityBlockPlans(
-                seed, cityRadius, blockSize, sidewalkWidth, roadWidth, curbHeight, parkChance, parkingLotChance,
-                storefrontChance, storeBrandCount, blocks,
-                fireStationBlock, policeStationBlock, radioStationBlock, marketBlock,
-                shoppingMallBlock, apartmentBlock, dealerBlock, waterTowerBlock, carWashBlock,
-                gasStations, progress);
-            // Regras de estacionamento e pontos de profissão ficam disponíveis antes de qualquer mesh.
-            List<WorldNoParkingZoneData> noParkingZones = BuildCityNoParkingZones(
-                cityRadius, blockSize, chunkSize, fireStationBlock, policeStationBlock, gasStations, blocks);
-            progress?.Invoke(new WorldGenerationProgress(
-                "Calculando regras de estacionamento", noParkingZones.Count, noParkingZones.Count));
-
-            Dictionary<WorldChunkCoordinate, List<WorldRoadCarPlan>> roadCars =
-                BuildCityRoadCarPlans(seed, cityRadius, blockSize, roadWidth, parkedCarChance, noParkingZones);
-            for (int i = 0; i < blocks.Count; i++)
+            // V7 segue o gerador visual legado e só precisa dos pontos fixos usados pelos trabalhos.
+            // Offline/V8 prepara todos os dados antes de construir qualquer geometria.
+            List<WorldNoParkingZoneData> noParkingZones = new();
+            if (prepareLogicalCityData)
             {
-                WorldBlockData block = blocks[i];
-                roadCars.TryGetValue(block.Coordinate, out List<WorldRoadCarPlan> blockRoadCars);
-                blocks[i] = new WorldBlockData(
-                    block.Coordinate, block.Kind, block.VisualSeed, block.DecorationSeed,
-                    new List<WorldBuildingPlan>(block.Buildings),
-                    new List<WorldParkTreePlan>(block.ParkTrees),
-                    new List<WorldParkBenchPlan>(block.ParkBenches),
-                    new List<WorldParkingCarPlan>(block.ParkingCars),
-                    blockRoadCars ?? new List<WorldRoadCarPlan>());
-            }
-            int plannedRoadCars = 0;
-            foreach (List<WorldRoadCarPlan> roadCarList in roadCars.Values)
-                plannedRoadCars += roadCarList.Count;
-            progress?.Invoke(new WorldGenerationProgress(
-                "Calculando veículos estacionados", plannedRoadCars, plannedRoadCars));
+                BuildCityBlockPlans(
+                    seed, cityRadius, blockSize, sidewalkWidth, roadWidth, curbHeight, parkChance, parkingLotChance,
+                    storefrontChance, safeBrandCount, blocks,
+                    fireStationBlock, policeStationBlock, radioStationBlock, marketBlock,
+                    shoppingMallBlock, apartmentBlock, dealerBlock, waterTowerBlock, carWashBlock,
+                    gasStations, progress);
 
-            // Os endereços V7 continuam sendo gerados pelo RNG legado, sem alterar a sequência visual.
+                noParkingZones = BuildCityNoParkingZones(
+                    cityRadius, blockSize, chunkSize, fireStationBlock, policeStationBlock, gasStations, blocks);
+                progress?.Invoke(new WorldGenerationProgress(
+                    "Calculando regras de estacionamento", noParkingZones.Count, noParkingZones.Count));
+
+                Dictionary<WorldChunkCoordinate, List<WorldRoadCarPlan>> roadCars =
+                    BuildCityRoadCarPlans(seed, cityRadius, blockSize, roadWidth, parkedCarChance, noParkingZones);
+                for (int i = 0; i < blocks.Count; i++)
+                {
+                    WorldBlockData block = blocks[i];
+                    roadCars.TryGetValue(block.Coordinate, out List<WorldRoadCarPlan> blockRoadCars);
+                    blocks[i] = new WorldBlockData(
+                        block.Coordinate, block.Kind, block.VisualSeed, block.DecorationSeed,
+                        new List<WorldBuildingPlan>(block.Buildings),
+                        new List<WorldParkTreePlan>(block.ParkTrees),
+                        new List<WorldParkBenchPlan>(block.ParkBenches),
+                        new List<WorldParkingCarPlan>(block.ParkingCars),
+                        blockRoadCars ?? new List<WorldRoadCarPlan>());
+                }
+
+                int plannedRoadCars = 0;
+                foreach (List<WorldRoadCarPlan> roadCarList in roadCars.Values)
+                    plannedRoadCars += roadCarList.Count;
+                progress?.Invoke(new WorldGenerationProgress(
+                    "Calculando veículos estacionados", plannedRoadCars, plannedRoadCars));
+
+                BuildCityDeliveryPoints(seed, cityRadius, blockSize, chunkSize, curbHeight, deliveryPoints);
+            }
+
+            // Coordenadas dos trabalhos são dados lógicos leves e também ficam disponíveis no V7.
             services = BuildCityServiceData(
                 cityRadius, blockSize, chunkSize, curbHeight, marketBlock,
                 radioStationBlock, gasStations, noParkingZones, progress);
-
-            if (prepareLogicalCityData)
-                BuildCityDeliveryPoints(seed, cityRadius, blockSize, chunkSize, curbHeight, deliveryPoints, progress);
             BuildCitySpawnPoints(
                 spawnPoints, blockSize, chunkSize, curbHeight, cityRadius,
                 marketBlock, radioStationBlock, gasStations);
@@ -166,16 +172,19 @@ public static class WorldDataGenerator
                 }
             }
 
-            progress?.Invoke(new WorldGenerationProgress("Calculando sítios e destinos do rancho", 0, 1));
-            BuildFarmSitePlans(seed, farmExtent, farmNames, farmSites, deliveryPoints);
-            progress?.Invoke(new WorldGenerationProgress("Calculando sítios e destinos do rancho", 1, 1));
+            if (prepareLogicalCityData)
+            {
+                progress?.Invoke(new WorldGenerationProgress("Calculando sítios e destinos do rancho", 0, 1));
+                BuildFarmSitePlans(seed, farmExtent, farmNames, farmSites, deliveryPoints);
+                progress?.Invoke(new WorldGenerationProgress("Calculando sítios e destinos do rancho", 1, 1));
 
-            progress?.Invoke(new WorldGenerationProgress("Planejando árvores e vegetação do rancho", 0, 1));
-            BuildFarmTreePlans(seed, farmExtent, farmSites, farmTrees);
-            BuildFarmReedPlans(seed, farmReeds);
-            BuildFarmUndergrowthPlans(farmExtent, farmSites, farmUndergrowth);
-            BuildFarmBoundaryPlans(farmExtent, farmBoundary);
-            progress?.Invoke(new WorldGenerationProgress("Planejando árvores e vegetação do rancho", 1, 1));
+                progress?.Invoke(new WorldGenerationProgress("Planejando árvores e vegetação do rancho", 0, 1));
+                BuildFarmTreePlans(seed, farmExtent, farmSites, farmTrees);
+                BuildFarmReedPlans(seed, farmReeds);
+                BuildFarmUndergrowthPlans(farmExtent, farmSites, farmUndergrowth);
+                BuildFarmBoundaryPlans(farmExtent, farmBoundary);
+                progress?.Invoke(new WorldGenerationProgress("Planejando árvores e vegetação do rancho", 1, 1));
+            }
 
             BuildFarmSpawnPoints(spawnPoints, blockSize);
         }
