@@ -111,6 +111,17 @@ public readonly record struct WorldParkBenchPlan(Vector3 Position, float Rotatio
 public readonly record struct WorldParkingCarPlan(Vector3 Position, float RotationY, ulong VisualSeed);
 
 /// <summary>Plano lógico de um sítio rural, incluindo destino de entrega e seed visual própria.</summary>
+public readonly record struct WorldFarmTreePlan(
+    Vector3 Position,
+    bool Pine,
+    bool Dead,
+    int VariantIndex,
+    float RotationY,
+    float Scale,
+    ulong VisualSeed);
+
+public readonly record struct WorldFarmReedPlan(Vector3 Position, float Height);
+
 public readonly record struct WorldFarmSitePlan(
     Vector3 GatePosition,
     Vector3 TowardRoad,
@@ -181,6 +192,8 @@ public sealed class WorldGenerationData
     public IReadOnlyList<WorldBlockData> Blocks { get; }
     public IReadOnlyList<WorldDeliveryPointData> DeliveryPoints { get; }
     public IReadOnlyList<WorldFarmSitePlan> FarmSites { get; }
+    public IReadOnlyList<WorldFarmTreePlan> FarmTrees { get; }
+    public IReadOnlyList<WorldFarmReedPlan> FarmReeds { get; }
     public WorldServiceData Services { get; }
     public IReadOnlyDictionary<string, WorldSpawnPoint> SpawnPoints => _spawnPoints;
 
@@ -194,6 +207,8 @@ public sealed class WorldGenerationData
         List<WorldBlockData> blocks,
         List<WorldDeliveryPointData> deliveryPoints,
         List<WorldFarmSitePlan> farmSites,
+        List<WorldFarmTreePlan> farmTrees,
+        List<WorldFarmReedPlan> farmReeds,
         WorldServiceData services,
         Dictionary<string, WorldSpawnPoint> spawnPoints)
     {
@@ -209,6 +224,8 @@ public sealed class WorldGenerationData
             _blockIndex[block.Coordinate] = block;
         DeliveryPoints = Array.AsReadOnly(deliveryPoints.ToArray());
         FarmSites = Array.AsReadOnly(farmSites.ToArray());
+        FarmTrees = Array.AsReadOnly(farmTrees.ToArray());
+        FarmReeds = Array.AsReadOnly(farmReeds.ToArray());
         Services = services ?? WorldServiceData.Empty();
         _chunkIndex = new Dictionary<WorldChunkCoordinate, WorldChunkData>(chunks.Count);
         foreach (WorldChunkData chunk in chunks)
