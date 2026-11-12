@@ -34,6 +34,7 @@ public partial class MultiplayerPanel : VBoxContainer
     private LineEdit _server;
     private LineEdit _code;
     private LineEdit _roomPassword;
+    private int _inviteProtocol;
     private Label _status;
     private Label _modeHint;
     private Control _serverRow;
@@ -136,6 +137,7 @@ public partial class MultiplayerPanel : VBoxContainer
         _code.AddThemeFontSizeOverride("font_size", 24);
         _code.TextChanged += text =>
         {
+            _inviteProtocol = 0;
             int caret = _code.CaretColumn;
             _code.Text = text.ToUpperInvariant();
             _code.CaretColumn = caret;
@@ -476,7 +478,7 @@ public partial class MultiplayerPanel : VBoxContainer
         string address = tunnel?.State == TunnelService.TunnelState.Ready
             ? tunnel.PublicUrl
             : $"http://{(lan.Count > 0 ? lan[0] : "127.0.0.1")}:{server?.Port ?? LocalServer.DefaultPort}";
-        return $"Bora entregar comigo no Dead Frequency! Código da sala: {server?.Code}\nServidor: {address}";
+        return $"Bora entregar comigo no Dead Frequency! Código da sala: {server?.Code}\nProtocolo: V{NetClient.ProtocolVersion}\nServidor: {address}";
     }
 
     private void CopyHostInvite()
@@ -573,7 +575,7 @@ public partial class MultiplayerPanel : VBoxContainer
             return;
         }
         SetBusy(true);
-        NetClient.Instance.JoinRoom(CurrentServer(), code, PlayerName(), _roomPassword.Text);
+        NetClient.Instance.JoinRoom(CurrentServer(), code, PlayerName(), _roomPassword.Text, _inviteProtocol);
     }
 
     /// <summary>Cola o convite: pega o código e, se tiver endereço de servidor, troca para "Meu servidor".</summary>
@@ -581,6 +583,8 @@ public partial class MultiplayerPanel : VBoxContainer
     {
         string text = DisplayServer.ClipboardGet() ?? "";
         _code.Text = ExtractCode(text);
+        Match protocol = Regex.Match(text, @"\bprotocolo\s*:\s*v?(7|8)\b", RegexOptions.IgnoreCase);
+        _inviteProtocol = protocol.Success ? int.Parse(protocol.Groups[1].Value) : 0;
         Match url = UrlInText.Match(text);
         if (url.Success && NetClient.NormalizeServer(url.Value) != NetClient.NormalizeServer(NetClient.OfficialServer))
         {
