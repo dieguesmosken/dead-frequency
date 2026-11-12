@@ -963,6 +963,21 @@ public partial class CityGenerator
     /// <summary>Capim, samambaias, moitas, flores e pedras espalhados (sorteio próprio: não mexe no mapa).</summary>
     private void BuildUndergrowth()
     {
+        if (_useLogicalWorldData && WorldData != null)
+        {
+            foreach (WorldFarmUndergrowthPlan plan in WorldData.FarmUndergrowth)
+            {
+                if (NatureKit.Get(plan.Model) is not Mesh mesh)
+                    return;
+
+                var transform = new Transform3D(
+                    new Basis(Vector3.Up, plan.RotationY) * Basis.FromScale(Vector3.One * plan.Scale),
+                    plan.Position);
+                AddInstance("qg_" + plan.Model, mesh, null, transform, Colors.White);
+            }
+            return;
+        }
+
         var rng = new RandomNumberGenerator { Seed = 96601 };
         int placed = 0;
         for (int i = 0; i < 9000 && placed < 2600; i++)
