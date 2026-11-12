@@ -16,6 +16,7 @@ public partial class FrentistaJob : JobBase
     private Label3D _label;
     private string _brand = "";
     private Vector3 _spot;
+    private bool _hasStationPin;
     private bool _arrived;
     private bool _filling;
     private float _fill;
@@ -23,6 +24,9 @@ public partial class FrentistaJob : JobBase
 
     public override void _ExitTree()
     {
+        if (_hasStationPin)
+            City?.UnpinChunkForPosition(_spot);
+        _hasStationPin = false;
         JobMarkers.Free(ref _marker);
         if (_car != null && IsInstanceValid(_car))
             _car.QueueFree();
@@ -45,7 +49,10 @@ public partial class FrentistaJob : JobBase
         for (int i = 1; i < City.GasSpots.Count; i++)
             if (PlayerPos.DistanceTo(City.GasSpots[i].Position) < PlayerPos.DistanceTo(City.GasSpots[best].Position))
                 best = i;
+        if (_hasStationPin)
+            City.UnpinChunkForPosition(_spot);
         (_spot, _brand) = City.GasSpots[best];
+        _hasStationPin = City.PinChunkForPosition(_spot);
 
         _car = new AnimatableBody3D { Name = "CarroPosto", CollisionLayer = 1, CollisionMask = 0, SyncToPhysics = false };
         AddChild(_car);
