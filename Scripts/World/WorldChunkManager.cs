@@ -23,6 +23,14 @@ public partial class WorldChunkManager : Node
     [Export(PropertyHint.Range, "1,8,1")]
     public int UnloadsPerFrame { get; set; } = 1;
 
+    /// <summary>Intervalo entre construções de chunks durante o jogo. 2 = um chunk a cada dois frames.</summary>
+    [Export(PropertyHint.Range, "1,6,1")]
+    public int BuildIntervalFrames { get; set; } = 2;
+
+    /// <summary>Evita varrer os grupos de objetos e alocar coleções em todos os frames.</summary>
+    [Export(PropertyHint.Range, "1,30,1")]
+    public int TrackedObjectScanIntervalFrames { get; set; } = 6;
+
     public CityGenerator City { get; set; }
     public Node3D Target { get; set; }
     public Vector3 InitialPosition { get; set; }
@@ -36,9 +44,13 @@ public partial class WorldChunkManager : Node
     private readonly HashSet<WorldChunkCoordinate> _queuedLoads = new();
     private readonly HashSet<WorldChunkCoordinate> _queuedUnloads = new();
     private readonly Dictionary<ulong, Vector3> _trackedObjectPins = new();
+    private readonly HashSet<ulong> _activeTrackedIds = new();
+    private readonly List<ulong> _staleTrackedIds = new();
 
     private WorldChunkCoordinate _lastCenter;
     private int _lastPinVersion = -1;
+    private int _buildFrameCountdown;
+    private int _trackedObjectScanCountdown;
     private bool _hasCenter;
     private bool _hasReportedChunkCounts;
 
@@ -83,7 +95,16 @@ public partial class WorldChunkManager : Node
             return;
         }
 
-        bool pinsChanged = RefreshTrackedObjectPins();
+        bool pinsChanged = false;
+        if (_trackedObjectScanCountdown > 0)
+        {
+            _trackedObjectScanCountdown--;
+        }
+        else
+        {
+            pinsChanged = RefreshTrackedObjectPins();
+            _trackedObjectScanCountdown = Mathf.Max(0, TrackedObjectScanIntervalFrames - 1);
+        }
 
         Vector3 targetPosition = GetTargetPosition();
         WorldChunkCoordinate center = City.WorldData.GetChunkCoordinate(targetPosition);
@@ -104,18 +125,23 @@ public partial class WorldChunkManager : Node
     private bool RefreshTrackedObjectPins()
     {
         bool changed = false;
-        var activeIds = new HashSet<ulong>();
-        changed |= TrackGroup(VanController.GroupName, activeIds);
-        changed |= TrackGroup(CargoItem.GroupName, activeIds);
-        changed |= TrackGroup(WorldItem.GroupName, activeIds);
-        changed |= TrackGroup(TrackedObjectGroup, activeIds);
+        _activeTrackedIds.Clear();
+        changed |= TrackGroup(VanController.GroupName, _activeTrackedIds);
+        changed |= TrackGroup(CargoItem.GroupName, _activeTrackedIds);
+        changed |= TrackGroup(WorldItem.GroupName, _activeTrackedIds);
+        changed |= TrackGroup(TrackedObjectGroup, _activeTrackedIds);
 
-        foreach (ulong instanceId in new List<ulong>(_trackedObjectPins.Keys))
+        _staleTrackedIds.Clear();
+        foreach (KeyValuePair<ulong, Vector3> entry in _trackedObjectPins)
         {
-            if (activeIds.Contains(instanceId))
-                continue;
+            if (!_activeTrackedIds.Contains(entry.Key))
+                _staleTrackedIds.Add(entry.Key);
+        }
 
-            City.UnpinChunkForPosition(_trackedObjectPins[instanceId]);
+        foreach (ulong instanceId in _staleTrackedIds)
+        {
+            if (_trackedObjectPins.TryGetValue(instanceId, out Vector3 previousPosition))
+                City.UnpinChunkForPosition(previousPosition);
             _trackedObjectPins.Remove(instanceId);
             changed = true;
         }
@@ -241,17 +267,32 @@ public partial class WorldChunkManager : Node
             }
         }
 
-        int builds = Mathf.Max(1, BuildsPerFrame);
-        while (builds-- > 0 && _loadQueue.Count > 0)
+        if (_buildFrameCountdown > 0)
         {
-            WorldChunkCoordinate coordinate = _loadQueue.Dequeue();
-            _queuedLoads.Remove(coordinate);
+            _buildFrameCountdown--;
+        }
+        else
+        {
+            int builds = Mathf.Max(1, BuildsPerFrame);
+            while (builds-- > 0 && _loadQueue.Count > 0)
+            {
+                WorldChunkCoordinate coordinate = _loadQueue.Dequeue();
+                _queuedLoads.Remove(coordinate);
 
-            if (!_desired.Contains(coordinate) || City.IsChunkVisualized(coordinate))
-                continue;
+                if (!_desired.Contains(coordinate) || City.IsChunkVisualized(coordinate))
+                    continue;
 
-            if (City.WorldData.TryGetChunk(coordinate, out WorldChunkData chunk))
-                chunksChanged |= City.BuildChunkVisuals(chunk);
+                if (City.WorldData.TryGetChunk(coordinate, out WorldChunkData chunk))
+                    chunksChanged |= City.BuildChunkVisuals(chunk);
+
+                // Construções maiores são separadas por frames para evitar uma sequência
+                // contínua de picos enquanto o jogador atravessa a cidade.
+                if (BuildIntervalFrames > 1)
+                {
+                    _buildFrameCountdown = BuildIntervalFrames - 1;
+                    break;
+                }
+            }
         }
 
         // Evita alocar uma lista e notificar observadores em todos os frames sem mudança.
