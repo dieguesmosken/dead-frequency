@@ -139,7 +139,7 @@ public static class WorldDataGenerator
             {
                 BuildCityBlockPlans(
                     seed, cityRadius, blockSize, sidewalkWidth, roadWidth, curbHeight, parkChance, parkingLotChance,
-                    storefrontChance, safeBrandCount, blocks,
+                    storefrontChance, storeBrandCount, blocks,
                     fireStationBlock, policeStationBlock, radioStationBlock, marketBlock,
                     shoppingMallBlock, apartmentBlock, dealerBlock, waterTowerBlock, carWashBlock,
                     gasStations, progress);
