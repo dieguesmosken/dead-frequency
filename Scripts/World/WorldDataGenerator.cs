@@ -10,7 +10,7 @@ namespace DeadFrequency;
 /// </summary>
 public static class WorldDataGenerator
 {
-    public const int CurrentGeneratorVersion = 1;
+    public const int CurrentGeneratorVersion = 2;
     public const float FarmChunkSize = 64f;
 
     private const ulong FnvOffset = 14695981039346656037UL;
@@ -222,7 +222,7 @@ public static class WorldDataGenerator
                     : new List<WorldBuildingPlan>();
                 float period = blockSize + roadWidth;
                 List<WorldParkTreePlan> parkTrees = kind == WorldBlockKind.Park
-                    ? BuildCityParkTrees(worldSeed, coordinate, blockSize, sidewalkWidth, period)
+                    ? BuildCityParkTrees(worldSeed, coordinate, blockSize, sidewalkWidth, curbHeight, period)
                     : new List<WorldParkTreePlan>();
                 List<WorldParkBenchPlan> parkBenches = kind == WorldBlockKind.Park
                     ? BuildCityParkBenches(worldSeed, coordinate, blockSize, sidewalkWidth, curbHeight, period)
@@ -371,6 +371,7 @@ public static class WorldDataGenerator
         WorldChunkCoordinate coordinate,
         float blockSize,
         float sidewalkWidth,
+        float curbHeight,
         float period)
     {
         float inner = blockSize - sidewalkWidth * 2f;
@@ -386,7 +387,7 @@ public static class WorldDataGenerator
         {
             Vector3 position = center + new Vector3(
                 rng.RandfRange(-inner * 0.45f, inner * 0.45f),
-                0f,
+                curbHeight,
                 rng.RandfRange(-inner * 0.45f, inner * 0.45f));
             float scale = rng.RandfRange(0.8f, 1.4f);
             string model = NatureKit.CommonTrees[AssetProps.Hash(position, 4) % NatureKit.CommonTrees.Length];
