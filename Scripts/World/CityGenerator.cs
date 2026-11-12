@@ -7,6 +7,7 @@
 // As ruas ficam entre eles, centradas em k*Period + Period/2. O quarteirão (0,0) é o depósito.
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Threading.Tasks;
 using Godot;
 
@@ -454,8 +455,7 @@ public partial class CityGenerator : Node3D
         {
             SceneTree generationTree = GetTree();
             bool previousGenerationPaused = generationTree.Paused;
-            object progressLock = new();
-            WorldGenerationProgress latestProgress = new("Preparando dados lógicos", 0, 1);
+            var progressQueue = new ConcurrentQueue<WorldGenerationProgress>();
 
             try
             {
@@ -464,42 +464,31 @@ public partial class CityGenerator : Node3D
                 generationTree.Paused = true;
 
                 Task<WorldGenerationData> generationTask = Task.Run(() =>
-                    GenerateWorldData(progress =>
-                    {
-                        lock (progressLock)
-                            latestProgress = progress;
-                    }));
+                    GenerateWorldData(progress => progressQueue.Enqueue(progress)));
 
-                while (!generationTask.IsCompleted)
+                // Drena os eventos no fio principal. Mesmo que o cálculo termine muito rápido,
+                // a barra consegue apresentar etapas reais em vez de saltar diretamente ao fim.
+                while (!generationTask.IsCompleted || !progressQueue.IsEmpty)
                 {
-                    WorldGenerationProgress snapshot;
-                    lock (progressLock)
-                        snapshot = latestProgress;
-
-                    WorldDataProgress?.Invoke(snapshot);
-                    int stageOffset = logicalOffsets.TryGetValue(snapshot.Stage, out int offset) ? offset : 0;
-                    float logicalRatio = (float)(stageOffset + snapshot.Completed) / logicalTotal;
-                    loading.SetProgress(
-                        snapshot.Stage,
-                        snapshot.Completed,
-                        snapshot.Total,
-                        logicalRatio * 0.68f);
+                    int processed = 0;
+                    while (processed < 8 && progressQueue.TryDequeue(out WorldGenerationProgress snapshot))
+                    {
+                        WorldDataProgress?.Invoke(snapshot);
+                        int stageOffset = logicalOffsets.TryGetValue(snapshot.Stage, out int offset) ? offset : 0;
+                        float logicalRatio = (float)(stageOffset + snapshot.Completed) / logicalTotal;
+                        loading.SetProgress(
+                            snapshot.Stage,
+                            snapshot.Completed,
+                            snapshot.Total,
+                            logicalRatio * 0.68f);
+                        processed++;
+                    }
 
                     await ToSignal(generationTree, SceneTree.SignalName.ProcessFrame);
                 }
 
                 WorldData = await generationTask;
-
-                // Publica a última etapa mesmo que a tarefa tenha terminado entre dois frames.
-                WorldGenerationProgress finalProgress;
-                lock (progressLock)
-                    finalProgress = latestProgress;
-                WorldDataProgress?.Invoke(finalProgress);
-                loading.SetProgress(
-                    finalProgress.Stage,
-                    finalProgress.Completed,
-                    finalProgress.Total,
-                    0.68f);
+                loading.SetProgress("Dados lógicos prontos", logicalTotal, logicalTotal, 0.68f);
             }
             catch (Exception ex)
             {
