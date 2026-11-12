@@ -22,6 +22,7 @@ public partial class Cyclist : Node3D
 
     public override void _Ready()
     {
+        AddToGroup(WorldChunkManager.TrackedObjectGroup);
         if (City == null)
         {
             GD.PushWarning("Cyclist: defina City no Inspector.");
