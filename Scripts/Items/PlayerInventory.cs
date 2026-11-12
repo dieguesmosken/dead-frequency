@@ -276,6 +276,7 @@ public partial class PlayerInventory : Node
             ItemCatalog.Skewer => player.UseSkewer(),
             ItemCatalog.Nail => FixSlippers(),
             ItemCatalog.SteelWool => VirtualTV.FixNearest(player),
+            ItemCatalog.Repellent => Mosquitoes.Repel(300f),
             _ => "",
         };
         if (!string.IsNullOrEmpty(result))

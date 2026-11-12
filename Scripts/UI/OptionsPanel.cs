@@ -181,7 +181,7 @@ public partial class OptionsPanel : VBoxContainer
 
         Section(p, "TOQUE (CELULAR)");
         Choice(p, "Controles de toque", new[] { "Automático", "Sempre", "Nunca" }, s.TouchMode, i => s.TouchMode = i,
-            "Automático: aparecem só em tela de toque. Joystick à esquerda, arrastar à direita mexe a câmera.");
+            "Automático: aparecem só no celular (em notebook com toque, escolha Sempre). Joystick à esquerda, arrastar à direita mexe a câmera.");
         Slider(p, "Tamanho dos botões", 0.7, 1.5, 0.05, s.TouchScale, v => s.TouchScale = (float)v, v => $"{v:0.00}x");
 
         Section(p, "TECLAS");

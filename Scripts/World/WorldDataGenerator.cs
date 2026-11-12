@@ -1043,6 +1043,7 @@ public static class WorldDataGenerator
             (new Vector2(-14f, 140f), 10f),
             (new Vector2(-10f, 26f), 8f),
             (new Vector2(36f, 146f), 14f),
+            (CityGenerator.AgroTudaoCenter, CityGenerator.AgroTudaoRadius),
         };
 
         // Mantém a ordem de destinos do mundo antigo: pesqueiro primeiro, depois os sítios.
@@ -1140,6 +1141,7 @@ public static class WorldDataGenerator
             (new Vector2(-14f, 140f), 10f),
             (new Vector2(-10f, 26f), 8f),
             (new Vector2(36f, 146f), 14f),
+            (CityGenerator.AgroTudaoCenter, CityGenerator.AgroTudaoRadius),
         };
         foreach (WorldFarmSitePlan site in farmSites)
             occupied.Add((new Vector2(site.Center.X, site.Center.Z), site.OccupiedRadius));
@@ -1285,6 +1287,7 @@ public static class WorldDataGenerator
             (new Vector2(-14f, 140f), 10f),
             (new Vector2(-10f, 26f), 8f),
             (new Vector2(36f, 146f), 14f),
+            (CityGenerator.AgroTudaoCenter, CityGenerator.AgroTudaoRadius),
         };
         foreach (WorldFarmSitePlan site in farmSites)
             occupied.Add((new Vector2(site.Center.X, site.Center.Z), site.OccupiedRadius));
