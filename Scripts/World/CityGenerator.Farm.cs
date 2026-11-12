@@ -103,6 +103,8 @@ public partial class CityGenerator
         _occupied.Add((new Vector2(-14f, 140f), 10f)); // barraca na encruzilhada
         _occupied.Add((new Vector2(-10f, 26f), 8f)); // barraca da entrada
         _occupied.Add((new Vector2(36f, 146f), 14f)); // cemitério
+        _occupied.Add((AgroTudaoCenter, AgroTudaoRadius)); // Agro-Tudão (v0.9.9)
+        BuildAgroTudao();
         BuildFarmProps();
 
         if (_useLogicalWorldData && WorldData != null)

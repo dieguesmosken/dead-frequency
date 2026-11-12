@@ -98,7 +98,9 @@ public partial class TouchControls : CanvasLayer
         {
             GameSettings s = GameSettings.Instance;
             int mode = s?.TouchMode ?? 0;
-            return mode == 1 || (mode == 0 && DisplayServer.IsTouchscreenAvailable());
+            // Automático = só no celular. Alguns PCs (e o X11 do Linux) dizem ter tela de toque sem ter:
+            // notebook com toque escolhe "Sempre" nas Opções.
+            return mode == 1 || (mode == 0 && OS.HasFeature("mobile"));
         }
     }
 

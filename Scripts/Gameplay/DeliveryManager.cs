@@ -56,6 +56,8 @@ public partial class DeliveryManager : Node3D
         "res://Data/Cargo/parabolica.tres",
         "res://Data/Cargo/tomates.tres",
         "res://Data/Cargo/feijoada.tres",
+        // v0.9.9: só no sítio (CARGO_CATALOG levels: ["farm"]); nasce no Agro-Tudão.
+        "res://Data/Cargo/racao.tres",
     };
     [Export] public int CargoPerShift { get; set; } = 3;
     /// <summary>Distância mínima do depósito para sortear um destino.</summary>
@@ -225,7 +227,8 @@ public partial class DeliveryManager : Node3D
         {
             for (int i = 0; i < CargoPerShift; i++)
             {
-                CargoItem cargo = SpawnCargo(_rng.RandiRange(0, CargoCatalog.Length - 1), i);
+                int[] pool = CargoRules.Pool(City != null && City.IsFarm ? "farm" : "city");
+                CargoItem cargo = SpawnCargo(pool[_rng.RandiRange(0, pool.Length - 1)], i);
                 if (cargo != null)
                     cargoList.Add(cargo);
             }
@@ -405,7 +408,9 @@ public partial class DeliveryManager : Node3D
         cargo.Data = GD.Load<CargoData>(CargoCatalog[Mathf.PosMod(typeIndex, CargoCatalog.Length)]);
         GetTree().CurrentScene.AddChild(cargo);
         var offset = new Vector3((slot % 3 - 1) * 1.1f, -0.15f, slot / 3 * 1.1f);
-        cargo.GlobalPosition = CargoSpawn.GlobalPosition + offset;
+        // Saco de ração (v0.9.9) nasce na frente do Agro-Tudão, não na cooperativa.
+        Vector3 origin = cargo.Data?.CargoId == "racao" && City?.AgroTudaoSpawn is Vector3 agro ? agro : CargoSpawn.GlobalPosition;
+        cargo.GlobalPosition = origin + offset;
         return cargo;
     }
 
