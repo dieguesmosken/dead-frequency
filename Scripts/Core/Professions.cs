@@ -24,7 +24,7 @@ public static class Professions
     public static readonly Def[] All =
     {
         new(Entregador, "Entregador", "Leve as caixas do depósito até o feixe verde. Paga pela integridade.", "Depósito Frequência", 0, new Color(0.55f, 1f, 0.62f), Both),
-        new(Taxista, "Taxista", "Pegue passageiros com a van (feixe amarelo) e deixe no destino. Corrida pela distância.", "Qualquer rua", 30, new Color(1f, 0.85f, 0.2f), Both),
+        new(Taxista, "Taxista", "Pegue o táxi amarelo no pátio da central, busque passageiros (feixe amarelo) e deixe no destino. Corrida pela distância.", "Qualquer rua", 30, new Color(1f, 0.85f, 0.2f), Both),
         new(Gari, "Gari", "Recolha os sacos de lixo das calçadas e jogue nas caçambas. R$ 25 por saco.", "Calçadas e caçambas", 25, new Color(1f, 0.55f, 0.15f), Both),
         new(Repositor, "Repositor", "Pegue caixas no estoque do Atacadinho e reponha as prateleiras vazias. R$ 30 por prateleira.", "Supermercado Atacadinho", 30, new Color(0.4f, 0.75f, 1f), CityOnly),
         new(Frentista, "Frentista", "Abasteça os carros que chegam no posto mais perto. R$ 45 por tanque cheio.", "Postos de gasolina", 45, new Color(0.3f, 0.9f, 0.4f), CityOnly),

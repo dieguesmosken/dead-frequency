@@ -68,6 +68,10 @@ Entregador solitário dirigindo uma van utilitária anos 90 por uma zona perigos
    🚧 v0.9.7 (em andamento): texturas da cidade (Assets/Textures/City/city_textures.py.txt), GrassTufts (capim),
       CityGenerator.OptimizeVisibility, ShopStock (abas por vendedor), concessionária (CityGenerator.Dealer + CarGarage +
       VehicleFactory.BuildCar; carros = CARS/VEHICLES/SHOP_PRICES no servidor, room.cars), ForbidParking.
+   🚧 v0.9.9 (Internal): Shopping Marconi, táxi da cooperativa (VehicleFactory.BuildTaxi, modelo Assets/GGBot, NetId "taxi";
+      TaxiJob só aceita CityGenerator.Taxi), van de viagem (CarType.Van80, NetId "van_viagem" = CityGenerator.TravelVan),
+      portão -X da central, grade nos muros (CityGenerator.Railing.cs), portãozinho da rádio, KeepClear (sem placa),
+      céu procedural (Shaders/Sky/procedural_sky.gdshader, parâmetros pelo DayNightController). VEHICLES no servidor.
 3. Painel diegético: DashboardButton, ElectricalSystem, EngineSystem, fusíveis
 4. CargoBayManager + SaveManager (.tzn)
 5. Shaders PS1 + monitor CRT
