@@ -287,12 +287,24 @@ public partial class CityGenerator : Node3D
         if (unloadedRoot != null && GodotObject.IsInstanceValid(unloadedRoot))
         {
             _parkedCars.RemoveAll(car =>
-                !GodotObject.IsInstanceValid(car) || car.GetParent() == unloadedRoot);
+                !GodotObject.IsInstanceValid(car) || IsOwnedByRoot(car, unloadedRoot));
         }
         else
         {
             _parkedCars.RemoveAll(car => !GodotObject.IsInstanceValid(car));
         }
+    }
+
+    private static bool IsOwnedByRoot(Node node, Node root)
+    {
+        Node current = node;
+        while (current != null)
+        {
+            if (current == root)
+                return true;
+            current = current.GetParent();
+        }
+        return false;
     }
 
     private void PrepareLogicalNoParkingZones()
