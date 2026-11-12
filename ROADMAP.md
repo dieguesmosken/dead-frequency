@@ -101,7 +101,7 @@ Ideias para depois (pesquisa de 12/11 sobre as regras do CTB):
 | ✅ **Central e rádio** | Portão novo do lado esquerdo da central (feedback dos testes), grade de metal em cima dos muros da central e da rádio, e portãozinho de pedestre na lateral da rádio. |
 | ✅ **Céu novo** | Céu 100% procedural (nuvens, sol, lua com relevo e estrelas) ligado ao ciclo de dia e noite. |
 | **Agro-Tudão (casa de rações)** | Na estrada de terra entre a cidade e o sítio: entregas de sacos de ração para os cercados. |
-| **Conserta-Tudo do Primo** | O gari junta sucata nas calçadas e vende aqui, ou troca por melhorias (lanterna de longo alcance, pilhas para a visão noturna). |
+| ✅ **Conserta-Tudo do Primo** | Barraca em frente ao depósito. O gari acha sucata na rua (rádio velho, cano, roda) e vende ao Primo pelo mesmo valor do saco; o Primo vende a lanterna de longo alcance (dobro do alcance, basta estar na mochila), kit de reparo, fita e prego. Pilhas para a visão noturna ficaram de fora: ela não gasta bateria hoje. |
 | ✅ **Lã de Aço 1001 Utilidades** | Balcão no Shopping Marconi (no lugar das Lojas Marcianas) com palha de aço Brilhaço, fita e prego. Na TV do apartamento, a palha de aço na antena acaba com o chuvisco. O repositor às vezes repõe fardos de palha de aço (carga leve). |
 
 ### v0.10 — Dead Frequency no celular (Android)
