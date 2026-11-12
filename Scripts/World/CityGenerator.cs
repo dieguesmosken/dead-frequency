@@ -88,6 +88,7 @@ public partial class CityGenerator : Node3D
     private Node3D _staticRoot;
     private Node3D _lightsRoot;
     private bool _useLogicalWorldData;
+    private bool _useLogicalServiceData;
     private bool _useLogicalBlockPlans;
     private Vector3 _initialChunkPosition;
     private bool _hasInitialChunkPosition;
@@ -254,6 +255,7 @@ public partial class CityGenerator : Node3D
         // V8 pode usar o plano lógico, já que seus clientes usam a mesma geração atualizada.
         _useLogicalWorldData = NetClient.Instance?.IsOnline != true
             || NetClient.Instance.ActiveProtocolVersion >= NetClient.PreferredProtocolVersion;
+        _useLogicalServiceData = Biome == WorldBiome.City;
         _useLogicalBlockPlans = _useLogicalWorldData;
 
         WorldData = WorldDataGenerator.Generate(
@@ -263,19 +265,22 @@ public partial class CityGenerator : Node3D
             ParkChance, ParkingLotChance, GasStations, _useLogicalWorldData,
             progress => WorldDataProgress?.Invoke(progress));
 
-        if (Biome == WorldBiome.City && _useLogicalWorldData)
+        if (Biome == WorldBiome.City)
         {
-            _deliveryPoints.Clear();
-            foreach (WorldDeliveryPointData point in WorldData.DeliveryPoints)
+            if (_useLogicalWorldData)
             {
-                _deliveryPoints.Add(new DeliveryPoint
+                _deliveryPoints.Clear();
+                foreach (WorldDeliveryPointData point in WorldData.DeliveryPoints)
                 {
-                    Position = point.Position,
-                    Address = point.Address,
-                });
+                    _deliveryPoints.Add(new DeliveryPoint
+                    {
+                        Position = point.Position,
+                        Address = point.Address,
+                    });
+                }
             }
 
-            // Pontos de interação ficam disponíveis mesmo quando os modelos 3D não estiverem carregados.
+            // Pontos fixos das profissões não dependem de meshes e também precisam existir no V7.
             DumpsterSpots.Clear();
             DumpsterSpots.AddRange(WorldData.Services.DumpsterSpots);
             GasSpots.Clear();
