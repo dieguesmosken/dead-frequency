@@ -33,6 +33,7 @@ function connect(code, name, prof = "entregador", items = [], roomPassword = "",
 
 const health = await (await fetch(base + "/")).json();
 assert(health.ok, "health");
+assert(Array.isArray(health.supportedProtocols) && health.supportedProtocols.includes(7) && health.supportedProtocols.includes(8), "health anuncia protocolos habilitados");
 const pub = await (await fetch(base + "/api/stats")).json();
 assert(pub.ok && typeof pub.onlinePlayers === "number" && pub.protocol === health.protocol, "stats públicas");
 assert(!JSON.stringify(pub).includes("code") && !("rooms" in pub), "stats sem códigos de sala");
