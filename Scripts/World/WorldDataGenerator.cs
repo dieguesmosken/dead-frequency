@@ -167,7 +167,7 @@ public static class WorldDataGenerator
                 progress?.Invoke(new WorldGenerationProgress(
                     "Calculando veículos estacionados", 1, 1));
 
-                BuildCityDeliveryPoints(seed, cityRadius, blockSize, chunkSize, curbHeight, deliveryPoints);
+                BuildCityDeliveryPoints(seed, cityRadius, blockSize, chunkSize, curbHeight, deliveryPoints, progress);
             }
 
             // Coordenadas dos trabalhos são dados lógicos leves e também ficam disponíveis no V7.
