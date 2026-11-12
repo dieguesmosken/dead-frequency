@@ -17,6 +17,10 @@ public static class WorldDataGenerator
     private const ulong FnvPrime = 1099511628211UL;
     private const uint DeliveryPointStream = 0x444C5652;
     private const uint BlockTypeStream = 0x424C4B54;
+    private const uint BlockLayoutStream = 0x4C41594F;
+    private const uint BuildingVisualStream = 0x42564953;
+    private const uint BuildingDecorationStream = 0x42444543;
+    private const uint StoreBrandStream = 0x53544252;
     private const uint BlockVisualStream = 0x56495355;
     private const uint BlockDecorationStream = 0x4445434F;
     private static readonly string[] StreetNamesX =
@@ -44,6 +48,8 @@ public static class WorldDataGenerator
         float parkChance,
         float parkingLotChance,
         IReadOnlyList<(Vector2I Block, string Id)> gasStations,
+        int storeBrandCount,
+        float storefrontChance,
         bool prepareLogicalCityData,
         Action<WorldGenerationProgress> progress = null)
     {
@@ -78,7 +84,8 @@ public static class WorldDataGenerator
             }
 
             BuildCityBlockPlans(
-                seed, cityRadius, parkChance, parkingLotChance, blocks,
+                seed, cityRadius, blockSize, sidewalkWidth: 3f, curbHeight, parkChance, parkingLotChance,
+                storefrontChance, storeBrandCount, blocks,
                 fireStationBlock, policeStationBlock, radioStationBlock, marketBlock,
                 shoppingMallBlock, apartmentBlock, dealerBlock, waterTowerBlock, carWashBlock,
                 gasStations, progress);
@@ -130,8 +137,13 @@ public static class WorldDataGenerator
     private static void BuildCityBlockPlans(
         int worldSeed,
         int radius,
+        float blockSize,
+        float sidewalkWidth,
+        float curbHeight,
         float parkChance,
         float parkingLotChance,
+        float storefrontChance,
+        int storeBrandCount,
         List<WorldBlockData> destination,
         Vector2I fireStationBlock,
         Vector2I policeStationBlock,
@@ -148,6 +160,12 @@ public static class WorldDataGenerator
         int width = radius * 2 + 1;
         int total = width * width;
         int completed = 0;
+        int safeBrandCount = Mathf.Max(1, storeBrandCount);
+        var brandQueue = new Queue<int>();
+        var brandRng = new RandomNumberGenerator
+        {
+            Seed = DeriveChunkSeed(worldSeed, new WorldChunkCoordinate(0, 0), StoreBrandStream),
+        };
 
         // A classificação segue a prioridade original de CityGenerator.BuildBlock/TryBuildServiceBlock.
         for (int bx = -radius; bx <= radius; bx++)
@@ -192,16 +210,144 @@ public static class WorldDataGenerator
                             : WorldBlockKind.Buildings;
                 }
 
+                List<WorldBuildingPlan> buildings = kind == WorldBlockKind.Buildings
+                    ? BuildCityBuildingPlans(
+                        worldSeed, coordinate, radius, blockSize, sidewalkWidth, curbHeight,
+                        storefrontChance, safeBrandCount, brandQueue, brandRng)
+                    : new List<WorldBuildingPlan>();
+
                 destination.Add(new WorldBlockData(
                     coordinate,
                     kind,
                     DeriveChunkSeed(worldSeed, coordinate, BlockVisualStream),
-                    DeriveChunkSeed(worldSeed, coordinate, BlockDecorationStream)));
+                    DeriveChunkSeed(worldSeed, coordinate, BlockDecorationStream),
+                    buildings));
 
                 completed++;
-                progress?.Invoke(new WorldGenerationProgress("Distribuindo tipos de quarteirão", completed, total));
+                progress?.Invoke(new WorldGenerationProgress("Planejando quarteirões e prédios", completed, total));
             }
         }
+    }
+
+    private static List<WorldBuildingPlan> BuildCityBuildingPlans(
+        int worldSeed,
+        WorldChunkCoordinate coordinate,
+        int radius,
+        float blockSize,
+        float sidewalkWidth,
+        float curbHeight,
+        float storefrontChance,
+        int storeBrandCount,
+        Queue<int> brandQueue,
+        RandomNumberGenerator brandRng)
+    {
+        float inner = blockSize - sidewalkWidth * 2f;
+        float half = inner * 0.5f;
+        Vector3 center = new(coordinate.X * (blockSize + 12f), 0f, coordinate.Z * (blockSize + 12f));
+
+        var layoutRng = new RandomNumberGenerator
+        {
+            Seed = DeriveChunkSeed(worldSeed, coordinate, BlockLayoutStream),
+        };
+        var lotDecorationRng = new RandomNumberGenerator
+        {
+            Seed = DeriveChunkSeed(worldSeed, coordinate, BlockDecorationStream),
+        };
+
+        var lots = new List<Rect2>();
+        float split = layoutRng.Randf();
+        if (split < 0.2f)
+        {
+            lots.Add(new Rect2(-half, -half, inner, inner));
+        }
+        else if (split < 0.5f)
+        {
+            if (layoutRng.Randf() < 0.5f)
+            {
+                lots.Add(new Rect2(-half, -half, inner, half));
+                lots.Add(new Rect2(-half, 0f, inner, half));
+            }
+            else
+            {
+                lots.Add(new Rect2(-half, -half, half, inner));
+                lots.Add(new Rect2(0f, -half, half, inner));
+            }
+        }
+        else
+        {
+            lots.Add(new Rect2(-half, -half, half, half));
+            lots.Add(new Rect2(0f, -half, half, half));
+            lots.Add(new Rect2(-half, 0f, half, half));
+            lots.Add(new Rect2(0f, 0f, half, half));
+        }
+
+        float ring = Mathf.Max(Mathf.Abs(coordinate.X), Mathf.Abs(coordinate.Z));
+        float heightBias = Mathf.Lerp(1.4f, 0.6f, (ring - 1f) / Mathf.Max(1f, radius - 1f));
+        var result = new List<WorldBuildingPlan>(lots.Count);
+
+        for (int i = 0; i < lots.Count; i++)
+        {
+            Rect2 lot = lots[i];
+            float margin = layoutRng.RandfRange(0.6f, 2.0f);
+            float width = lot.Size.X - margin * 2f;
+            float depth = lot.Size.Y - margin * 2f;
+            if (width < 5f || depth < 5f)
+                continue;
+
+            float height = layoutRng.RandfRange(7f, 20f) * heightBias;
+            if (layoutRng.Randf() < 0.18f)
+                height = layoutRng.RandfRange(26f, 48f) * heightBias;
+            height = Mathf.Max(4f, Mathf.Round(height / 3.2f) * 3.2f + 0.4f);
+
+            Vector3 lotCenter = center + new Vector3(
+                lot.Position.X + lot.Size.X * 0.5f,
+                curbHeight,
+                lot.Position.Y + lot.Size.Y * 0.5f);
+
+            Vector3 toLot = lotCenter - center;
+            Vector3 front;
+            if (Mathf.Abs(toLot.X) < 0.5f && Mathf.Abs(toLot.Z) < 0.5f)
+                front = lotDecorationRng.Randf() < 0.5f ? Vector3.Back : Vector3.Right;
+            else if (Mathf.Abs(toLot.X) > Mathf.Abs(toLot.Z))
+                front = new Vector3(Mathf.Sign(toLot.X), 0f, 0f);
+            else
+                front = new Vector3(0f, 0f, Mathf.Sign(toLot.Z));
+
+            bool hasStorefront = lotDecorationRng.Randf() < storefrontChance;
+            float buildingHeight = hasStorefront ? 4.4f : height;
+            int brandIndex = -1;
+            if (hasStorefront)
+            {
+                if (brandQueue.Count == 0)
+                {
+                    var shuffled = new List<int>(storeBrandCount);
+                    for (int brand = 0; brand < storeBrandCount; brand++)
+                        shuffled.Add(brand);
+                    for (int j = shuffled.Count - 1; j > 0; j--)
+                    {
+                        int swap = brandRng.RandiRange(0, j);
+                        (shuffled[j], shuffled[swap]) = (shuffled[swap], shuffled[j]);
+                    }
+                    foreach (int brand in shuffled)
+                        brandQueue.Enqueue(brand);
+                }
+                brandIndex = brandQueue.Dequeue();
+            }
+
+            uint index = unchecked((uint)i);
+            result.Add(new WorldBuildingPlan(
+                lotCenter,
+                width,
+                depth,
+                buildingHeight,
+                front,
+                hasStorefront,
+                DeriveChunkSeed(worldSeed, coordinate, BuildingVisualStream + index),
+                DeriveChunkSeed(worldSeed, coordinate, BuildingDecorationStream + index),
+                brandIndex));
+        }
+
+        return result;
     }
 
     private static bool TryGetGasStation(
