@@ -15,6 +15,8 @@ public class SaveData
     public string SavedAt { get; set; } = "";
     public string Level { get; set; } = "city";
     public string Profession { get; set; } = Professions.Entregador;
+    public int WorldSeed { get; set; } = 1996;
+    public int WorldGeneratorVersion { get; set; }
     public int Shift { get; set; } = 1;
     public int TotalDelivered { get; set; }
     public int Wallet { get; set; }
@@ -70,6 +72,11 @@ public static class SaveManager
         data.SavedAt = Time.GetDatetimeStringFromSystem(false, true);
         data.Level = Professions.CurrentLevel;
         data.Profession = Professions.Current;
+        if (delivery?.City?.WorldData is WorldGenerationData worldData)
+        {
+            data.WorldSeed = worldData.Seed;
+            data.WorldGeneratorVersion = worldData.GeneratorVersion;
+        }
         if (delivery != null && !delivery.NetworkMode)
         {
             data.Shift = delivery.Shift;
