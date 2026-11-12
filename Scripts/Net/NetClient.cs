@@ -305,9 +305,9 @@ public partial class NetClient : Node
     public string InviteText()
     {
         if (UsingOfficialServer)
-            return $"Bora entregar comigo no Dead Frequency! Código da sala: {RoomCode}";
+            return $"Bora entregar comigo no Dead Frequency! Código da sala: {RoomCode}\nProtocolo: V{ActiveProtocolVersion}";
         string server = string.IsNullOrEmpty(PublicServerUrl) ? ServerUrl : PublicServerUrl;
-        return $"Bora entregar comigo no Dead Frequency! Código da sala: {RoomCode}\nServidor: {server}";
+        return $"Bora entregar comigo no Dead Frequency! Código da sala: {RoomCode}\nProtocolo: V{ActiveProtocolVersion}\nServidor: {server}";
     }
 
     // ---------------- Loop ----------------
