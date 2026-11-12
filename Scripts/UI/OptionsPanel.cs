@@ -215,6 +215,42 @@ public partial class OptionsPanel : VBoxContainer
         Toggle(p, "Linhas de CRT", s.Scanlines, b => s.Scanlines = b, "Efeito de tela de tubo por cima dos menus e do HUD.");
         Choice(p, "Velocímetro", new[] { "km/h", "mph" }, s.SpeedUnit, i => s.SpeedUnit = i);
         Choice(p, "Relógio", new[] { "24 horas", "12 horas (AM/PM)" }, s.Clock24h ? 0 : 1, i => s.Clock24h = i == 0);
+        BuildMenuCodes(s, p);
+    }
+
+    /// <summary>Menu inicial: campo de código secreto (MenuStyles) e, depois do VISUAL966, a escolha do menu.</summary>
+    private void BuildMenuCodes(GameSettings s, VBoxContainer p)
+    {
+        Section(p, "MENU INICIAL");
+        HBoxContainer row = Row(p, "Código");
+        var code = new LineEdit { PlaceholderText = "digite o código", CustomMinimumSize = new Vector2(260, 38), MaxLength = 24 };
+        code.AddThemeFontSizeOverride("font_size", 16);
+        row.AddChild(code);
+        Label result = Hint("Tem um código? Digite e aperte Enter.");
+        p.AddChild(result);
+
+        // Escolha do menu (só aparece com o VISUAL966).
+        var pickerBox = new VBoxContainer { Visible = s.MenuPicker };
+        pickerBox.AddThemeConstantOverride("separation", 6);
+        p.AddChild(pickerBox);
+        Choice(pickerBox, "Menu inicial", MenuStyles.Names, s.MenuStyle, i => s.MenuStyle = i, "Vale ao voltar para a tela inicial.");
+        Node pickerRow = pickerBox.GetChild(0);
+        var picker = pickerRow.GetChild(pickerRow.GetChildCount() - 1) as OptionButton;
+
+        void Submit()
+        {
+            MenuStyles.CodeResult r = MenuStyles.Apply(code.Text);
+            AudioManager.Instance?.PlayUi(r.Ok ? UiSound.Start : UiSound.Back);
+            result.Text = r.Message + (r.Ok && s.MenuStyle != 0 && !s.MenuPicker ? " Vale ao voltar para a tela inicial." : "");
+            result.AddThemeColorOverride("font_color", r.Ok ? UiStyle.Phosphor : UiStyle.Danger);
+            pickerBox.Visible = s.MenuPicker;
+            if (picker != null)
+                picker.Selected = Mathf.Clamp(s.MenuStyle, 0, MenuStyles.Names.Length - 1);
+            if (r.Ok)
+                code.Text = "";
+        }
+        code.TextSubmitted += _ => Submit();
+        row.AddChild(UiStyle.MakeButton("Ativar", Submit, 140));
     }
 
     private void BuildGame(GameSettings s, VBoxContainer p)
