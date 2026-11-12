@@ -18,6 +18,7 @@ public partial class RepositorJob : JobBase
     private Node3D _stock;
     private Node3D _boxInHand;
     private double _refill;
+    private bool _hasMarketPin;
 
     public override void _Ready()
     {
@@ -26,6 +27,7 @@ public partial class RepositorJob : JobBase
             GameHud.Toast(this, "Esta fase não tem supermercado.", UiStyle.Warning);
             return;
         }
+        _hasMarketPin = City.PinChunkForPosition(City.MarketEntrance);
         // Estoque: palete com caixas no fundo da loja.
         _stock = JobMarkers.Create(this, City.MarketStockPoint, Blue, "ESTOQUE", 0f, 0.8f);
         var cardboard = new StandardMaterial3D { AlbedoColor = new Color(0.62f, 0.45f, 0.26f) };
@@ -40,6 +42,9 @@ public partial class RepositorJob : JobBase
 
     public override void _ExitTree()
     {
+        if (_hasMarketPin)
+            City?.UnpinChunkForPosition(City.MarketEntrance);
+        _hasMarketPin = false;
         foreach (Node3D n in _emptyNodes.Values)
             if (IsInstanceValid(n))
                 n.QueueFree();
