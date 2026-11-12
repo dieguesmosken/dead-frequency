@@ -18,13 +18,13 @@ async function waitFor(client, type, predicate = () => true, timeout = 3000) {
   return undefined;
 }
 
-function connect(code, name, prof = "entregador", items = [], roomPassword = "") {
+function connect(code, name, prof = "entregador", items = [], roomPassword = "", protocol = 7) {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`${wsBase}/api/rooms/${code}/ws?name=${encodeURIComponent(name)}`);
+    const ws = new WebSocket(`${wsBase}/api/rooms/${code}/ws?protocol=${protocol}&name=${encodeURIComponent(name)}`);
     const inbox = [];
     ws.on("message", (data) => inbox.push(JSON.parse(data.toString())));
     ws.on("open", () => {
-      ws.send(JSON.stringify({ t: "hello", version: 7, prof, items, roomPassword }));
+      ws.send(JSON.stringify({ t: "hello", version: protocol, prof, items, roomPassword }));
       resolve({ ws, inbox, send: (m) => ws.send(JSON.stringify(m)), find: (t) => inbox.find((m) => m.t === t), all: (t) => inbox.filter((m) => m.t === t) });
     });
     ws.on("error", reject);
