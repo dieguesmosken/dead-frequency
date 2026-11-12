@@ -16,6 +16,7 @@ run/main_scene="res://Scenes/UI/splash_screen.tscn"
 config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 config/icon="res://icon.png"
 config/windows_native_icon="res://icon.ico"
+config/tags=PackedStringArray("pre_release")
 
 [audio]
 
