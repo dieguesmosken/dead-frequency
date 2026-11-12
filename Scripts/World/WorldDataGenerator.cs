@@ -106,20 +106,26 @@ public static class WorldDataGenerator
         Add(ref hash, stream);
 
         // Finalização avalanche para espalhar bits próximos entre chunks vizinhos.
-        hash ^= hash >> 30;
-        hash *= 0xBF58476D1CE4E5B9UL;
-        hash ^= hash >> 27;
-        hash *= 0x94D049BB133111EBUL;
-        hash ^= hash >> 31;
+        unchecked
+        {
+            hash ^= hash >> 30;
+            hash *= 0xBF58476D1CE4E5B9UL;
+            hash ^= hash >> 27;
+            hash *= 0x94D049BB133111EBUL;
+            hash ^= hash >> 31;
+        }
         return hash == 0 ? 1UL : hash;
     }
 
     private static void Add(ref ulong hash, uint value)
     {
-        for (int i = 0; i < sizeof(uint); i++)
+        unchecked
         {
-            hash ^= (byte)(value >> (i * 8));
-            hash *= FnvPrime;
+            for (int i = 0; i < sizeof(uint); i++)
+            {
+                hash ^= (byte)(value >> (i * 8));
+                hash *= FnvPrime;
+            }
         }
     }
 
@@ -160,8 +166,22 @@ public static class WorldDataGenerator
         if (gasStations == null || gasStations.Count == 0)
             return;
 
-        Vector2I firstStation = gasStations[0].Block;
-        if (!IsInsideCity(firstStation, radius))
+        // BuildBlock percorre X e depois Z em ordem crescente; GasSpots[0] segue essa ordem,
+        // não necessariamente a ordem em que GasStations foi declarada.
+        Vector2I firstStation = default;
+        bool foundStation = false;
+        foreach ((Vector2I block, string _) in gasStations)
+        {
+            if (!IsInsideCity(block, radius))
+                continue;
+            if (!foundStation || block.X < firstStation.X ||
+                (block.X == firstStation.X && block.Y < firstStation.Y))
+            {
+                firstStation = block;
+                foundStation = true;
+            }
+        }
+        if (!foundStation)
             return;
 
         Vector3 gasStation = new(firstStation.X * period, curbHeight, firstStation.Y * period);
