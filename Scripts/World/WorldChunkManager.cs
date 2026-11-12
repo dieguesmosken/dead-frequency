@@ -51,6 +51,7 @@ public partial class WorldChunkManager : Node
     private int _lastPinVersion = -1;
     private int _buildFrameCountdown;
     private int _trackedObjectScanCountdown;
+    private bool _isBuilding;
     private bool _hasCenter;
     private bool _hasReportedChunkCounts;
 
@@ -249,6 +250,30 @@ public partial class WorldChunkManager : Node
         }
     }
 
+    private async void BuildQueuedChunkAsync(WorldChunkData chunk)
+    {
+        try
+        {
+            bool built = await City.BuildChunkVisualsAsync(chunk);
+            if (built && GodotObject.IsInstanceValid(City))
+            {
+                _hasReportedChunkCounts = true;
+                ChunkCountsChanged?.Invoke(
+                    City.GetLoadedChunkCoordinates().Count,
+                    City.WorldData.Chunks.Count);
+            }
+        }
+        catch (Exception ex)
+        {
+            GD.PushError($"Falha no carregamento assíncrono do chunk {chunk.Coordinate.X},{chunk.Coordinate.Z}: {ex}");
+        }
+        finally
+        {
+            _isBuilding = false;
+            _buildFrameCountdown = Mathf.Max(0, BuildIntervalFrames - 1);
+        }
+    }
+
     private void ProcessQueues()
     {
         bool chunksChanged = false;
@@ -267,30 +292,28 @@ public partial class WorldChunkManager : Node
             }
         }
 
-        if (_buildFrameCountdown > 0)
+        if (!_isBuilding)
         {
-            _buildFrameCountdown--;
-        }
-        else
-        {
-            int builds = Mathf.Max(1, BuildsPerFrame);
-            while (builds-- > 0 && _loadQueue.Count > 0)
+            if (_buildFrameCountdown > 0)
             {
-                WorldChunkCoordinate coordinate = _loadQueue.Dequeue();
-                _queuedLoads.Remove(coordinate);
-
-                if (!_desired.Contains(coordinate) || City.IsChunkVisualized(coordinate))
-                    continue;
-
-                if (City.WorldData.TryGetChunk(coordinate, out WorldChunkData chunk))
-                    chunksChanged |= City.BuildChunkVisuals(chunk);
-
-                // Construções maiores são separadas por frames para evitar uma sequência
-                // contínua de picos enquanto o jogador atravessa a cidade.
-                if (BuildIntervalFrames > 1)
+                _buildFrameCountdown--;
+            }
+            else
+            {
+                while (_loadQueue.Count > 0)
                 {
-                    _buildFrameCountdown = BuildIntervalFrames - 1;
-                    break;
+                    WorldChunkCoordinate coordinate = _loadQueue.Dequeue();
+                    _queuedLoads.Remove(coordinate);
+
+                    if (!_desired.Contains(coordinate) || City.IsChunkVisualized(coordinate))
+                        continue;
+
+                    if (City.WorldData.TryGetChunk(coordinate, out WorldChunkData chunk))
+                    {
+                        _isBuilding = true;
+                        BuildQueuedChunkAsync(chunk);
+                        break;
+                    }
                 }
             }
         }
