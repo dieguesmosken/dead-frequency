@@ -24,6 +24,8 @@ public partial class WorldChunkManager : Node
 
     public CityGenerator City { get; set; }
     public Node3D Target { get; set; }
+    public Vector3 InitialPosition { get; set; }
+    public bool HasInitialPosition { get; set; }
 
     public event Action<int, int> ChunkCountsChanged;
 
@@ -59,17 +61,32 @@ public partial class WorldChunkManager : Node
             Target == null || !GodotObject.IsInstanceValid(Target))
             return;
 
-        WorldChunkCoordinate center = City.WorldData.GetChunkCoordinate(Target.GlobalPosition);
+        Vector3 targetPosition = GetTargetPosition();
+        WorldChunkCoordinate center = City.WorldData.GetChunkCoordinate(targetPosition);
         if (!_hasCenter || center != _lastCenter)
             RebuildQueues();
 
         ProcessQueues();
     }
 
+    private Vector3 GetTargetPosition()
+    {
+        if (HasInitialPosition)
+        {
+            // Espera o ProfessionManager aplicar o teleporte inicial antes de seguir o player real.
+            if (Target.GlobalPosition.DistanceTo(InitialPosition) <= 2f)
+                HasInitialPosition = false;
+            else
+                return InitialPosition;
+        }
+        return Target.GlobalPosition;
+    }
+
     private void RebuildQueues()
     {
         _hasCenter = true;
-        _lastCenter = City.WorldData.GetChunkCoordinate(Target.GlobalPosition);
+        Vector3 targetPosition = GetTargetPosition();
+        _lastCenter = City.WorldData.GetChunkCoordinate(targetPosition);
         _desired.Clear();
         _loadQueue.Clear();
         _unloadQueue.Clear();
@@ -77,7 +94,7 @@ public partial class WorldChunkManager : Node
         _queuedUnloads.Clear();
 
         IReadOnlyList<WorldChunkData> nearby =
-            City.WorldData.GetChunksAround(Target.GlobalPosition, LoadRadius);
+            City.WorldData.GetChunksAround(targetPosition, LoadRadius);
         var prioritized = new List<WorldChunkData>(nearby.Count);
         foreach (WorldChunkData chunk in nearby)
         {
@@ -86,8 +103,8 @@ public partial class WorldChunkManager : Node
         }
 
         prioritized.Sort((a, b) =>
-            Target.GlobalPosition.DistanceSquaredTo(a.Center)
-                .CompareTo(Target.GlobalPosition.DistanceSquaredTo(b.Center)));
+            targetPosition.DistanceSquaredTo(a.Center)
+                .CompareTo(targetPosition.DistanceSquaredTo(b.Center)));
 
         foreach (WorldChunkData chunk in prioritized)
         {
