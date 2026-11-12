@@ -204,7 +204,7 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
 
     if (url.pathname === "/" || url.pathname === "/health") {
-      return json({ ok: true, game: "dead-frequency", protocol: PROTOCOL_VERSION });
+      return json({ ok: true, game: "dead-frequency", protocol: PROTOCOL_VERSION, supportedProtocols: SUPPORTED_PROTOCOLS });
     }
 
     if (url.pathname === "/admin" || url.pathname === "/admin/") {
@@ -221,7 +221,7 @@ export default {
     if (url.pathname === "/api/stats" && request.method === "GET") {
       const registry = env.REGISTRY.get(env.REGISTRY.idFromName("global"));
       const stats = await registry.publicStats();
-      return new Response(JSON.stringify({ ok: true, protocol: PROTOCOL_VERSION, maxPlayers: MAX_PLAYERS, ...stats, now: Date.now() }), {
+      return new Response(JSON.stringify({ ok: true, protocol: PROTOCOL_VERSION, supportedProtocols: SUPPORTED_PROTOCOLS, maxPlayers: MAX_PLAYERS, ...stats, now: Date.now() }), {
         headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=15", ...CORS },
       });
     }
@@ -309,7 +309,7 @@ async function handleAdmin(request: Request, url: URL, env: Env): Promise<Respon
     await registry.ensurePermanentRooms();
     const status = await registry.status();
     const colo = (request as Request & { cf?: { colo?: string } }).cf?.colo ?? "local";
-    return json({ ...status, server: { protocol: PROTOCOL_VERSION, maxPlayers: MAX_PLAYERS, colo, isolateStartedAt: SERVER_STARTED, now: Date.now(), limits: { workersFreeRequestsPerDay: FREE_DAILY_REQUEST_LIMIT, durableObjectsFreeRequestsPerDay: FREE_DAILY_REQUEST_LIMIT, wsMessagesPerBillableRequest: WS_MESSAGES_PER_BILLABLE_REQUEST } } });
+    return json({ ...status, server: { protocol: PROTOCOL_VERSION, supportedProtocols: SUPPORTED_PROTOCOLS, maxPlayers: MAX_PLAYERS, colo, isolateStartedAt: SERVER_STARTED, now: Date.now(), limits: { workersFreeRequestsPerDay: FREE_DAILY_REQUEST_LIMIT, durableObjectsFreeRequestsPerDay: FREE_DAILY_REQUEST_LIMIT, wsMessagesPerBillableRequest: WS_MESSAGES_PER_BILLABLE_REQUEST } } });
   }
 
   if (path === "/initial-passwords/ack" && request.method === "POST") {
@@ -1300,6 +1300,7 @@ export class GameRoom extends DurableObject<Env> {
         name: me.name,
         color: me.color,
         code: room.code,
+        protocol: room.protocol ?? 7,
         seed: room.seed,
         level: room.level ?? "city",
         prof: me.prof,
