@@ -84,6 +84,7 @@ Entregador solitário dirigindo uma van utilitária anos 90 por uma zona perigos
 - Site: `site/` (GitHub Pages via .github/workflows/pages.yml). `site/build.py` gera data/site.json do GameVersion.cs;
   fotos de cada versão em `site/assets/shots/vX.Y.Z/` + captions.json; notas de release = `site/release_notes.py`.
   Servidor tem `/api/stats` público (só totais). Pix de apoio: <contato@badwolf3d.com.br>.
+- Builds da Internal: cada PR mesclado na `Internal` gera um pré-release `vX.Y.Z.N-pre` (ex.: `v0.9.9.1-pre`); N sobe a cada PR e volta a 1 quando `GameVersion.Current` muda (`.github/workflows/internal-prerelease.yml`). Releases públicos continuam `vX.Y.Z`, só da `main`.
 - Nunca versionar `server/.dev.vars` (ADMIN_TOKEN), `server/node_modules`, `.godot/` nem `_to_delete/`.
 
 ---

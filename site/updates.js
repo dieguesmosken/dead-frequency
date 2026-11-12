@@ -4,7 +4,7 @@ const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const date=s=>s?new Date(s).toLocaleDateString("pt-BR"):"Data não informada";
 const privateRelease=r=>/SITE_VISIBILITY\s*:\s*PRIVATE/i.test(r.body||"")||/\[SITE_PRIVATE\]/i.test(r.body||"");
-const isInternal=r=>/^internal-v/i.test(r.tag_name||"")||/internal/i.test(r.name||"");
+const isInternal=r=>/^internal-v/i.test(r.tag_name||"")||/^v[\d.]+-pre$/i.test(r.tag_name||"")||/internal/i.test(r.name||"");
 let releases=[],selected="stable";
 function safeMarkdown(text){
  const lines=String(text||"").split(/\r?\n/);let out="",inList=false;
