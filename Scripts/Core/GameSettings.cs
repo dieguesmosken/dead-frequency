@@ -78,6 +78,29 @@ public partial class GameSettings : Node
     public float UiScale { get; set; } = 1f;
     public bool Scanlines { get; set; } = true;
     public bool ShowCrosshair { get; set; } = true;
+
+    /// <summary>
+    /// Celular (Android). Para testar no PC: rode com "-- --mobile" (OS.GetCmdlineUserArgs).
+    /// No celular: tela cheia sempre, interface maior e padrões leves na primeira vez.
+    /// </summary>
+    public static bool IsMobile => OS.HasFeature("mobile") || System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--mobile") >= 0;
+    /// <summary>Já aplicou os padrões do celular (salvo em [meta]).</summary>
+    public bool MobileDefaultsApplied { get; set; }
+
+    /// <summary>Padrões do celular: qualidade baixa, resolução 3D menor e interface 1,6x. Uma vez só.</summary>
+    private void ApplyMobileDefaults()
+    {
+        if (!IsMobile || MobileDefaultsApplied)
+            return;
+        MobileDefaultsApplied = true;
+        Quality = 0;
+        RenderScale = 0.7f;
+        AntiAliasing = 0;
+        MaxFps = 30;
+        UiScale = 1.6f;
+        HeadBob = false;
+        Save();
+    }
     public bool ShowKeyHints { get; set; } = true;
     public bool ShowCompass { get; set; } = true;
     /// <summary>Multiplica quanto tempo os avisos ficam na tela.</summary>
@@ -209,6 +232,9 @@ public partial class GameSettings : Node
             3 => DisplayServer.WindowMode.Maximized,
             _ => DisplayServer.WindowMode.Windowed,
         };
+        // No celular é sempre tela cheia (modo imersivo: some a barra de notificação e a de gestos).
+        if (OS.HasFeature("mobile"))
+            wantedMode = DisplayServer.WindowMode.Fullscreen;
         if (DisplayServer.WindowGetMode() != wantedMode && !Engine.IsEmbeddedInEditor())
             DisplayServer.WindowSetMode(wantedMode);
 
@@ -219,7 +245,7 @@ public partial class GameSettings : Node
             root.Scaling3DScale = Mathf.Clamp(RenderScale, 0.5f, 1f);
             root.ScreenSpaceAA = AntiAliasing == 1 ? Viewport.ScreenSpaceAAEnum.Fxaa : Viewport.ScreenSpaceAAEnum.Disabled;
             root.Msaa3D = AntiAliasing switch { 2 => Viewport.Msaa.Msaa2X, 3 => Viewport.Msaa.Msaa4X, _ => Viewport.Msaa.Disabled };
-            root.ContentScaleFactor = Mathf.Clamp(UiScale, 0.75f, 1.5f);
+            root.ContentScaleFactor = Mathf.Clamp(UiScale, 0.75f, IsMobile ? 2.2f : 1.5f);
         }
         if (GetTree() != null)
             foreach (Node n in GetTree().GetNodesInGroup(UiStyle.ScanlineGroup))
@@ -255,6 +281,7 @@ public partial class GameSettings : Node
         cfg.SetValue("meta", "last_seen_version", LastSeenVersion);
         cfg.SetValue("meta", "menu_style", MenuStyle);
         cfg.SetValue("meta", "menu_picker", MenuPicker);
+        cfg.SetValue("meta", "mobile_defaults", MobileDefaultsApplied);
         cfg.SetValue("audio", "master_volume", MasterVolume);
         cfg.SetValue("audio", "music_volume", MusicVolume);
         cfg.SetValue("audio", "sfx_volume", SfxVolume);
@@ -309,7 +336,10 @@ public partial class GameSettings : Node
     {
         var cfg = new ConfigFile();
         if (cfg.Load(FilePath) != Error.Ok)
+        {
+            ApplyMobileDefaults();
             return; // primeira execução: usa os padrões
+        }
 
         MouseSensitivity = cfg.GetValue("controls", "mouse_sensitivity", MouseSensitivity).AsSingle();
         InvertY = cfg.GetValue("controls", "invert_y", InvertY).AsBool();
@@ -323,6 +353,7 @@ public partial class GameSettings : Node
         LastSeenVersion = cfg.GetValue("meta", "last_seen_version", LastSeenVersion).AsString();
         MenuStyle = cfg.GetValue("meta", "menu_style", MenuStyle).AsInt32();
         MenuPicker = cfg.GetValue("meta", "menu_picker", MenuPicker).AsBool();
+        MobileDefaultsApplied = cfg.GetValue("meta", "mobile_defaults", MobileDefaultsApplied).AsBool();
         MasterVolume = cfg.GetValue("audio", "master_volume", MasterVolume).AsSingle();
         MusicVolume = cfg.GetValue("audio", "music_volume", MusicVolume).AsSingle();
         SfxVolume = cfg.GetValue("audio", "sfx_volume", SfxVolume).AsSingle();
@@ -375,6 +406,7 @@ public partial class GameSettings : Node
                     Rebind(action, e);
             }
         }
+        ApplyMobileDefaults();
     }
 
     /// <summary>Volta tudo ao padrão (menos nome, servidor e profissão).</summary>
