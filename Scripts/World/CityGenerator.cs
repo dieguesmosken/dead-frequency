@@ -767,7 +767,8 @@ public partial class CityGenerator : Node3D
     private bool _curbMarkingsBuilt;
 
     /// <summary>Proíbe estacionar num trecho de rua e pinta o meio-fio correspondente de amarelo.</summary>
-    public void ForbidParking(Vector3 center, Vector3 dir, float halfLength, string signLabel = null)
+    /// <param name="signShift">Desloca a placa ao longo do trecho (ex.: tirar da frente da saída da concessionária).</param>
+    public void ForbidParking(Vector3 center, Vector3 dir, float halfLength, string signLabel = null, float signShift = 0f)
     {
         Vector3 normalizedDir = dir.Normalized();
         _noParking.Add((center, normalizedDir, halfLength));
@@ -781,7 +782,7 @@ public partial class CityGenerator : Node3D
         }
         if (_curbMarkingsBuilt)
             PaintNoParkingCurb(center, normalizedDir, halfLength);
-        BuildNoParkingSigns(center, normalizedDir, signLabel);
+        BuildNoParkingSigns(center + normalizedDir * signShift, normalizedDir, signLabel);
     }
 
     private void BuildCurbMarkings()
