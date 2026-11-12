@@ -82,13 +82,14 @@ public static class WorldDataGenerator
                 fireStationBlock, policeStationBlock, radioStationBlock, marketBlock,
                 shoppingMallBlock, apartmentBlock, dealerBlock, waterTowerBlock, carWashBlock,
                 gasStations, progress);
+            // Os endereços V7 continuam sendo gerados pelo RNG legado, mas os pontos fixos
+            // das profissões podem ser preparados sem alterar o protocolo nem a sequência visual.
+            services = BuildCityServiceData(
+                cityRadius, blockSize, chunkSize, curbHeight, marketBlock,
+                radioStationBlock, gasStations, progress);
+
             if (prepareLogicalCityData)
-            {
                 BuildCityDeliveryPoints(seed, cityRadius, blockSize, chunkSize, curbHeight, deliveryPoints, progress);
-                services = BuildCityServiceData(
-                    cityRadius, blockSize, chunkSize, curbHeight, marketBlock,
-                    radioStationBlock, gasStations, progress);
-            }
             BuildCitySpawnPoints(
                 spawnPoints, blockSize, chunkSize, curbHeight, cityRadius,
                 marketBlock, radioStationBlock, gasStations);
