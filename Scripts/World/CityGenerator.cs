@@ -246,6 +246,7 @@ public partial class CityGenerator : Node3D
         BuildHydrantsForBlock(bx, bz);
         BuildStreetPropsForBlock(bx, bz);
         BuildStrayDogsForBlock(bx, bz);
+        BuildNoParkingSignsForBlock(bx, bz);
         BuildCurbMarkingsForBlock(bx, bz);
     }
 
@@ -1429,7 +1430,8 @@ public partial class CityGenerator : Node3D
         }
         if (_curbMarkingsBuilt && !_useLogicalBlockPlans)
             PaintNoParkingCurb(center, normalizedDir, halfLength);
-        BuildNoParkingSigns(center, normalizedDir, signLabel);
+        if (!_useLogicalBlockPlans)
+            BuildNoParkingSigns(center, normalizedDir, signLabel);
     }
 
     private void BuildCurbMarkings()
@@ -1461,6 +1463,16 @@ public partial class CityGenerator : Node3D
     {
         _curbWhite ??= Flat(new Color(0.88f, 0.87f, 0.82f), 0.8f);
         _curbYellow ??= Flat(new Color(0.95f, 0.74f, 0.08f), 0.75f);
+    }
+
+    private void BuildNoParkingSignsForBlock(int bx, int bz)
+    {
+        WorldChunkCoordinate owner = new(bx, bz);
+        foreach ((Vector3 center, Vector3 dir, float halfLength, WorldChunkCoordinate zoneOwner) in _noParking)
+        {
+            if (zoneOwner == owner)
+                BuildNoParkingSigns(center, dir, null);
+        }
     }
 
     private void BuildCurbMarkingsForBlock(int bx, int bz)
