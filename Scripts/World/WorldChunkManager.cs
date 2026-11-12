@@ -63,6 +63,7 @@ public partial class WorldChunkManager : Node
     public void RequestRefresh()
     {
         if (!IsInsideTree() || City == null || !GodotObject.IsInstanceValid(City) ||
+            City.WorldData == null || !City.UsesChunkStreaming ||
             Target == null || !GodotObject.IsInstanceValid(Target))
             return;
 
@@ -74,8 +75,12 @@ public partial class WorldChunkManager : Node
     public override void _Process(double delta)
     {
         if (City == null || !GodotObject.IsInstanceValid(City) ||
+            City.WorldData == null || !City.UsesChunkStreaming ||
             Target == null || !GodotObject.IsInstanceValid(Target))
+        {
+            SetProcess(false);
             return;
+        }
 
         bool pinsChanged = RefreshTrackedObjectPins();
 
