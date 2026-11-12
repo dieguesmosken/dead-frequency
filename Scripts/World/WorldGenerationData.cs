@@ -37,6 +37,40 @@ public readonly record struct WorldSpawnPoint(string Profession, Vector3 Positio
 /// <summary>Ponto de entrega lógico de um quarteirão, calculado sem objetos da SceneTree.</summary>
 public readonly record struct WorldDeliveryPointData(int BlockX, int BlockZ, Vector3 Position, string Address);
 
+public readonly record struct WorldGasSpotData(Vector3 Position, string Brand);
+public readonly record struct WorldMarketShelfSlotData(Vector3 Position, float RotationY);
+
+/// <summary>Dados lógicos dos pontos usados pelos sistemas de profissão.</summary>
+public sealed class WorldServiceData
+{
+    public IReadOnlyList<Vector3> DumpsterSpots { get; }
+    public IReadOnlyList<WorldGasSpotData> GasSpots { get; }
+    public IReadOnlyList<WorldMarketShelfSlotData> MarketShelfSlots { get; }
+    public Vector3 MarketStockPoint { get; }
+    public Vector3 MarketEntrance { get; }
+    public Vector3 RadioConsolePoint { get; }
+
+    internal WorldServiceData(
+        List<Vector3> dumpsterSpots,
+        List<WorldGasSpotData> gasSpots,
+        List<WorldMarketShelfSlotData> marketShelfSlots,
+        Vector3 marketStockPoint,
+        Vector3 marketEntrance,
+        Vector3 radioConsolePoint)
+    {
+        DumpsterSpots = Array.AsReadOnly(dumpsterSpots.ToArray());
+        GasSpots = Array.AsReadOnly(gasSpots.ToArray());
+        MarketShelfSlots = Array.AsReadOnly(marketShelfSlots.ToArray());
+        MarketStockPoint = marketStockPoint;
+        MarketEntrance = marketEntrance;
+        RadioConsolePoint = radioConsolePoint;
+    }
+
+    public static WorldServiceData Empty() =>
+        new(new List<Vector3>(), new List<WorldGasSpotData>(), new List<WorldMarketShelfSlotData>(),
+            Vector3.Zero, Vector3.Zero, Vector3.Zero);
+}
+
 /// <summary>Tipo lógico de um quarteirão da cidade, sem dependência de geometria.</summary>
 public enum WorldBlockKind
 {
@@ -97,6 +131,7 @@ public sealed class WorldGenerationData
     public IReadOnlyList<WorldChunkData> Chunks { get; }
     public IReadOnlyList<WorldBlockData> Blocks { get; }
     public IReadOnlyList<WorldDeliveryPointData> DeliveryPoints { get; }
+    public WorldServiceData Services { get; }
     public IReadOnlyDictionary<string, WorldSpawnPoint> SpawnPoints => _spawnPoints;
 
     internal WorldGenerationData(
@@ -108,6 +143,7 @@ public sealed class WorldGenerationData
         List<WorldChunkData> chunks,
         List<WorldBlockData> blocks,
         List<WorldDeliveryPointData> deliveryPoints,
+        WorldServiceData services,
         Dictionary<string, WorldSpawnPoint> spawnPoints)
     {
         Seed = seed;
@@ -121,6 +157,7 @@ public sealed class WorldGenerationData
         foreach (WorldBlockData block in blocks)
             _blockIndex[block.Coordinate] = block;
         DeliveryPoints = Array.AsReadOnly(deliveryPoints.ToArray());
+        Services = services ?? WorldServiceData.Empty();
         _chunkIndex = new Dictionary<WorldChunkCoordinate, WorldChunkData>(chunks.Count);
         foreach (WorldChunkData chunk in chunks)
             _chunkIndex[chunk.Coordinate] = chunk;
