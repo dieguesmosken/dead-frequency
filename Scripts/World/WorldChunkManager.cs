@@ -40,6 +40,7 @@ public partial class WorldChunkManager : Node
     private WorldChunkCoordinate _lastCenter;
     private int _lastPinVersion = -1;
     private bool _hasCenter;
+    private bool _hasReportedChunkCounts;
 
     public override void _Ready()
     {
@@ -224,6 +225,7 @@ public partial class WorldChunkManager : Node
 
     private void ProcessQueues()
     {
+        bool chunksChanged = false;
         int unloads = Mathf.Max(1, UnloadsPerFrame);
         while (unloads-- > 0 && _unloadQueue.Count > 0)
         {
@@ -233,7 +235,10 @@ public partial class WorldChunkManager : Node
             int dx = Math.Abs(coordinate.X - _lastCenter.X);
             int dz = Math.Abs(coordinate.Z - _lastCenter.Z);
             if (Math.Max(dx, dz) > UnloadRadius && !_desired.Contains(coordinate) && !City.IsChunkPinned(coordinate))
+            {
                 City.UnloadChunkVisuals(coordinate);
+                chunksChanged = true;
+            }
         }
 
         int builds = Mathf.Max(1, BuildsPerFrame);
@@ -246,9 +251,14 @@ public partial class WorldChunkManager : Node
                 continue;
 
             if (City.WorldData.TryGetChunk(coordinate, out WorldChunkData chunk))
-                City.BuildChunkVisuals(chunk);
+                chunksChanged |= City.BuildChunkVisuals(chunk);
         }
 
-        ChunkCountsChanged?.Invoke(City.GetLoadedChunkCoordinates().Count, City.WorldData.Chunks.Count);
+        // Evita alocar uma lista e notificar observadores em todos os frames sem mudança.
+        if (chunksChanged || !_hasReportedChunkCounts)
+        {
+            _hasReportedChunkCounts = true;
+            ChunkCountsChanged?.Invoke(City.GetLoadedChunkCoordinates().Count, City.WorldData.Chunks.Count);
+        }
     }
 }
