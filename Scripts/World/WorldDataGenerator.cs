@@ -10,7 +10,7 @@ namespace DeadFrequency;
 /// </summary>
 public static class WorldDataGenerator
 {
-    public const int CurrentGeneratorVersion = 4;
+    public const int CurrentGeneratorVersion = 5;
     public const float FarmChunkSize = 64f;
 
     private const ulong FnvOffset = 14695981039346656037UL;
@@ -58,6 +58,7 @@ public static class WorldDataGenerator
         IReadOnlyList<(Vector2I Block, string Id)> gasStations,
         int storeBrandCount,
         float storefrontChance,
+        float parkedCarChance,
         IReadOnlyList<string> farmNames,
         bool prepareLogicalCityData,
         Action<WorldGenerationProgress> progress = null)
@@ -108,6 +109,25 @@ public static class WorldDataGenerator
                 cityRadius, blockSize, chunkSize, fireStationBlock, policeStationBlock, gasStations, blocks);
             progress?.Invoke(new WorldGenerationProgress(
                 "Calculando regras de estacionamento", noParkingZones.Count, noParkingZones.Count));
+
+            Dictionary<WorldChunkCoordinate, List<WorldRoadCarPlan>> roadCars =
+                BuildCityRoadCarPlans(seed, cityRadius, blockSize, roadWidth, parkedCarChance, noParkingZones);
+            for (int i = 0; i < blocks.Count; i++)
+            {
+                WorldBlockData block = blocks[i];
+                roadCars.TryGetValue(block.Coordinate, out List<WorldRoadCarPlan> blockRoadCars);
+                blocks[i] = new WorldBlockData(
+                    block.Coordinate, block.Kind, block.VisualSeed, block.DecorationSeed,
+                    new List<WorldBuildingPlan>(block.Buildings),
+                    new List<WorldParkTreePlan>(block.ParkTrees),
+                    new List<WorldParkBenchPlan>(block.ParkBenches),
+                    new List<WorldParkingCarPlan>(block.ParkingCars),
+                    blockRoadCars ?? new List<WorldRoadCarPlan>());
+            }
+            int plannedRoadCars = roadCars.Values.Sum(list => list.Count);
+            progress?.Invoke(new WorldGenerationProgress(
+                "Calculando veículos estacionados", plannedRoadCars, plannedRoadCars));
+
             // Os endereços V7 continuam sendo gerados pelo RNG legado, sem alterar a sequência visual.
             services = BuildCityServiceData(
                 cityRadius, blockSize, chunkSize, curbHeight, marketBlock,
@@ -505,6 +525,123 @@ public static class WorldDataGenerator
         }
 
         id = null;
+        return false;
+    }
+
+    private static Dictionary<WorldChunkCoordinate, List<WorldRoadCarPlan>> BuildCityRoadCarPlans(
+        int worldSeed,
+        int radius,
+        float blockSize,
+        float roadWidth,
+        float parkedCarChance,
+        IReadOnlyList<WorldNoParkingZoneData> noParkingZones)
+    {
+        var result = new Dictionary<WorldChunkCoordinate, List<WorldRoadCarPlan>>();
+        float period = blockSize + roadWidth;
+        float laneOffset = roadWidth * 0.5f - 1.4f;
+        float reach = blockSize * 0.5f - 4f;
+
+        for (int road = -radius - 1; road <= radius; road++)
+        {
+            for (int segment = -radius; segment <= radius; segment++)
+            {
+                foreach (int side in new[] { -1, 1 })
+                {
+                    bool hasCurb = side < 0
+                        ? road >= -radius && road <= radius
+                        : road + 1 >= -radius && road + 1 <= radius;
+                    float roadPosition = road * period + period * 0.5f;
+                    float along = segment * period;
+
+                    AddRoadCarPlan(
+                        worldSeed, radius, road, segment, side, vertical: true,
+                        hasCurb, roadPosition, along, laneOffset, reach, parkedCarChance,
+                        noParkingZones, result);
+                    AddRoadCarPlan(
+                        worldSeed, radius, road, segment, side, vertical: false,
+                        hasCurb, roadPosition, along, laneOffset, reach, parkedCarChance,
+                        noParkingZones, result);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private static void AddRoadCarPlan(
+        int worldSeed,
+        int radius,
+        int road,
+        int segment,
+        int side,
+        bool vertical,
+        bool hasCurb,
+        float roadPosition,
+        float along,
+        float laneOffset,
+        float reach,
+        float parkedCarChance,
+        IReadOnlyList<WorldNoParkingZoneData> noParkingZones,
+        Dictionary<WorldChunkCoordinate, List<WorldRoadCarPlan>> destination)
+    {
+        int owner = side < 0 ? road : road + 1;
+        if (owner < -radius || owner > radius)
+            return;
+
+        int seedX = vertical ? road : segment;
+        int seedZ = vertical ? segment : road;
+        uint stream = unchecked(0x43415200u
+            + (uint)(road + radius + 1) * 4u
+            + (side > 0 ? 2u : 0u)
+            + (vertical ? 0u : 1u));
+        var random = new RandomNumberGenerator
+        {
+            Seed = DeriveChunkSeed(worldSeed, new WorldChunkCoordinate(seedX, seedZ), stream),
+        };
+        if (random.Randf() >= parkedCarChance)
+            return;
+
+        float offset = random.RandfRange(-reach, reach);
+        Vector3 position = vertical
+            ? new Vector3(roadPosition + side * laneOffset, 0f, along + offset)
+            : new Vector3(along + offset, 0f, roadPosition + side * laneOffset);
+        if (IsInLogicalNoParkingZone(position, noParkingZones))
+            return;
+
+        WorldChunkCoordinate ownerCoordinate = vertical
+            ? new WorldChunkCoordinate(owner, segment)
+            : new WorldChunkCoordinate(segment, owner);
+        if (!destination.TryGetValue(ownerCoordinate, out List<WorldRoadCarPlan> cars))
+        {
+            cars = new List<WorldRoadCarPlan>();
+            destination[ownerCoordinate] = cars;
+        }
+
+        uint visualStream = unchecked(stream ^ 0x56495355u);
+        ulong visualSeed = DeriveChunkSeed(
+            worldSeed, new WorldChunkCoordinate(seedX, seedZ), visualStream);
+        cars.Add(new WorldRoadCarPlan(
+            position,
+            vertical ? 0f : Mathf.Pi * 0.5f,
+            offset,
+            hasCurb,
+            visualSeed));
+    }
+
+    private static bool IsInLogicalNoParkingZone(
+        Vector3 position,
+        IReadOnlyList<WorldNoParkingZoneData> zones)
+    {
+        foreach (WorldNoParkingZoneData zone in zones)
+        {
+            Vector3 delta = position - zone.Center;
+            delta.Y = 0f;
+            float along = delta.Dot(zone.Direction);
+            float across = (delta - zone.Direction * along).Length();
+            if (Mathf.Abs(along) < zone.HalfLength && across < 6f)
+                return true;
+        }
+
         return false;
     }
 
