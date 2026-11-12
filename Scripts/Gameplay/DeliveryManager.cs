@@ -22,6 +22,7 @@ public class DeliveryJob
     public Label3D Label;
     /// <summary>Multiplayer: já avisamos o servidor, esperando confirmação.</summary>
     public bool Reported;
+    public bool ChunkPinned;
 }
 
 public partial class DeliveryManager : Node3D
@@ -391,6 +392,7 @@ public partial class DeliveryManager : Node3D
         if (!ChooseDestination(job, pick))
             return;
 
+        job.ChunkPinned = City.PinChunkForPosition(job.Point.Position);
         BuildMarker(job);
         job.Marker.Visible = EntregadorMode;
         cargo.CargoDestroyed += () => OnJobCargoDestroyed(job);
@@ -503,6 +505,11 @@ public partial class DeliveryManager : Node3D
     private void RemoveJob(DeliveryJob job, bool freeCargo, bool playSound)
     {
         _jobs.Remove(job);
+        if (job.ChunkPinned)
+        {
+            City?.UnpinChunkForPosition(job.Point.Position);
+            job.ChunkPinned = false;
+        }
         if (playSound && job.Marker != null && IsInstanceValid(job.Marker))
         {
             _deliveredSound.GlobalPosition = job.Marker.GlobalPosition;
