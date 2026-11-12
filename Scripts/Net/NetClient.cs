@@ -19,7 +19,9 @@ public class NetPlayerInfo
 
 public partial class NetClient : Node
 {
+    // V7 permanece como base compatível e protocolo do servidor local.
     public const int ProtocolVersion = 7;
+    public const int PreferredProtocolVersion = 8;
     /// <summary>Servidor oficial do projeto (Cloudflare). Não aparece na tela; é o padrão.</summary>
     public const string OfficialServer = "https://dead-frequency.teuzin0dev.workers.dev";
 
@@ -57,6 +59,7 @@ public partial class NetClient : Node
     public int MyId { get; private set; }
     public Color MyColor { get; private set; } = Colors.White;
     public int Seed { get; private set; }
+    public int ActiveProtocolVersion { get; private set; } = ProtocolVersion;
     /// <summary>Fase da sala ("city", "farm"...), vinda do servidor.</summary>
     public string Level { get; private set; } = "city";
     public int HostId { get; private set; }
@@ -76,6 +79,10 @@ public partial class NetClient : Node
     private double _pingTimer;
     private string _joinPassword = "";
     private string _connectFailureMessage = "";
+    private int _createProtocol = PreferredProtocolVersion;
+    private string _pendingCreateLevel = "city";
+    private bool _pendingAutoProfession;
+    private bool _pendingIsPublic = true;
 
     public override void _EnterTree()
     {
@@ -108,12 +115,15 @@ public partial class NetClient : Node
         Status = ConnectionStatus.Connecting;
         StatusMessage?.Invoke("Criando sala...");
 
-        Error err = _http.Request($"{HttpBase(ServerUrl)}/api/rooms", new[] { "Content-Type: application/json" }, HttpClient.Method.Post, JsonSerializer.Serialize(new { level, autoProfession, isPublic }));
-        if (err != Error.Ok)
-            Fail($"Não foi possível contatar o servidor ({err}).");
+        _pendingCreateLevel = level;
+        _pendingAutoProfession = autoProfession;
+        _pendingIsPublic = isPublic;
+        _createProtocol = PreferredProtocolVersion;
+        SendCreateRoomRequest();
     }
 
-    public void JoinRoom(string serverUrl, string code, string playerName, string roomPassword = "")
+    /// <summary>Protocolo 0 detecta a versão da sala; 7/8 conecta diretamente.</summary>
+    public void JoinRoom(string serverUrl, string code, string playerName, string roomPassword = "", int protocol = 0)
     {
         if (Status != ConnectionStatus.Offline)
             Leave();
@@ -127,7 +137,50 @@ public partial class NetClient : Node
         Status = ConnectionStatus.Connecting;
         StatusMessage?.Invoke($"Entrando na sala {RoomCode}...");
 
-        string url = $"{WsBase(ServerUrl)}/api/rooms/{RoomCode}/ws?name={Uri.EscapeDataString(playerName)}";
+        if (protocol is 7 or 8)
+            ConnectToRoom(protocol);
+        else
+            ProbeRoomProtocol();
+    }
+
+    private void ProbeRoomProtocol()
+    {
+        var probe = new HttpRequest { Timeout = 5 };
+        AddChild(probe);
+        probe.RequestCompleted += (result, responseCode, headers, body) =>
+        {
+            probe.QueueFree();
+            int protocol = ProtocolVersion;
+            if (result == (long)HttpRequest.Result.Success && responseCode == 200)
+            {
+                try
+                {
+                    using JsonDocument doc = JsonDocument.Parse(body);
+                    if (doc.RootElement.TryGetProperty("protocol", out JsonElement p)
+                        && p.TryGetInt32(out int detected) && detected is 7 or 8)
+                        protocol = detected;
+                }
+                catch (JsonException)
+                {
+                    // Worker antigo ou servidor local: mantém V7.
+                }
+            }
+            // Se a descoberta não existir (Worker antigo/servidor local), tenta V7.
+            ConnectToRoom(protocol);
+        };
+
+        Error err = probe.Request($"{HttpBase(ServerUrl)}/api/rooms/{RoomCode}?protocol={PreferredProtocolVersion}");
+        if (err != Error.Ok)
+        {
+            probe.QueueFree();
+            ConnectToRoom(ProtocolVersion);
+        }
+    }
+
+    private void ConnectToRoom(int protocol)
+    {
+        ActiveProtocolVersion = protocol is 7 or 8 ? protocol : ProtocolVersion;
+        string url = $"{WsBase(ServerUrl)}/api/rooms/{RoomCode}/ws?protocol={ActiveProtocolVersion}&name={Uri.EscapeDataString(PlayerName)}";
         _socket = new WebSocketPeer();
         _socket.InboundBufferSize = 1 << 20;
         Error err = _socket.ConnectToUrl(url);
@@ -172,53 +225,80 @@ public partial class NetClient : Node
         Send(new { t = "debug_add_money", amount });
     }
 
-    public readonly record struct RoomListing(string Code, string Name, int Players, int Max, string Level, string Host, int Shift, bool AutoProfession, bool Permanent, bool HasPassword);
+    public readonly record struct RoomListing(string Code, string Name, int Players, int Max, string Level, string Host, int Shift, bool AutoProfession, bool Permanent, bool HasPassword, int Protocol);
 
-    /// <summary>Lista as salas públicas abertas no servidor (GET /api/rooms). callback(salas, erro).</summary>
+    /// <summary>Lista salas V7 e V8; Workers antigos ignoram a query e suas salas V7 são deduplicadas.</summary>
     public void ListRooms(string serverUrl, Action<List<RoomListing>, string> callback)
     {
-        var http = new HttpRequest { Timeout = 10 };
-        AddChild(http);
-        http.RequestCompleted += (result, code, headers, body) =>
+        string baseUrl = HttpBase(NormalizeServer(serverUrl));
+        var rooms = new Dictionary<string, RoomListing>(StringComparer.OrdinalIgnoreCase);
+        int completed = 0;
+        int successful = 0;
+        string lastError = "Servidor fora do ar.";
+
+        void FinishOne()
         {
-            http.QueueFree();
-            if (result != (long)HttpRequest.Result.Success || code != 200)
-            {
-                callback(null, result != (long)HttpRequest.Result.Success ? "Servidor fora do ar." : $"O servidor não tem lista de salas ({code}). Atualize-o com npm run deploy.");
+            completed++;
+            if (completed < 2)
                 return;
-            }
-            var list = new List<RoomListing>();
-            try
-            {
-                using JsonDocument doc = JsonDocument.Parse(body);
-                foreach (JsonElement r in doc.RootElement.GetProperty("rooms").EnumerateArray())
-                {
-                    list.Add(new RoomListing(
-                        r.GetProperty("code").GetString() ?? "",
-                        r.TryGetProperty("name", out JsonElement nm) ? nm.GetString() ?? "" : "",
-                        r.GetProperty("players").GetInt32(),
-                        r.TryGetProperty("max", out JsonElement mx) ? mx.GetInt32() : 8,
-                        r.TryGetProperty("level", out JsonElement lv) ? lv.GetString() ?? "city" : "city",
-                        r.TryGetProperty("host", out JsonElement h) && h.ValueKind == JsonValueKind.String ? h.GetString() : "",
-                        r.TryGetProperty("shift", out JsonElement sh) ? sh.GetInt32() : 1,
-                        r.TryGetProperty("autoProfession", out JsonElement ap) && ap.ValueKind == JsonValueKind.True,
-                        r.TryGetProperty("permanent", out JsonElement permanent) && permanent.ValueKind == JsonValueKind.True,
-                        r.TryGetProperty("hasPassword", out JsonElement password) && password.ValueKind == JsonValueKind.True));
-                }
-            }
-            catch (Exception)
-            {
-                callback(null, "Resposta inválida do servidor.");
-                return;
-            }
-            callback(list, null);
-        };
-        Error err = http.Request($"{HttpBase(NormalizeServer(serverUrl))}/api/rooms");
-        if (err != Error.Ok)
-        {
-            http.QueueFree();
-            callback(null, $"Não foi possível contatar o servidor ({err}).");
+            callback(successful == 0 ? null : new List<RoomListing>(rooms.Values), successful == 0 ? lastError : null);
         }
+
+        void FetchProtocol(int requestedProtocol)
+        {
+            var http = new HttpRequest { Timeout = 10 };
+            AddChild(http);
+            http.RequestCompleted += (result, code, headers, body) =>
+            {
+                http.QueueFree();
+                if (result == (long)HttpRequest.Result.Success && code == 200)
+                {
+                    try
+                    {
+                        using JsonDocument doc = JsonDocument.Parse(body);
+                        foreach (JsonElement r in doc.RootElement.GetProperty("rooms").EnumerateArray())
+                        {
+                            int protocol = r.TryGetProperty("protocol", out JsonElement rp)
+                                && rp.TryGetInt32(out int parsed) && parsed is 7 or 8 ? parsed : ProtocolVersion;
+                            var room = new RoomListing(
+                                r.GetProperty("code").GetString() ?? "",
+                                r.TryGetProperty("name", out JsonElement nm) ? nm.GetString() ?? "" : "",
+                                r.GetProperty("players").GetInt32(),
+                                r.TryGetProperty("max", out JsonElement mx) ? mx.GetInt32() : 8,
+                                r.TryGetProperty("level", out JsonElement lv) ? lv.GetString() ?? "city" : "city",
+                                r.TryGetProperty("host", out JsonElement h) && h.ValueKind == JsonValueKind.String ? h.GetString() : "",
+                                r.TryGetProperty("shift", out JsonElement sh) ? sh.GetInt32() : 1,
+                                r.TryGetProperty("autoProfession", out JsonElement ap) && ap.ValueKind == JsonValueKind.True,
+                                r.TryGetProperty("permanent", out JsonElement permanent) && permanent.ValueKind == JsonValueKind.True,
+                                r.TryGetProperty("hasPassword", out JsonElement password) && password.ValueKind == JsonValueKind.True,
+                                protocol);
+                            rooms[$"{protocol}:{room.Code}"] = room;
+                        }
+                        successful++;
+                    }
+                    catch (Exception)
+                    {
+                        lastError = "Resposta inválida do servidor.";
+                    }
+                }
+                else if (result != (long)HttpRequest.Result.Success)
+                    lastError = "Servidor fora do ar.";
+                else if (!(requestedProtocol == PreferredProtocolVersion && code == 400))
+                    lastError = $"O servidor não tem lista de salas ({code}).";
+                FinishOne();
+            };
+
+            Error err = http.Request($"{baseUrl}/api/rooms?protocol={requestedProtocol}");
+            if (err != Error.Ok)
+            {
+                http.QueueFree();
+                lastError = $"Não foi possível contatar o servidor ({err}).";
+                FinishOne();
+            }
+        }
+
+        FetchProtocol(PreferredProtocolVersion);
+        FetchProtocol(ProtocolVersion);
     }
 
     /// <summary>Texto pronto para mandar a um amigo.</summary>
@@ -246,7 +326,7 @@ public partial class NetClient : Node
                 Send(new
                 {
                     t = "hello",
-                    version = ProtocolVersion,
+                    version = ActiveProtocolVersion,
                     name = PlayerName,
                     prof = Professions.Current,
                     roomPassword = _joinPassword,
@@ -351,6 +431,15 @@ public partial class NetClient : Node
 
     private void OnWelcome(JsonElement msg, string raw)
     {
+        if (msg.TryGetProperty("protocol", out JsonElement protocolElement)
+            && protocolElement.TryGetInt32(out int serverProtocol)
+            && serverProtocol != ActiveProtocolVersion)
+        {
+            _socket?.Close(1002, "protocol mismatch");
+            Fail($"Protocolo incompatível: cliente V{ActiveProtocolVersion}, servidor V{serverProtocol}.");
+            return;
+        }
+
         MyId = msg.GetProperty("you").GetInt32();
         MyColor = ParseColor(msg.GetProperty("color").GetString());
         PlayerName = msg.GetProperty("name").GetString() ?? PlayerName;
@@ -390,6 +479,17 @@ public partial class NetClient : Node
 
     // ---------------- Criar sala (HTTP) ----------------
 
+    private void SendCreateRoomRequest()
+    {
+        Error err = _http.Request(
+            $"{HttpBase(ServerUrl)}/api/rooms",
+            new[] { "Content-Type: application/json" },
+            HttpClient.Method.Post,
+            JsonSerializer.Serialize(new { level = _pendingCreateLevel, autoProfession = _pendingAutoProfession, isPublic = _pendingIsPublic, protocol = _createProtocol }));
+        if (err != Error.Ok)
+            Fail($"Não foi possível contatar o servidor ({err}).");
+    }
+
     private void OnCreateRoomCompleted(long result, long responseCode, string[] headers, byte[] body)
     {
         if (Status != ConnectionStatus.Connecting)
@@ -397,6 +497,12 @@ public partial class NetClient : Node
 
         if (result != (long)HttpRequest.Result.Success || responseCode != 200)
         {
+            if (result == (long)HttpRequest.Result.Success && responseCode == 400 && _createProtocol == PreferredProtocolVersion)
+            {
+                _createProtocol = ProtocolVersion;
+                SendCreateRoomRequest();
+                return;
+            }
             Fail(result != (long)HttpRequest.Result.Success
                 ? "Servidor fora do ar ou endereço errado."
                 : $"O servidor recusou ({responseCode}).");
@@ -407,7 +513,9 @@ public partial class NetClient : Node
         {
             using JsonDocument doc = JsonDocument.Parse(body);
             string code = doc.RootElement.GetProperty("code").GetString();
-            JoinRoom(ServerUrl, code, PlayerName);
+            int protocol = doc.RootElement.TryGetProperty("protocol", out JsonElement p)
+                && p.TryGetInt32(out int parsed) && parsed is 7 or 8 ? parsed : ProtocolVersion;
+            JoinRoom(ServerUrl, code, PlayerName, protocol: protocol);
         }
         catch (Exception)
         {
@@ -429,6 +537,7 @@ public partial class NetClient : Node
         _debugAuthExpiresAt = 0;
         _joinPassword = "";
         _connectFailureMessage = "";
+        ActiveProtocolVersion = ProtocolVersion;
         _socket = null;
         _lastState = WebSocketPeer.State.Closed;
         Status = ConnectionStatus.Offline;
