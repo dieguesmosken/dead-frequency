@@ -43,6 +43,7 @@ public partial class CityGenerator : Node3D
     /// <summary>Plano lógico calculado antes da criação de qualquer geometria do mundo.</summary>
     public WorldGenerationData WorldData { get; private set; }
     public int ChunkPinVersion { get; private set; }
+    public bool UsesLogicalWorldData => _useLogicalWorldData;
     public bool UsesChunkStreaming => _useLogicalBlockPlans && (Biome == WorldBiome.City || Biome == WorldBiome.Farm);
     public int StoreBrandCount => _brands.Count;
     public event Action<WorldGenerationProgress> WorldDataProgress;
