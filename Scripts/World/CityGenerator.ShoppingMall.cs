@@ -65,7 +65,8 @@ public partial class CityGenerator
         BuildMallShop(mall, "CASAS BAIXA", ShopStock.Ze, new Color(0.1f, 0.25f, 0.62f), new Vector3(-10f, 0f, 6.5f), Mathf.Pi * 0.5f);
         BuildMallShop(mall, "PÃO DE SAL", ShopStock.Market, new Color(0.12f, 0.46f, 0.22f), new Vector3(10f, 0f, 6.5f), -Mathf.Pi * 0.5f);
         BuildMallShop(mall, "RABIB'S", ShopStock.Churrasco, new Color(0.8f, 0.12f, 0.1f), new Vector3(-7f, 0f, -8.8f), 0f);
-        BuildMallShop(mall, "LOJAS MARCIANAS", ShopStock.Ze, new Color(0.84f, 0.08f, 0.12f), new Vector3(7f, 0f, -8.8f), 0f);
+        // v0.9.9: a Lã de Aço 1001 Utilidades ficou com o ponto das Lojas Marcianas (o Zé já vende o mesmo).
+        BuildMallShop(mall, "LÃ DE AÇO 1001 UTILIDADES", ShopStock.Utilidades, new Color(0.86f, 0.62f, 0.08f), new Vector3(7f, 0f, -8.8f), 0f);
         BuildMallShop(mall, "MAGAZINE LUZIA", ShopStock.Ze, new Color(0.04f, 0.42f, 0.82f), new Vector3(-10f, MallUpperFloorY, -1.6f), Mathf.Pi * 0.5f);
         BuildMallShop(mall, "DROGA ARRAIA", ShopStock.Ze, new Color(0.05f, 0.26f, 0.52f), new Vector3(10f, MallUpperFloorY, -1.6f), -Mathf.Pi * 0.5f);
         BuildMallShop(mall, "AÇAÍ ATACADISTA", ShopStock.Market, new Color(0.94f, 0.47f, 0.08f), new Vector3(-7f, MallUpperFloorY, -8.8f), 0f);
@@ -162,7 +163,8 @@ public partial class CityGenerator
         {
             Text = name,
             FontSize = 48,
-            PixelSize = 0.006f,
+            // Nome comprido (ex.: LÃ DE AÇO 1001 UTILIDADES) encolhe para caber na faixa de 5,5 m.
+            PixelSize = 0.006f * Mathf.Min(1f, 17f / Mathf.Max(1, name.Length)),
             Modulate = Colors.White,
             OutlineSize = 6,
             OutlineModulate = new Color(0.08f, 0.08f, 0.08f),

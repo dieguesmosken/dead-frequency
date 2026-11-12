@@ -102,7 +102,7 @@ Ideias para depois (pesquisa de 12/11 sobre as regras do CTB):
 | ✅ **Céu novo** | Céu 100% procedural (nuvens, sol, lua com relevo e estrelas) ligado ao ciclo de dia e noite. |
 | **Agro-Tudão (casa de rações)** | Na estrada de terra entre a cidade e o sítio: entregas de sacos de ração para os cercados. |
 | **Conserta-Tudo do Primo** | O gari junta sucata nas calçadas e vende aqui, ou troca por melhorias (lanterna de longo alcance, pilhas para a visão noturna). |
-| **Lã de Aço 1001 Utilidades** | Carga leve do repositor; no apartamento, melhora a imagem chiada da TV. |
+| ✅ **Lã de Aço 1001 Utilidades** | Balcão no Shopping Marconi (no lugar das Lojas Marcianas) com palha de aço Brilhaço, fita e prego. Na TV do apartamento, a palha de aço na antena acaba com o chuvisco. O repositor às vezes repõe fardos de palha de aço (carga leve). |
 
 ### v0.10 — Dead Frequency no celular (Android)
 Planejado em 12/11/2026 (antes a v0.10 era a Carreira, que passou para a v0.11). Objetivo: jogar e testar no

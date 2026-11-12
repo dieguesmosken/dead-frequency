@@ -6,7 +6,7 @@ using Godot;
 namespace DeadFrequency;
 
 /// <summary>O que cada vendedor tem (v0.9.7): cada item só aparece em quem vende ele.</summary>
-public enum ShopStock { Ze, Churrasco, Market, Dealer }
+public enum ShopStock { Ze, Churrasco, Market, Dealer, Utilidades }
 
 public partial class ShopScreen : ModalScreen
 {
@@ -24,7 +24,9 @@ public partial class ShopScreen : ModalScreen
         ShopStock.Dealer => false,
         ShopStock.Churrasco => def.Id is ItemCatalog.Skewer or ItemCatalog.Guarana,
         ShopStock.Market => TabOf(def) == Tab.Food && def.Id != ItemCatalog.Skewer || def.Id is ItemCatalog.DuctTape or ItemCatalog.Nail,
-        _ => TabOf(def) != Tab.Food || def.Id == ItemCatalog.Guarana,
+        // Lã de Aço 1001 Utilidades (v0.9.9): só miudeza de casa e de conserto.
+        ShopStock.Utilidades => def.Id is ItemCatalog.SteelWool or ItemCatalog.DuctTape or ItemCatalog.Nail,
+        _ => def.Id != ItemCatalog.SteelWool && (TabOf(def) != Tab.Food || def.Id == ItemCatalog.Guarana),
     };
 
     private ShopStock _stock;
@@ -96,12 +98,13 @@ public partial class ShopScreen : ModalScreen
     {
         _stock = stock;
         _salePending = false;
-        _tab = stock switch { ShopStock.Ze => Tab.Gear, ShopStock.Dealer => Tab.Cars, _ => Tab.Food };
+        _tab = stock switch { ShopStock.Ze => Tab.Gear, ShopStock.Dealer => Tab.Cars, ShopStock.Utilidades => Tab.Repair, _ => Tab.Food };
         _title.Text = vendorName.ToUpperInvariant();
         _tagline.Text = stock switch
         {
             ShopStock.Churrasco => "\"Procedência? Confia.\"",
             ShopStock.Market => "\"Leve 3, pague 3.\"",
+            ShopStock.Utilidades => "\"Tem de tudo. Se não tiver, tem palha de aço.\"",
             ShopStock.Dealer => Online ? "\"Carro comprado com o dinheiro do grupo é da sala toda.\"" : "\"Dono único, só ia na missa.\"",
             _ => "\"Tudo testado, tudo funcionando. Quase tudo.\"",
         };

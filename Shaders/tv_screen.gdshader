@@ -6,11 +6,16 @@ render_mode unshaded, cull_back;
 uniform int mode = 0;
 uniform float seed = 0.0;
 uniform vec3 tint : source_color = vec3(0.2, 0.4, 0.9);
+// Chuvisco por cima dos canais (antena ruim). 0 = imagem limpa (palha de aço na antena).
+uniform float snow = 0.0;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233)) + seed) * 43758.5453); }
 
 void fragment() {
 	vec2 uv = UV;
+	// Antena ruim: linhas tremem de lado de vez em quando.
+	if (snow > 0.0 && mode >= 1 && mode <= 4)
+		uv.x += (hash(vec2(floor(uv.y * 60.0), floor(TIME * 12.0))) - 0.5) * 0.04 * snow;
 	vec3 col = vec3(0.0);
 	float scan = 0.85 + 0.15 * sin(uv.y * 240.0 + TIME * 8.0);
 	if (mode == 1) {
@@ -35,6 +40,10 @@ void fragment() {
 		if (uv.y > 0.7) col = vec3(hash(floor(uv * vec2(160.0, 120.0)) + floor(TIME * 24.0)));
 	} else if (mode == 5) {
 		col = vec3(hash(floor(uv * vec2(160.0, 120.0)) + floor(TIME * 30.0)));
+	}
+	if (snow > 0.0 && mode >= 1 && mode <= 4) {
+		float n = hash(floor(UV * vec2(160.0, 120.0)) + floor(TIME * 30.0));
+		col = mix(col, vec3(n), snow);
 	}
 	ALBEDO = col * scan;
 }
