@@ -34,6 +34,7 @@ public partial class WorldChunkManager : Node
     private readonly HashSet<WorldChunkCoordinate> _desired = new();
     private readonly HashSet<WorldChunkCoordinate> _queuedLoads = new();
     private readonly HashSet<WorldChunkCoordinate> _queuedUnloads = new();
+    private readonly Dictionary<ulong, Vector3> _trackedObjectPins = new();
 
     private WorldChunkCoordinate _lastCenter;
     private bool _hasCenter;
@@ -72,12 +73,62 @@ public partial class WorldChunkManager : Node
             Target == null || !GodotObject.IsInstanceValid(Target))
             return;
 
+        RefreshTrackedObjectPins();
+
         Vector3 targetPosition = GetTargetPosition();
         WorldChunkCoordinate center = City.WorldData.GetChunkCoordinate(targetPosition);
         if (!_hasCenter || center != _lastCenter)
             RebuildQueues();
 
         ProcessQueues();
+    }
+
+    /// <summary>
+    /// Mantém o chão sob veículos, cargas e itens largados mesmo quando o jogador se afasta.
+    /// A reserva acompanha o objeto entre chunks e é liberada quando ele é removido.
+    /// </summary>
+    private void RefreshTrackedObjectPins()
+    {
+        var activeIds = new HashSet<ulong>();
+        TrackGroup(VanController.GroupName, activeIds);
+        TrackGroup(CargoItem.GroupName, activeIds);
+        TrackGroup(WorldItem.GroupName, activeIds);
+
+        foreach (ulong instanceId in new List<ulong>(_trackedObjectPins.Keys))
+        {
+            if (activeIds.Contains(instanceId))
+                continue;
+
+            City.UnpinChunkForPosition(_trackedObjectPins[instanceId]);
+            _trackedObjectPins.Remove(instanceId);
+        }
+    }
+
+    private void TrackGroup(string groupName, HashSet<ulong> activeIds)
+    {
+        foreach (Node node in GetTree().GetNodesInGroup(groupName))
+        {
+            if (node is not Node3D spatial || !GodotObject.IsInstanceValid(spatial))
+                continue;
+
+            ulong instanceId = spatial.GetInstanceId();
+            activeIds.Add(instanceId);
+            Vector3 position = spatial.GlobalPosition;
+            WorldChunkCoordinate next = City.WorldData.GetChunkCoordinate(position);
+
+            if (_trackedObjectPins.TryGetValue(instanceId, out Vector3 previousPosition))
+            {
+                WorldChunkCoordinate previous = City.WorldData.GetChunkCoordinate(previousPosition);
+                if (previous == next)
+                    continue;
+
+                City.UnpinChunkForPosition(previousPosition);
+                _trackedObjectPins.Remove(instanceId);
+            }
+
+            if (City.PinChunkForPosition(position))
+                _trackedObjectPins[instanceId] = position;
+        }
     }
 
     private Vector3 GetTargetPosition()
