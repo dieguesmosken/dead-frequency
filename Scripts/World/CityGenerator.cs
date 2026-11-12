@@ -1217,7 +1217,7 @@ public partial class CityGenerator : Node3D
                 _parkedCars.RemoveAt(i);
             }
         }
-        if (_curbMarkingsBuilt)
+        if (_curbMarkingsBuilt && !_useLogicalBlockPlans)
             PaintNoParkingCurb(center, normalizedDir, halfLength);
         BuildNoParkingSigns(center, normalizedDir, signLabel);
     }
