@@ -55,7 +55,16 @@ jobs:
       - uses: actions/setup-dotnet@v4
         if: steps.ver.outputs.exists == 'false'
         with:
-          dotnet-version: 10.0.x
+          # 9.0 é para o APK: o template Android da Godot 4.7 não aceita net10.0.
+          dotnet-version: |
+            9.0.x
+            10.0.x
+
+      - uses: actions/setup-java@v4
+        if: steps.ver.outputs.exists == 'false'
+        with:
+          distribution: temurin
+          java-version: 17
 
       - name: Baixar Godot .NET e templates de exportação
         if: steps.ver.outputs.exists == 'false'
@@ -100,6 +109,47 @@ jobs:
           "$GODOT" --headless --path . --export-release "Windows Desktop" build/windows/DeadFrequency.exe
           "$GODOT" --headless --path . --export-release "Linux" build/linux/DeadFrequency.x86_64
           chmod +x build/linux/DeadFrequency.x86_64
+
+      # APK do celular (v0.10). Se falhar, o release de PC sai do mesmo jeito, só sem o APK.
+      # Assinatura: com os segredos ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_USER / ANDROID_KEYSTORE_PASSWORD
+      # (chave do Matheus) o APK atualiza por cima do anterior; sem eles usa uma chave de debug criada na hora,
+      # e aí é preciso desinstalar a versão antiga antes de instalar a nova.
+      - name: Exportar Android (APK)
+        id: apk
+        if: steps.ver.outputs.exists == 'false'
+        continue-on-error: true
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_USER: ${{ secrets.ANDROID_KEYSTORE_USER }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -e
+          VER=${{ steps.ver.outputs.version }}
+          TAG=${{ steps.ver.outputs.tag }}
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          mkdir -p "$HOME/.config/godot" build/android
+          for f in editor_settings-4.tres editor_settings-4.7.tres; do
+            printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/android/android_sdk_path = "%s"\nexport/android/java_sdk_path = "%s"\n' "$SDK" "$JAVA_HOME" > "$HOME/.config/godot/$f"
+          done
+          sed -i "s|^version/code=.*|version/code=${{ github.run_number }}|; s|^version/name=.*|version/name=\"${TAG#v}\"|" export_presets.cfg
+          dotnet build DeadFrequency.csproj -p:GodotTargetPlatform=android
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            export GODOT_ANDROID_KEYSTORE_RELEASE_PATH="$RUNNER_TEMP/release.keystore"
+            export GODOT_ANDROID_KEYSTORE_RELEASE_USER="$KS_USER"
+            export GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD="$KS_PASS"
+            "$GODOT" --headless --path . --export-release "Android" build/android/DeadFrequency.apk
+          else
+            keytool -genkeypair -keystore "$RUNNER_TEMP/debug.keystore" -storepass android -alias androiddebugkey \
+              -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+            export GODOT_ANDROID_KEYSTORE_DEBUG_PATH="$RUNNER_TEMP/debug.keystore"
+            export GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey
+            export GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android
+            "$GODOT" --headless --path . --export-debug "Android" build/android/DeadFrequency.apk
+          fi
+          test -s build/android/DeadFrequency.apk
+          mv build/android/DeadFrequency.apk "DeadFrequency-${TAG}-android.apk"
+          ls -lh DeadFrequency-${TAG}-android.apk
 
       - name: Compilar o launcher (Godot padrão, só GDScript)
         if: steps.ver.outputs.exists == 'false'
@@ -170,7 +220,8 @@ jobs:
           TAG=${{ steps.ver.outputs.tag }}
           (cd build/windows && zip -qr "../../DeadFrequency-${TAG}-windows.zip" .)
           (cd build/linux && zip -qr "../../DeadFrequency-${TAG}-linux.zip" .)
-          sha256sum DeadFrequency-${TAG}-windows.zip DeadFrequency-${TAG}-linux.zip DeadFrequencyLauncher-windows.exe DeadFrequencyLauncher-linux > SHA256SUMS.txt
+          APK=$(ls DeadFrequency-${TAG}-android.apk 2>/dev/null || true)
+          sha256sum DeadFrequency-${TAG}-windows.zip DeadFrequency-${TAG}-linux.zip DeadFrequencyLauncher-windows.exe DeadFrequencyLauncher-linux $APK > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Atestado de build (prova que os arquivos saíram deste repositório)
@@ -189,6 +240,7 @@ jobs:
           VER=${{ steps.ver.outputs.version }}
           TAG=${{ steps.ver.outputs.tag }}
           python3 site/release_notes.py "$VER" Internal "$TAG" > notes.md
-          gh release create "$TAG" DeadFrequency-${TAG}-windows.zip DeadFrequency-${TAG}-linux.zip DeadFrequencyLauncher-windows.exe DeadFrequencyLauncher-linux SHA256SUMS.txt --title "$TAG — Internal" --notes-file notes.md --target "$GITHUB_SHA" --prerelease
+          APK=$(ls DeadFrequency-${TAG}-android.apk 2>/dev/null || true)
+          gh release create "$TAG" DeadFrequency-${TAG}-windows.zip DeadFrequency-${TAG}-linux.zip DeadFrequencyLauncher-windows.exe DeadFrequencyLauncher-linux $APK SHA256SUMS.txt --title "$TAG — Internal" --notes-file notes.md --target "$GITHUB_SHA" --prerelease
         env:
           GH_TOKEN: ${{ github.token }}

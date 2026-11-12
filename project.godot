@@ -24,6 +24,7 @@ GameSettings="*res://Scripts/Core/GameSettings.cs"
 AudioManager="*res://Scripts/Audio/AudioManager.cs"
 NetClient="*res://Scripts/Net/NetClient.cs"
 PlayerInventory="*res://Scripts/Items/PlayerInventory.cs"
+TouchControls="*res://Scripts/UI/TouchControls.cs"
 
 [display]
 

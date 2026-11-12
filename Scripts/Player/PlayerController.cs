@@ -103,6 +103,9 @@ public partial class PlayerController : CharacterBody3D
     public PlayerState State { get; private set; } = PlayerState.Walking;
     /// <summary>Desligado com o menu aberto no multiplayer (o jogo não pausa online).</summary>
     public bool InputEnabled { get; set; } = true;
+
+    /// <summary>O jogador local (só existe um PlayerController por fase). Usado pelos controles de toque.</summary>
+    public static PlayerController Local { get; private set; }
     public bool IsHolding => _heldItem != null && IsInstanceValid(_heldItem);
     public CargoItem HeldItem => IsHolding ? _heldItem : null;
     public bool HasSelectedItem => !string.IsNullOrEmpty(PlayerInventory.Instance?.SelectedHotbarItemId);
@@ -195,8 +198,12 @@ public partial class PlayerController : CharacterBody3D
         Input.MouseMode = Input.MouseModeEnum.Captured;
     }
 
+    public override void _EnterTree() => Local = this;
+
     public override void _ExitTree()
     {
+        if (Local == this)
+            Local = null;
         if (GameSettings.Instance != null)
             GameSettings.Instance.SettingsChanged -= ApplySettings;
         DropHeld();
@@ -221,6 +228,10 @@ public partial class PlayerController : CharacterBody3D
         if (!InputEnabled)
             return;
 
+        // Mouse "de mentira" gerado pelo toque: a câmera do celular vem de TouchControls.Look.
+        if (@event is InputEventMouse mouse && mouse.Device == Godot.InputEvent.DeviceIdEmulation && TouchControls.Active)
+            return;
+
         if (@event is InputEventMouseMotion motion && Input.MouseMode == Input.MouseModeEnum.Captured)
         {
             RotateLook(motion.Relative);
@@ -233,6 +244,13 @@ public partial class PlayerController : CharacterBody3D
             Input.MouseMode = Input.MouseModeEnum.Captured;
             GetViewport().SetInputAsHandled();
         }
+    }
+
+    /// <summary>Câmera pelo arrasto do dedo (TouchControls), com a mesma sensibilidade do mouse.</summary>
+    public void TouchLook(Vector2 relative)
+    {
+        if (InputEnabled)
+            RotateLook(relative);
     }
 
     private void RotateLook(Vector2 relative)
@@ -359,7 +377,7 @@ public partial class PlayerController : CharacterBody3D
                 DropSelectedItem();
         }
 
-        if (Input.IsActionJustPressed("throw") && Input.MouseMode == Input.MouseModeEnum.Captured)
+        if (Input.IsActionJustPressed("throw") && (Input.MouseMode == Input.MouseModeEnum.Captured || TouchControls.Active))
         {
             if (IsHolding)
                 ThrowHeld();
