@@ -547,8 +547,8 @@ public partial class NetSync : Node
 
         Vector3 position = Player.GlobalPosition;
         Vector3 look = Player.Camera.GlobalRotation;
-        float yaw = Round(look.Y);
-        float pitch = Round(look.X);
+        float yaw = (float)Round(look.Y);
+        float pitch = (float)Round(look.X);
         int state = Player.State == PlayerState.Driving ? 1 : Player.State == PlayerState.Riding ? 2 : 0;
         string lookCode = CharacterLook.Local.Encode();
         string held = Player.HeldItem?.NetId ?? (PlayerInventory.Instance?.SelectedHotbarItemId is string heldItem ? "item:" + heldItem : "");
