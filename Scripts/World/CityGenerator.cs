@@ -219,13 +219,9 @@ public partial class CityGenerator : Node3D
         catch (Exception ex)
         {
             GD.PushError($"Falha ao construir chunk {chunk.Coordinate.X},{chunk.Coordinate.Z}: {ex}");
-            root.QueueFree();
-            _chunkRoots.Remove(chunk.Coordinate);
-            if (_chunkLightRoots.TryGetValue(chunk.Coordinate, out Node3D lights))
-            {
-                lights.QueueFree();
-                _chunkLightRoots.Remove(chunk.Coordinate);
-            }
+            // Usa a rotina normal de descarregamento para também limpar obstáculos e referências
+            // auxiliares criadas antes da falha; os dados lógicos permanecem intactos.
+            UnloadChunkVisuals(chunk.Coordinate);
             return false;
         }
         finally
