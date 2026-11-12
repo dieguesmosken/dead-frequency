@@ -147,6 +147,7 @@ public partial class BusLine : Node3D
         var pole = new Vector3(2.4f, 0f, -0.4f);
         CarModels.Box(stop, pole + new Vector3(0f, 1.4f, 0f), new Vector3(0.07f, 2.8f, 0.07f), metal);
         CarModels.Box(stop, pole + new Vector3(0f, 2.65f, 0f), new Vector3(0.7f, 0.5f, 0.04f), roof);
+        stop.AddToGroup(WorldChunkManager.TrackedObjectGroup);
         stop.AddChild(new Label3D
         {
             Text = "PONTO DE\nÔNIBUS",
