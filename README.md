@@ -103,7 +103,12 @@ O servidor também tem estatísticas públicas (só números somados) em `/api/s
 ## Site
 
 O site fica em [`site/`](site/) e é publicado pelo GitHub Actions no GitHub Pages a cada push.
-`python3 site/build.py` gera `site/data/site.json` com o changelog do `GameVersion.cs` e as fotos de
+A central [Atualizações](https://www.teuzin.com.br/dead-frequency/updates.html) lê os GitHub Releases:
+versões estáveis da `main`, pré-releases da `Internal`, notas, downloads e commits do comparativo entre tags.
+A aba Próximas novidades carrega o `ROADMAP.md`. Para ocultar um Release do site, inclua
+`SITE_VISIBILITY: PRIVATE` no corpo da publicação (GitHub Release); isso só oculta no site — o Release
+continua público no GitHub se estiver publicado em um repositório público.
+`python3 site/build.py` continua gerando `site/data/site.json` com o changelog do `GameVersion.cs` e as fotos de
 `site/assets/shots/vX.Y.Z/` (legendas em `captions.json`). O texto dos releases sai de `site/release_notes.py`.
 
 ## Apoie

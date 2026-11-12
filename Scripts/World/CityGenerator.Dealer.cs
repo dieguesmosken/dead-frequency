@@ -89,7 +89,8 @@ public partial class CityGenerator
         }
 
         // Saída dos carros: proibido estacionar na rua da frente (dos dois lados).
-        ForbidParking(center + new Vector3(-Period * 0.5f, 0f, 0f), Vector3.Back, BlockSize * 0.5f);
+        // A placa vai para a ponta do trecho: no meio ela ficaria na frente da saída dos carros.
+        ForbidParking(center + new Vector3(-Period * 0.5f, 0f, 0f), Vector3.Back, BlockSize * 0.5f, null, BlockSize * 0.5f - 2.5f);
 
         if (NetClient.Instance?.IsOnline != true)
             CarGarage.SetOffline();

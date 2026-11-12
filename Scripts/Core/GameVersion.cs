@@ -16,12 +16,15 @@ public static class GameVersion
     {
         new("0.9.8", "10/11/2026", "Rua de verdade", new[]
         {
-            "Meio-fio branco nos trechos permitidos e amarelo nos cruzamentos e pontos proibidos; carros gerados só estacionam junto às marcações brancas.",
-            "Placas de proibido estacionar nos trechos amarelos, com identificação de POLÍCIA e BOMBEIROS nas respectivas áreas.",
+            "Meio-fio de concreto cinza com faixas brancas intercaladas e tinta gasta pelo tempo; amarelo nos cruzamentos e trechos proibidos, com a linha amarela oficial no asfalto junto à sarjeta (como manda a Resolução CONTRAN 973/2022). Carros gerados só estacionam onde é permitido.",
+            "Placas de proibido estacionar finas e chapadas nos trechos amarelos, de frente para quem vem pela rua, com POLÍCIA e BOMBEIROS nas respectivas áreas; pontos de ônibus com a placa azul de ÔNIBUS.",
             "Céu procedural com nuvens em movimento, estrelas e transição de cores sincronizada ao ciclo de dia e noite.",
             "Bocas de lobo com grades, tampas de bueiro nas ruas e som de água corrente audível nas proximidades.",
             "Ciclovias pintadas e ciclista que percorre a cidade sincronizado pelo relógio; ele toca o sino quando há alguém à frente.",
             "Delegacia identificada na fachada e no minimapa, com policiais figurantes fardados.",
+            "Roda do mouse alterna entre a câmera em primeira e em terceira pessoa; Ctrl + roda ajusta o campo de visão.",
+            "Online: salas separadas por versão do protocolo (7 e 8), com aviso claro quando a sua versão não bate com a da sala. Atualize o servidor com npm run deploy.",
+            "Correções: a caixa na mão de outro jogador não aparece mais duplicada, o boneco sentado reconhece mais animações e a placa de proibido estacionar da concessionária saiu da frente da saída dos carros.",
         }),
         new("0.9.7", "10/11/2026", "Mãos ocupadas", new[]
         {

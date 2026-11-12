@@ -344,7 +344,8 @@ public partial class CityGenerator
     {
         float inner = BlockSize - SidewalkWidth * 2f;
         float half = inner * 0.5f;
-        ForbidParking(center + new Vector3(0f, 0f, -BlockSize * 0.5f), Vector3.Right, 13f, "BOMBEIROS");
+        // Frente dos bombeiros = +Z (FacadeFrame com Vector3.Back): saída dos caminhões.
+        ForbidParking(center + new Vector3(0f, 0f, BlockSize * 0.5f), Vector3.Right, 13f, "BOMBEIROS");
         // Frame local: +Z = rua da frente.
         Node3D f = FacadeFrame(block, center + new Vector3(0f, CurbHeight, 0f), Vector3.Back);
         f.Name = "FireStation";
@@ -443,7 +444,8 @@ public partial class CityGenerator
     {
         float inner = BlockSize - SidewalkWidth * 2f;
         float half = inner * 0.5f;
-        ForbidParking(center + new Vector3(0f, 0f, BlockSize * 0.5f), Vector3.Right, 4.5f, "POLÍCIA");
+        // Frente da delegacia = -Z (FacadeFrame com Vector3.Forward): o trecho proibido é na rua da frente.
+        ForbidParking(center + new Vector3(0f, 0f, -BlockSize * 0.5f), Vector3.Right, 4.5f, "POLÍCIA");
         Node3D f = FacadeFrame(block, center + new Vector3(0f, CurbHeight, 0f), Vector3.Forward);
         f.Name = "PoliceStation";
         MarkPoi(f, "P", new Color(0.3f, 0.5f, 1f));

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atualizações — Dead Frequency</title>
+<meta name="description" content="Lançamentos, versões experimentais e próximas novidades de Dead Frequency.">
+<meta name="theme-color" content="#050806"><link rel="icon" href="assets/icon.png">
+<link rel="canonical" href="https://www.teuzin.com.br/dead-frequency/updates.html">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="updates.css"></head>
+<body><div class="scanlines" aria-hidden="true"></div>
+<header class="nav"><a class="brand" href="index.html#topo"><span class="dot"></span>DEAD FREQUENCY <small class="brand-version" title="Última versão publicada">v—</small> <span class="alpha">ALPHA</span></a>
+<button class="menu-btn" aria-label="Abrir menu" aria-expanded="false">≡</button>
+<nav><a href="index.html#jogo">Jogo</a><a href="index.html#baixar">Baixar</a><a href="updates.html" class="hl">Atualizações</a><a href="#roadmap">Roadmap</a><a href="index.html#apoie">Apoie</a></nav></header>
+<main class="updates-main">
+<section class="updates-hero"><p class="tag">▸ registro de transmissão · 96.6</p><h1 class="glitch" data-text="ATUALIZAÇÕES">ATUALIZAÇÕES</h1>
+<p class="lead">Cada versão, cada melhoria e os próximos passos de Dead Frequency — tudo em um só lugar.</p></section>
+<section class="block updates-block">
+<div class="updates-tabs" role="tablist" aria-label="Categorias de atualização">
+<button class="update-tab active" data-tab="stable" role="tab" aria-selected="true">Lançamentos</button>
+<button class="update-tab" data-tab="internal" role="tab" aria-selected="false">Desenvolvimento</button>
+<button class="update-tab" data-tab="roadmap" role="tab" aria-selected="false">Próximas novidades</button></div>
+<div id="release-status" class="small dim" aria-live="polite">Sintonizando o histórico do GitHub…</div>
+<div id="release-list" class="changelog"></div>
+<div id="roadmap" hidden><span id="roadmap" class="anchor-target"></span><div class="roadmap-intro"><h2><span>↗</span> O que vem por aí</h2><p class="dim">Planejamento público do projeto. Os itens podem mudar conforme testes e prioridades.</p></div>
+<div id="roadmap-content" class="roadmap-content">Carregando o roadmap…</div>
+<p class="small dim">Documento original: <a href="https://github.com/dieguesmosken/dead-frequency/blob/main/ROADMAP.md" target="_blank" rel="noopener">ROADMAP.md no GitHub ↗</a></p></div>
+</section></main>
+<footer class="foot"><div><b>DEAD FREQUENCY</b> · <a href="index.html">Página inicial</a> · <a href="https://github.com/dieguesmosken/dead-frequency/releases" target="_blank" rel="noopener">GitHub Releases ↗</a></div>
+<div class="small dim">As versões Internal são pré-releases experimentais. Recursos podem mudar ou apresentar problemas.</div></footer>
+<script src="updates.js"></script>
+<script>
+document.querySelector(".menu-btn").addEventListener("click",e=>{const nav=document.querySelector(".nav nav");nav.classList.toggle("open");e.currentTarget.setAttribute("aria-expanded",nav.classList.contains("open"));});
+document.querySelectorAll(".nav nav a").forEach(a=>a.addEventListener("click",()=>document.querySelector(".nav nav").classList.remove("open")));
+</script></body></html>

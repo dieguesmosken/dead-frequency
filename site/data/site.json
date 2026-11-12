@@ -6,14 +6,54 @@
    "date": "10/11/2026",
    "title": "Rua de verdade",
    "changes": [
-    "Meio-fio branco nos trechos permitidos e amarelo nos cruzamentos e pontos proibidos; carros gerados só estacionam junto às marcações brancas.",
-    "Placas de proibido estacionar nos trechos amarelos, com identificação de POLÍCIA e BOMBEIROS nas respectivas áreas.",
+    "Meio-fio de concreto cinza com faixas brancas intercaladas e tinta gasta pelo tempo; amarelo nos cruzamentos e trechos proibidos, com a linha amarela oficial no asfalto junto à sarjeta (como manda a Resolução CONTRAN 973/2022). Carros gerados só estacionam onde é permitido.",
+    "Placas de proibido estacionar finas e chapadas nos trechos amarelos, de frente para quem vem pela rua, com POLÍCIA e BOMBEIROS nas respectivas áreas; pontos de ônibus com a placa azul de ÔNIBUS.",
     "Céu procedural com nuvens em movimento, estrelas e transição de cores sincronizada ao ciclo de dia e noite.",
     "Bocas de lobo com grades, tampas de bueiro nas ruas e som de água corrente audível nas proximidades.",
     "Ciclovias pintadas e ciclista que percorre a cidade sincronizado pelo relógio; ele toca o sino quando há alguém à frente.",
-    "Delegacia identificada na fachada e no minimapa, com policiais figurantes fardados."
+    "Delegacia identificada na fachada e no minimapa, com policiais figurantes fardados.",
+    "Roda do mouse alterna entre a câmera em primeira e em terceira pessoa; Ctrl + roda ajusta o campo de visão.",
+    "Online: salas separadas por versão do protocolo (7 e 8), com aviso claro quando a sua versão não bate com a da sala. Atualize o servidor com npm run deploy.",
+    "Correções: a caixa na mão de outro jogador não aparece mais duplicada, o boneco sentado reconhece mais animações e a placa de proibido estacionar da concessionária saiu da frente da saída dos carros."
    ],
-   "shots": []
+   "shots": [
+    {
+     "src": "assets/shots/v0.9.8/meio_fio.jpg",
+     "caption": "Meio-fio cinza com faixas brancas intercaladas e tinta gasta"
+    },
+    {
+     "src": "assets/shots/v0.9.8/meio_fio_amarelo.jpg",
+     "caption": "Esquina proibida: meio-fio amarelo e a linha amarela oficial no asfalto"
+    },
+    {
+     "src": "assets/shots/v0.9.8/ciclista.jpg",
+     "caption": "Ciclovia pintada e o ciclista que roda pela cidade"
+    },
+    {
+     "src": "assets/shots/v0.9.8/delegacia.jpg",
+     "caption": "Delegacia com policiais, viaturas e meio-fio amarelo na frente"
+    },
+    {
+     "src": "assets/shots/v0.9.8/placa_policia.jpg",
+     "caption": "Placas finas de proibido estacionar, de frente para quem vem pela rua"
+    },
+    {
+     "src": "assets/shots/v0.9.8/placa_onibus.jpg",
+     "caption": "Ponto de ônibus com a placa azul de ÔNIBUS"
+    },
+    {
+     "src": "assets/shots/v0.9.8/bueiro.jpg",
+     "caption": "Tampas de bueiro na rua e bocas de lobo com som de água"
+    },
+    {
+     "src": "assets/shots/v0.9.8/ceu_entardecer.jpg",
+     "caption": "Céu novo com nuvens andando no fim de tarde"
+    },
+    {
+     "src": "assets/shots/v0.9.8/ceu_noite.jpg",
+     "caption": "E à noite, com estrelas entre as nuvens"
+    }
+   ]
   },
   {
    "version": "0.9.7",
@@ -28,7 +68,7 @@
     "Salas permanentes: ADMNA e ADMNB são privadas; SERVA e SERVB são públicas e não expiram nem podem ser encerradas.",
     "Lojas organizadas por vendedor e Auto Center Dois Mil com carros compráveis, compartilhados pela sala no online.",
     "Cidade com novas texturas, capim animado e otimizações de visibilidade.",
-    "Online: protocolo 6. Atualize o servidor com npm run deploy."
+    "Online: protocolo 7 (hotfix de segurança multiplayer). Atualize o servidor com npm run deploy."
    ],
    "shots": []
   },
@@ -527,6 +567,22 @@
    "caption": "Menu principal com as novidades da versão"
   },
   {
+   "src": "assets/shots/v0.9.8/meio_fio.jpg",
+   "caption": "Meio-fio cinza com faixas brancas intercaladas e tinta gasta"
+  },
+  {
+   "src": "assets/shots/v0.9.8/meio_fio_amarelo.jpg",
+   "caption": "Esquina proibida: meio-fio amarelo e a linha amarela oficial no asfalto"
+  },
+  {
+   "src": "assets/shots/v0.9.8/ciclista.jpg",
+   "caption": "Ciclovia pintada e o ciclista que roda pela cidade"
+  },
+  {
+   "src": "assets/shots/v0.9.8/delegacia.jpg",
+   "caption": "Delegacia com policiais, viaturas e meio-fio amarelo na frente"
+  },
+  {
    "src": "assets/shots/v0.9.6/personagem.jpg",
    "caption": "Novo menu Personagem: homem ou mulher e as cores"
   },
@@ -573,22 +629,6 @@
   {
    "src": "assets/shots/v0.9.4/animal_Cow.jpg",
    "caption": "Vacas e boi animados no cercado do sítio"
-  },
-  {
-   "src": "assets/shots/v0.9.3/posto_carro_vindo.jpg",
-   "caption": "Frentista: o carro chega pela avenida"
-  },
-  {
-   "src": "assets/shots/v0.9.3/posto_carro_bomba.jpg",
-   "caption": "Parado na bomba esperando o tanque cheio"
-  },
-  {
-   "src": "assets/shots/v0.9.3/posto_rampas.jpg",
-   "caption": "Calçada rebaixada com rampas de entrada e saída"
-  },
-  {
-   "src": "assets/shots/v0.9.3/frota.jpg",
-   "caption": "Moto e caminhões do pátio"
   }
  ],
  "pix": "00020126700014br.gov.bcb.pix0124contato@badwolf3d.com.br0220Apoio Dead Frequency5204000053039865802BR5914DEAD FREQUENCY6006BRASIL62120508DEADFREQ6304D998"
