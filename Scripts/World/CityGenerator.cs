@@ -41,7 +41,7 @@ public partial class CityGenerator : Node3D
     /// <summary>Plano lógico calculado antes da criação de qualquer geometria do mundo.</summary>
     public WorldGenerationData WorldData { get; private set; }
     public int ChunkPinVersion { get; private set; }
-    public bool UsesChunkStreaming => _useLogicalBlockPlans && Biome == WorldBiome.City;
+    public bool UsesChunkStreaming => _useLogicalBlockPlans && (Biome == WorldBiome.City || Biome == WorldBiome.Farm);
     public int StoreBrandCount => _brands.Count;
     public event Action<WorldGenerationProgress> WorldDataProgress;
     public event Action<WorldChunkCoordinate> ChunkVisualized;
@@ -134,7 +134,7 @@ public partial class CityGenerator : Node3D
     /// <summary>Impede o descarregamento do chunk que contém uma missão/objeto ativo.</summary>
     public bool PinChunkForPosition(Vector3 position)
     {
-        if (WorldData == null || Biome != WorldBiome.City)
+        if (WorldData == null || (Biome != WorldBiome.City && Biome != WorldBiome.Farm))
             return false;
 
         WorldChunkCoordinate coordinate = WorldData.GetChunkCoordinate(position);
@@ -151,7 +151,7 @@ public partial class CityGenerator : Node3D
     /// <summary>Libera uma reserva feita por PinChunkForPosition.</summary>
     public void UnpinChunkForPosition(Vector3 position)
     {
-        if (WorldData == null || Biome != WorldBiome.City)
+        if (WorldData == null || (Biome != WorldBiome.City && Biome != WorldBiome.Farm))
             return;
 
         WorldChunkCoordinate coordinate = WorldData.GetChunkCoordinate(position);
@@ -178,7 +178,12 @@ public partial class CityGenerator : Node3D
     /// <summary>Cria a geometria de um único chunk na thread principal.</summary>
     public bool BuildChunkVisuals(WorldChunkData chunk)
     {
-        if (!_useLogicalBlockPlans || Biome != WorldBiome.City || IsChunkVisualized(chunk.Coordinate))
+        if (!_useLogicalBlockPlans || IsChunkVisualized(chunk.Coordinate))
+            return false;
+
+        if (Biome == WorldBiome.Farm)
+            return BuildFarmChunkVisuals(chunk);
+        if (Biome != WorldBiome.City)
             return false;
 
         var root = new Node3D { Name = $"Chunk_{chunk.Coordinate.X}_{chunk.Coordinate.Z}" };
@@ -511,9 +516,52 @@ public partial class CityGenerator : Node3D
 
             if (Biome == WorldBiome.Farm)
             {
-                loading.SetProgress("Construindo o rancho", 0, 1, 0.72f);
+                loading.SetProgress("Carregando terreno, estradas e pontos centrais", 0, 1, 0.72f);
                 BuildFarm();
-                loading.SetProgress("Rancho preparado", 1, 1, 1f);
+                loading.SetProgress("Estrutura central do rancho pronta", 1, 1, 0.76f);
+                await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+
+                PlayerController farmPlayer = GetParent()?.GetNodeOrNull<PlayerController>("Player");
+                Vector3 farmFallback = farmPlayer != null
+                    ? farmPlayer.GlobalPosition
+                    : new Vector3(-3f, 0f, 8f);
+                string farmProfession = GetInitialProfessionForWorld();
+                _initialChunkPosition = WorldData.TryGetProfessionSpawn(
+                    farmProfession, out WorldSpawnPoint farmSpawn)
+                    ? farmSpawn.Position
+                    : farmFallback;
+                _hasInitialChunkPosition = true;
+
+                IReadOnlyList<WorldChunkData> initialFarmChunks =
+                    WorldData.GetChunksAround(_initialChunkPosition, radius: 1);
+                int totalFarmChunks = Mathf.Max(1, initialFarmChunks.Count);
+                int completedFarmChunks = 0;
+                foreach (WorldChunkData chunk in initialFarmChunks)
+                {
+                    BuildChunkVisuals(chunk);
+                    completedFarmChunks++;
+                    float farmRatio = 0.76f + 0.23f * completedFarmChunks / totalFarmChunks;
+                    loading.SetProgress(
+                        $"Carregando sítios e vegetação ({chunk.Coordinate.X}, {chunk.Coordinate.Z})",
+                        completedFarmChunks,
+                        initialFarmChunks.Count,
+                        farmRatio);
+                    await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+                }
+
+                if (farmPlayer != null)
+                {
+                    _chunkManager = new WorldChunkManager
+                    {
+                        City = this,
+                        Target = farmPlayer,
+                        InitialPosition = _initialChunkPosition,
+                        HasInitialPosition = _hasInitialChunkPosition,
+                    };
+                    AddChild(_chunkManager);
+                }
+
+                loading.SetProgress("Rancho pronto", 1, 1, 1f);
                 await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
                 return;
             }
