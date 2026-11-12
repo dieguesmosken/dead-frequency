@@ -96,6 +96,8 @@ public partial class CityGenerator : Node3D
     private WorldChunkCoordinate? _activeChunkCoordinate;
     private readonly Dictionary<WorldChunkCoordinate, Node3D> _chunkRoots = new();
     private readonly Dictionary<WorldChunkCoordinate, Node3D> _chunkLightRoots = new();
+    private readonly Dictionary<WorldChunkCoordinate, int> _pinnedChunkCounts = new();
+    private WorldChunkManager _chunkManager;
 
     private Node3D ActiveLightsRoot
     {
@@ -122,6 +124,46 @@ public partial class CityGenerator : Node3D
 
     public IReadOnlyList<WorldChunkCoordinate> GetLoadedChunkCoordinates() =>
         new List<WorldChunkCoordinate>(_chunkRoots.Keys);
+
+    /// <summary>Impede o descarregamento do chunk que contém uma missão/objeto ativo.</summary>
+    public bool PinChunkForPosition(Vector3 position)
+    {
+        if (WorldData == null || Biome != WorldBiome.City)
+            return false;
+
+        WorldChunkCoordinate coordinate = WorldData.GetChunkCoordinate(position);
+        if (!WorldData.TryGetChunk(coordinate, out _))
+            return false;
+
+        _pinnedChunkCounts.TryGetValue(coordinate, out int count);
+        _pinnedChunkCounts[coordinate] = count + 1;
+        _chunkManager?.RequestRefresh();
+        return true;
+    }
+
+    /// <summary>Libera uma reserva feita por PinChunkForPosition.</summary>
+    public void UnpinChunkForPosition(Vector3 position)
+    {
+        if (WorldData == null || Biome != WorldBiome.City)
+            return;
+
+        WorldChunkCoordinate coordinate = WorldData.GetChunkCoordinate(position);
+        if (!_pinnedChunkCounts.TryGetValue(coordinate, out int count))
+            return;
+
+        if (count <= 1)
+            _pinnedChunkCounts.Remove(coordinate);
+        else
+            _pinnedChunkCounts[coordinate] = count - 1;
+
+        _chunkManager?.RequestRefresh();
+    }
+
+    public bool IsChunkPinned(WorldChunkCoordinate coordinate) =>
+        _pinnedChunkCounts.TryGetValue(coordinate, out int count) && count > 0;
+
+    public IReadOnlyList<WorldChunkCoordinate> GetPinnedChunkCoordinates() =>
+        new List<WorldChunkCoordinate>(_pinnedChunkCounts.Keys);
 
     /// <summary>Cria a geometria de um único chunk na thread principal.</summary>
     public bool BuildChunkVisuals(WorldChunkData chunk)
@@ -421,13 +463,14 @@ public partial class CityGenerator : Node3D
 
             if (player != null)
             {
-                AddChild(new WorldChunkManager
+                _chunkManager = new WorldChunkManager
                 {
                     City = this,
                     Target = player,
                     InitialPosition = _initialChunkPosition,
                     HasInitialPosition = _hasInitialChunkPosition,
-                });
+                };
+                AddChild(_chunkManager);
             }
 
             completed = totalWork;
