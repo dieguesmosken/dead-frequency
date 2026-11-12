@@ -7,7 +7,7 @@
    "title": "Rua de verdade",
    "changes": [
     "Meio-fio branco nos trechos permitidos e amarelo nos cruzamentos e pontos proibidos; carros gerados só estacionam junto às marcações brancas.",
-    "Placas de proibido estacionar nos trechos amarelos, com identificação de POLÍCIA e BOMBEIROS nas respectivas áreas.",
+    "Placas de proibido estacionar finas e chapadas nos trechos amarelos, de frente para quem vem pela rua, com POLÍCIA e BOMBEIROS nas respectivas áreas; pontos de ônibus com a placa azul de ÔNIBUS.",
     "Céu procedural com nuvens em movimento, estrelas e transição de cores sincronizada ao ciclo de dia e noite.",
     "Bocas de lobo com grades, tampas de bueiro nas ruas e som de água corrente audível nas proximidades.",
     "Ciclovias pintadas e ciclista que percorre a cidade sincronizado pelo relógio; ele toca o sino quando há alguém à frente.",
@@ -23,11 +23,15 @@
     },
     {
      "src": "assets/shots/v0.9.8/delegacia.jpg",
-     "caption": "Delegacia com policiais, viaturas e o meio-fio amarelo com a placa POLÍCIA"
+     "caption": "Delegacia com policiais, viaturas e meio-fio amarelo na frente"
     },
     {
-     "src": "assets/shots/v0.9.8/bombeiros.jpg",
-     "caption": "Saída dos bombeiros livre: meio-fio amarelo e placa de proibido estacionar"
+     "src": "assets/shots/v0.9.8/placa_policia.jpg",
+     "caption": "Placas finas de proibido estacionar, de frente para quem vem pela rua"
+    },
+    {
+     "src": "assets/shots/v0.9.8/placa_onibus.jpg",
+     "caption": "Ponto de ônibus com a placa azul de ÔNIBUS"
     },
     {
      "src": "assets/shots/v0.9.8/bueiro.jpg",
@@ -560,15 +564,15 @@
   },
   {
    "src": "assets/shots/v0.9.8/delegacia.jpg",
-   "caption": "Delegacia com policiais, viaturas e o meio-fio amarelo com a placa POLÍCIA"
+   "caption": "Delegacia com policiais, viaturas e meio-fio amarelo na frente"
   },
   {
-   "src": "assets/shots/v0.9.8/bombeiros.jpg",
-   "caption": "Saída dos bombeiros livre: meio-fio amarelo e placa de proibido estacionar"
+   "src": "assets/shots/v0.9.8/placa_policia.jpg",
+   "caption": "Placas finas de proibido estacionar, de frente para quem vem pela rua"
   },
   {
-   "src": "assets/shots/v0.9.8/bueiro.jpg",
-   "caption": "Tampas de bueiro na rua e bocas de lobo com som de água"
+   "src": "assets/shots/v0.9.8/placa_onibus.jpg",
+   "caption": "Ponto de ônibus com a placa azul de ÔNIBUS"
   },
   {
    "src": "assets/shots/v0.9.6/personagem.jpg",

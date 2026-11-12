@@ -5,11 +5,15 @@
  },
  {
   "file": "delegacia.jpg",
-  "caption": "Delegacia com policiais, viaturas e o meio-fio amarelo com a placa POLÍCIA"
+  "caption": "Delegacia com policiais, viaturas e meio-fio amarelo na frente"
  },
  {
-  "file": "bombeiros.jpg",
-  "caption": "Saída dos bombeiros livre: meio-fio amarelo e placa de proibido estacionar"
+  "file": "placa_policia.jpg",
+  "caption": "Placas finas de proibido estacionar, de frente para quem vem pela rua"
+ },
+ {
+  "file": "placa_onibus.jpg",
+  "caption": "Ponto de ônibus com a placa azul de ÔNIBUS"
  },
  {
   "file": "bueiro.jpg",
