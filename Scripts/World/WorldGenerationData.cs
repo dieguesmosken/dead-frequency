@@ -37,6 +37,42 @@ public readonly record struct WorldSpawnPoint(string Profession, Vector3 Positio
 /// <summary>Ponto de entrega lógico de um quarteirão, calculado sem objetos da SceneTree.</summary>
 public readonly record struct WorldDeliveryPointData(int BlockX, int BlockZ, Vector3 Position, string Address);
 
+/// <summary>Tipo lógico de um quarteirão da cidade, sem dependência de geometria.</summary>
+public enum WorldBlockKind
+{
+    Depot,
+    FireStation,
+    PoliceStation,
+    RadioStation,
+    Supermarket,
+    ShoppingMall,
+    ApartmentBuilding,
+    VehicleDealer,
+    WaterTower,
+    GasStation,
+    CarWash,
+    Park,
+    ParkingLot,
+    Buildings,
+}
+
+/// <summary>Plano determinístico de um quarteirão, com streams aleatórios independentes.</summary>
+public sealed class WorldBlockData
+{
+    public WorldChunkCoordinate Coordinate { get; }
+    public WorldBlockKind Kind { get; }
+    public ulong VisualSeed { get; }
+    public ulong DecorationSeed { get; }
+
+    internal WorldBlockData(WorldChunkCoordinate coordinate, WorldBlockKind kind, ulong visualSeed, ulong decorationSeed)
+    {
+        Coordinate = coordinate;
+        Kind = kind;
+        VisualSeed = visualSeed;
+        DecorationSeed = decorationSeed;
+    }
+}
+
 /// <summary>Progresso de uma etapa real do preparo lógico do mundo.</summary>
 public readonly record struct WorldGenerationProgress(string Stage, int Completed, int Total)
 {
@@ -50,6 +86,7 @@ public readonly record struct WorldGenerationProgress(string Stage, int Complete
 public sealed class WorldGenerationData
 {
     private readonly Dictionary<WorldChunkCoordinate, WorldChunkData> _chunkIndex;
+    private readonly Dictionary<WorldChunkCoordinate, WorldBlockData> _blockIndex;
     private readonly IReadOnlyDictionary<string, WorldSpawnPoint> _spawnPoints;
 
     public int Seed { get; }
@@ -58,6 +95,7 @@ public sealed class WorldGenerationData
     public float ChunkSize { get; }
     public bool UsesCenteredGrid { get; }
     public IReadOnlyList<WorldChunkData> Chunks { get; }
+    public IReadOnlyList<WorldBlockData> Blocks { get; }
     public IReadOnlyList<WorldDeliveryPointData> DeliveryPoints { get; }
     public IReadOnlyDictionary<string, WorldSpawnPoint> SpawnPoints => _spawnPoints;
 
@@ -68,6 +106,7 @@ public sealed class WorldGenerationData
         float chunkSize,
         bool usesCenteredGrid,
         List<WorldChunkData> chunks,
+        List<WorldBlockData> blocks,
         List<WorldDeliveryPointData> deliveryPoints,
         Dictionary<string, WorldSpawnPoint> spawnPoints)
     {
@@ -77,6 +116,10 @@ public sealed class WorldGenerationData
         ChunkSize = chunkSize;
         UsesCenteredGrid = usesCenteredGrid;
         Chunks = Array.AsReadOnly(chunks.ToArray());
+        Blocks = Array.AsReadOnly(blocks.ToArray());
+        _blockIndex = new Dictionary<WorldChunkCoordinate, WorldBlockData>(blocks.Count);
+        foreach (WorldBlockData block in blocks)
+            _blockIndex[block.Coordinate] = block;
         DeliveryPoints = Array.AsReadOnly(deliveryPoints.ToArray());
         _chunkIndex = new Dictionary<WorldChunkCoordinate, WorldChunkData>(chunks.Count);
         foreach (WorldChunkData chunk in chunks)
@@ -102,6 +145,9 @@ public sealed class WorldGenerationData
 
     public bool TryGetChunk(WorldChunkCoordinate coordinate, out WorldChunkData chunk) =>
         _chunkIndex.TryGetValue(coordinate, out chunk);
+
+    public bool TryGetBlock(WorldChunkCoordinate coordinate, out WorldBlockData block) =>
+        _blockIndex.TryGetValue(coordinate, out block);
 
     /// <summary>
     /// Converte uma posição do mundo para a coordenada de chunk.
