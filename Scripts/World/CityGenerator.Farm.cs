@@ -677,13 +677,27 @@ public partial class CityGenerator
         });
         // Não deixa a van entrar no lago: borda invisível (o barro e as taboas mostram onde é).
         AddShape(new CylinderShape3D { Radius = LakeRadius - 1f, Height = 1.2f }, new Transform3D(Basis.Identity, _lakeCenter + new Vector3(0f, 0.6f, 0f)));
-        for (int i = 0; i < 70; i++)
+        if (_useLogicalWorldData && WorldData != null)
         {
-            float a = _rng.Randf() * Mathf.Tau;
-            float r = LakeRadius + _rng.RandfRange(-1.2f, 1.5f);
-            float hgt = _rng.RandfRange(0.6f, 1.4f);
-            var reed = new Transform3D(Basis.FromScale(new Vector3(0.12f, hgt, 0.12f)), _lakeCenter + new Vector3(Mathf.Cos(a) * r, hgt * 0.5f, Mathf.Sin(a) * r));
-            AddInstance("reed", _unitBox, _cornGreen, reed, new Color(0.8f, 0.9f, 0.6f));
+            foreach (WorldFarmReedPlan reedPlan in WorldData.FarmReeds)
+            {
+                var reed = new Transform3D(
+                    Basis.FromScale(new Vector3(0.12f, reedPlan.Height, 0.12f)),
+                    reedPlan.Position);
+                AddInstance("reed", _unitBox, _cornGreen, reed, new Color(0.8f, 0.9f, 0.6f));
+            }
+        }
+        else
+        {
+            for (int i = 0; i < 70; i++)
+            {
+                float a = _rng.Randf() * Mathf.Tau;
+                float r = LakeRadius + _rng.RandfRange(-1.2f, 1.5f);
+                float hgt = _rng.RandfRange(0.6f, 1.4f);
+                var reed = new Transform3D(Basis.FromScale(new Vector3(0.12f, hgt, 0.12f)),
+                    _lakeCenter + new Vector3(Mathf.Cos(a) * r, hgt * 0.5f, Mathf.Sin(a) * r));
+                AddInstance("reed", _unitBox, _cornGreen, reed, new Color(0.8f, 0.9f, 0.6f));
+            }
         }
 
         // Píer do pesqueiro, virado para a trilha (lado -X).
@@ -846,6 +860,40 @@ public partial class CityGenerator
 
     private void BuildTrees()
     {
+        if (_useLogicalWorldData && WorldData != null)
+        {
+            foreach (WorldFarmTreePlan treePlan in WorldData.FarmTrees)
+            {
+                Vector2 position = new(treePlan.Position.X, treePlan.Position.Z);
+                if (treePlan.Dead)
+                {
+                    string model = NatureKit.DeadTrees[Mathf.PosMod(treePlan.VariantIndex, NatureKit.DeadTrees.Length)];
+                    var transform = new Transform3D(
+                        new Basis(Vector3.Up, treePlan.RotationY) *
+                        Basis.FromScale(Vector3.One * treePlan.Scale),
+                        treePlan.Position);
+                    if (NatureKit.Get(model) is Mesh deadMesh)
+                        AddInstance("q_" + model, deadMesh, null, transform, Colors.White);
+                    AddShape(new CylinderShape3D { Radius = 0.35f, Height = 4f },
+                        new Transform3D(Basis.Identity, treePlan.Position + new Vector3(0f, 2f, 0f)));
+                }
+                else
+                {
+                    RandomNumberGenerator previousRng = _rng;
+                    _rng = new RandomNumberGenerator { Seed = treePlan.VisualSeed };
+                    try
+                    {
+                        Tree(position, treePlan.Pine);
+                    }
+                    finally
+                    {
+                        _rng = previousRng;
+                    }
+                }
+            }
+            return;
+        }
+
         int count = 0;
         for (int i = 0; i < 1600 && count < 900; i++)
         {
