@@ -92,7 +92,7 @@ const v7LookupInfo = v7Lookup.status === 200 ? await v7Lookup.json() : null;
 assert(v7Lookup.status === 404 || v7LookupInfo?.protocol === 7, "rota padrão V7 não acessa sala V8");
 const v8Client = await connect(v8Code, "ClienteV8", "entregador", [], "", 8);
 await sleep(250);
-assert(v8Client.find("welcome")?.code === v8Code, "cliente V8 entra na sala V8");
+assert(v8Client.find("welcome")?.code === v8Code && v8Client.find("welcome")?.protocol === 8, "cliente V8 entra na sala V8");
 assert((await (await fetch(base + "/api/rooms?protocol=8")).json()).rooms.some((r) => r.code === v8Code), "lista pública filtra salas V8");
 const mismatch = new WebSocket(`${wsBase}/api/rooms/${v8Code}/ws?protocol=8&name=VersaoErrada`);
 const mismatchInbox = [];
