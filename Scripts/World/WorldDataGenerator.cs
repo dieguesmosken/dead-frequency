@@ -44,7 +44,7 @@ public static class WorldDataGenerator
         float parkChance,
         float parkingLotChance,
         IReadOnlyList<(Vector2I Block, string Id)> gasStations,
-        bool prepareLogicalDeliveryPoints,
+        bool prepareLogicalCityData,
         Action<WorldGenerationProgress> progress = null)
     {
         float chunkSize = biome == WorldBiome.City ? blockSize + roadWidth : FarmChunkSize;
@@ -52,6 +52,7 @@ public static class WorldDataGenerator
         var chunks = new List<WorldChunkData>();
         var blocks = new List<WorldBlockData>();
         var deliveryPoints = new List<WorldDeliveryPointData>();
+        WorldServiceData services = WorldServiceData.Empty();
         var spawnPoints = new Dictionary<string, WorldSpawnPoint>(StringComparer.Ordinal);
 
         if (centeredGrid)
@@ -81,8 +82,13 @@ public static class WorldDataGenerator
                 fireStationBlock, policeStationBlock, radioStationBlock, marketBlock,
                 shoppingMallBlock, apartmentBlock, dealerBlock, waterTowerBlock, carWashBlock,
                 gasStations, progress);
-            if (prepareLogicalDeliveryPoints)
+            if (prepareLogicalCityData)
+            {
                 BuildCityDeliveryPoints(seed, cityRadius, blockSize, chunkSize, curbHeight, deliveryPoints, progress);
+                services = BuildCityServiceData(
+                    cityRadius, blockSize, chunkSize, curbHeight, marketBlock,
+                    radioStationBlock, gasStations, progress);
+            }
             BuildCitySpawnPoints(
                 spawnPoints, blockSize, chunkSize, curbHeight, cityRadius,
                 marketBlock, radioStationBlock, gasStations);
@@ -117,7 +123,7 @@ public static class WorldDataGenerator
 
         progress?.Invoke(new WorldGenerationProgress("Preparando pontos de início", 1, 1));
         return new WorldGenerationData(
-            seed, CurrentGeneratorVersion, biome, chunkSize, centeredGrid, chunks, blocks, deliveryPoints, spawnPoints);
+            seed, CurrentGeneratorVersion, biome, chunkSize, centeredGrid, chunks, blocks, deliveryPoints, services, spawnPoints);
     }
 
     private static void BuildCityBlockPlans(
@@ -216,6 +222,99 @@ public static class WorldDataGenerator
 
         id = null;
         return false;
+    }
+
+    private static WorldServiceData BuildCityServiceData(
+        int radius,
+        float blockSize,
+        float period,
+        float curbHeight,
+        Vector2I marketBlock,
+        Vector2I radioStationBlock,
+        IReadOnlyList<(Vector2I Block, string Id)> gasStations,
+        Action<WorldGenerationProgress> progress)
+    {
+        var dumpsters = new List<Vector3>();
+        var gasSpots = new List<WorldGasSpotData>();
+        var shelfSlots = new List<WorldMarketShelfSlotData>();
+
+        int completed = 0;
+        int total = (radius * 2 + 1) * (radius * 2 + 1) - 1;
+        float edge = blockSize * 0.5f - 1f;
+
+        // Reproduz os pontos de caçamba criados por BuildStreetProps sem carregar modelos.
+        for (int bx = -radius; bx <= radius; bx++)
+        {
+            for (int bz = -radius; bz <= radius; bz++)
+            {
+                if (bx == 0 && bz == 0)
+                    continue;
+
+                Vector3 center = new(bx * period, curbHeight, bz * period);
+                int hash = StableAssetHash(center, 11);
+                if (hash / 100 % 100 < 40)
+                {
+                    Vector3 dumpster = center + new Vector3(-edge - 0.1f, 0f, -blockSize * 0.3f);
+                    dumpsters.Add(dumpster + new Vector3(0.9f, 0f, 0f));
+                }
+
+                if (TryGetGasStation(gasStations, new Vector2I(bx, bz), out string brand))
+                    gasSpots.Add(new WorldGasSpotData(center + new Vector3(0f, 0f, 5f), brand));
+
+                completed++;
+                progress?.Invoke(new WorldGenerationProgress("Calculando locais de serviço", completed, total));
+            }
+        }
+
+        Vector3 marketStockPoint = Vector3.Zero;
+        Vector3 marketEntrance = Vector3.Zero;
+        if (IsInsideCity(marketBlock, radius))
+        {
+            Vector3 marketPosition = new(marketBlock.X * period, curbHeight, marketBlock.Y * period);
+
+            // Mesmas coordenadas usadas em BuildSupermarket: z0=-13, z1=7.
+            marketStockPoint = marketPosition + new Vector3(7f, 0f, -11.6f);
+            marketEntrance = marketPosition + new Vector3(0f, 0f, 7.5f);
+
+            float[] shelfX = { -10f, -6f, -2f, 2f, 6f, 10f };
+            float[] shelfZ = { -7f, -4.5f, -2f };
+            float[] shelfY = { 0.6f, 1.05f };
+            foreach (float x in shelfX)
+            {
+                foreach (int side in new[] { -1, 1 })
+                {
+                    foreach (float z in shelfZ)
+                    {
+                        foreach (float y in shelfY)
+                        {
+                            Vector3 position = marketPosition + new Vector3(x + side * 0.275f, y, z);
+                            shelfSlots.Add(new WorldMarketShelfSlotData(position, Mathf.Pi * 0.5f));
+                        }
+                    }
+                }
+            }
+        }
+
+        Vector3 radioConsolePoint = Vector3.Zero;
+        if (IsInsideCity(radioStationBlock, radius))
+        {
+            Vector3 stationPosition = new(radioStationBlock.X * period, curbHeight, radioStationBlock.Y * period);
+            radioConsolePoint = stationPosition + new Vector3(-6f, 0f, -0.4f);
+        }
+
+        return new WorldServiceData(
+            dumpsters, gasSpots, shelfSlots, marketStockPoint, marketEntrance, radioConsolePoint);
+    }
+
+    private static int StableAssetHash(Vector3 position, int salt)
+    {
+        unchecked
+        {
+            int hash = Mathf.RoundToInt(position.X * 10f) * 73856093
+                ^ Mathf.RoundToInt(position.Z * 10f) * 19349663
+                ^ salt * 83492791;
+            return hash & 0x7fffffff;
+        }
     }
 
     private static void BuildCityDeliveryPoints(
