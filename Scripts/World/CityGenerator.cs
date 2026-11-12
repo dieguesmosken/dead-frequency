@@ -242,28 +242,40 @@ public partial class CityGenerator : Node3D
         return wanted;
     }
 
-    public override void _Ready()
+    public override void _Ready() => InitializeWorldAsync();
+
+    private async void InitializeWorldAsync()
     {
-        HomeGuide.Clear(); // a casa só existe na cidade (o prédio registra de novo)
-        // No multiplayer todos usam a seed da sala, então a cidade (e os endereços) são iguais para todos.
+        HomeGuide.Clear();
         if (NetClient.Instance?.IsOnline == true)
             Seed = NetClient.Instance.Seed;
 
-        // Primeira etapa: indexa o mundo e calcula os spawns sem criar Nodes, malhas ou colisões.
-        // O RNG legado de renderização permanece separado para preservar o mapa visual atual.
-        // V7 precisa preservar exatamente os pontos de entrega do gerador legado.
-        // V8 pode usar o plano lógico, já que seus clientes usam a mesma geração atualizada.
         _useLogicalWorldData = NetClient.Instance?.IsOnline != true
             || NetClient.Instance.ActiveProtocolVersion >= NetClient.PreferredProtocolVersion;
         _useLogicalServiceData = Biome == WorldBiome.City;
         _useLogicalBlockPlans = _useLogicalWorldData;
 
+        WorldLoadingScreen loading = null;
+        if (_useLogicalBlockPlans)
+        {
+            loading = new WorldLoadingScreen { Name = "WorldLoading" };
+            AddChild(loading);
+            loading.SetProgress("Calculando os dados lógicos do mundo...", 0, 1);
+        }
+
+        // Esta etapa não cria Nodes nem geometria; os dados ficam prontos antes dos sistemas de missão.
+        WorldGenerationProgress lastLogicalProgress = new("Preparando mundo", 0, 1);
         WorldData = WorldDataGenerator.Generate(
             Seed, Biome, Radius, BlockSize, RoadWidth, FarmExtent, CurbHeight,
             MarketBlock, RadioStationBlock, FireStationBlock, PoliceStationBlock,
             ShoppingMallBlock, ApartmentBlock, DealerBlock, WaterTowerBlock, CarWashBlock,
             ParkChance, ParkingLotChance, GasStations, _useLogicalWorldData,
-            progress => WorldDataProgress?.Invoke(progress));
+            progress =>
+            {
+                lastLogicalProgress = progress;
+                WorldDataProgress?.Invoke(progress);
+                loading?.SetProgress(progress.Stage, progress.Completed, progress.Total);
+            });
 
         if (Biome == WorldBiome.City)
         {
@@ -271,16 +283,10 @@ public partial class CityGenerator : Node3D
             {
                 _deliveryPoints.Clear();
                 foreach (WorldDeliveryPointData point in WorldData.DeliveryPoints)
-                {
-                    _deliveryPoints.Add(new DeliveryPoint
-                    {
-                        Position = point.Position,
-                        Address = point.Address,
-                    });
-                }
+                    _deliveryPoints.Add(new DeliveryPoint { Position = point.Position, Address = point.Address });
             }
 
-            // Pontos fixos das profissões não dependem de meshes e também precisam existir no V7.
+            // Os pontos de profissão ficam disponíveis antes de qualquer mesh, inclusive em salas V7.
             DumpsterSpots.Clear();
             DumpsterSpots.AddRange(WorldData.Services.DumpsterSpots);
             GasSpots.Clear();
@@ -295,42 +301,25 @@ public partial class CityGenerator : Node3D
         }
 
         _rng = new RandomNumberGenerator { Seed = (ulong)Seed };
-        // Detalhes (lojas, ar-condicionados, orelhões) usam outro gerador para não mudar o resto da cidade.
         _decoRng = new RandomNumberGenerator { Seed = (ulong)Seed * 7919UL + 13UL };
-        BuildResources();
-        BuildLandmarkResources();
 
-        _staticRoot = new Node3D { Name = "Static" };
-        _lightsRoot = new Node3D { Name = "Lights" };
-        AddChild(_staticRoot);
-        AddChild(_lightsRoot);
-
-        if (Biome == WorldBiome.Farm)
+        // V7 conserva a construção síncrona e o RNG antigo: não muda o mapa nem os endereços existentes.
+        if (!_useLogicalBlockPlans)
         {
-            BuildFarm();
-            return;
-        }
+            BuildResources();
+            BuildLandmarkResources();
+            _staticRoot = new Node3D { Name = "Static" };
+            _lightsRoot = new Node3D { Name = "Lights" };
+            AddChild(_staticRoot);
+            AddChild(_lightsRoot);
 
-        BuildGround();
+            if (Biome == WorldBiome.Farm)
+            {
+                BuildFarm();
+                return;
+            }
 
-        if (_useLogicalBlockPlans)
-        {
-            PlayerController player = GetParent()?.GetNodeOrNull<PlayerController>("Player");
-            Vector3 fallback = player != null
-                ? player.GlobalPosition
-                : new Vector3(-3f, 0f, 8f);
-            string profession = GetInitialProfessionForWorld();
-            _initialChunkPosition = WorldData.TryGetProfessionSpawn(profession, out WorldSpawnPoint spawn)
-                ? spawn.Position
-                : fallback;
-            _hasInitialChunkPosition = true;
-            IReadOnlyList<WorldChunkData> initialChunks =
-                WorldData.GetChunksAround(_initialChunkPosition, radius: 1);
-            foreach (WorldChunkData chunk in initialChunks)
-                BuildChunkVisuals(chunk);
-        }
-        else
-        {
+            BuildGround();
             for (int bx = -Radius; bx <= Radius; bx++)
             {
                 for (int bz = -Radius; bz <= Radius; bz++)
@@ -341,28 +330,99 @@ public partial class CityGenerator : Node3D
                         BuildBlock(bx, bz);
                 }
             }
+
+            BuildCurbMarkings();
+            BuildBikeLanes();
+            BuildStreetDrainage();
+            BuildStreetLamps();
+            BuildStreetSigns();
+            BuildPhoneBooths();
+            BuildHydrants();
+            BuildStreetProps();
+            BuildStrayDogs();
+            BuildParkedCars();
+            float legacyOutside = Radius * Period + Period * 0.5f + RoadWidth * 0.5f + 6f;
+            BuildRadioTower(new Vector3(-legacyOutside, 0f, -legacyOutside));
+            BuildBoundary();
+            BuildBillboards();
+            OptimizeVisibility(this);
+            return;
         }
 
-        BuildCurbMarkings();
-        BuildBikeLanes();
-        BuildStreetDrainage();
-        BuildStreetLamps();
-        BuildStreetSigns();
-        BuildPhoneBooths();
-        BuildHydrants();
-        BuildStreetProps();
-        BuildStrayDogs();
-        BuildParkedCars();
-        float outside = Radius * Period + Period * 0.5f + RoadWidth * 0.5f + 6f; // além da última rua
-        BuildRadioTower(new Vector3(-outside, 0f, -outside));
-        BuildBoundary();
-        BuildBillboards();
-        OptimizeVisibility(this);
-
-        if (_useLogicalBlockPlans)
+        SceneTree tree = GetTree();
+        bool previousPaused = tree.Paused;
+        try
         {
+            loading.SetProgress("Dados lógicos prontos", 1, 1);
+            await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+            tree.Paused = true;
+
+            loading.SetProgress("Carregando materiais e recursos...", 0, 1);
+            BuildResources();
+            BuildLandmarkResources();
+            _staticRoot = new Node3D { Name = "Static" };
+            _lightsRoot = new Node3D { Name = "Lights" };
+            AddChild(_staticRoot);
+            AddChild(_lightsRoot);
+            loading.SetProgress("Materiais e recursos carregados", 1, 1);
+            await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+
+            if (Biome == WorldBiome.Farm)
+            {
+                loading.SetProgress("Construindo o rancho", 0, 1);
+                BuildFarm();
+                loading.SetProgress("Rancho preparado", 1, 1);
+                await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+                return;
+            }
+
+            BuildGround();
             PlayerController player = GetParent()?.GetNodeOrNull<PlayerController>("Player");
+            Vector3 fallback = player != null ? player.GlobalPosition : new Vector3(-3f, 0f, 8f);
+            string profession = GetInitialProfessionForWorld();
+            _initialChunkPosition = WorldData.TryGetProfessionSpawn(profession, out WorldSpawnPoint spawn)
+                ? spawn.Position
+                : fallback;
+            _hasInitialChunkPosition = true;
+
+            IReadOnlyList<WorldChunkData> initialChunks =
+                WorldData.GetChunksAround(_initialChunkPosition, radius: 1);
+            int totalWork = Mathf.Max(1, initialChunks.Count + 3);
+            int completed = 1;
+            loading.SetProgress("Preparando o terreno", completed, totalWork);
+            await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+
+            foreach (WorldChunkData chunk in initialChunks)
+            {
+                BuildChunkVisuals(chunk);
+                completed++;
+                loading.SetProgress(
+                    $"Construindo região inicial ({chunk.Coordinate.X}, {chunk.Coordinate.Z})",
+                    completed, totalWork);
+                await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+            }
+
+            BuildCurbMarkings();
+            BuildBikeLanes();
+            BuildStreetDrainage();
+            BuildStreetLamps();
+            BuildStreetSigns();
+            BuildPhoneBooths();
+            BuildHydrants();
+            BuildStreetProps();
+            BuildStrayDogs();
+            BuildParkedCars();
+            float outside = Radius * Period + Period * 0.5f + RoadWidth * 0.5f + 6f;
+            BuildRadioTower(new Vector3(-outside, 0f, -outside));
+            BuildBoundary();
+            BuildBillboards();
+            OptimizeVisibility(this);
+            completed++;
+            loading.SetProgress("Preparando elementos globais", completed, totalWork);
+            await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+
             if (player != null)
+            {
                 AddChild(new WorldChunkManager
                 {
                     City = this,
@@ -370,6 +430,23 @@ public partial class CityGenerator : Node3D
                     InitialPosition = _initialChunkPosition,
                     HasInitialPosition = _hasInitialChunkPosition,
                 });
+            }
+
+            completed = totalWork;
+            loading.SetProgress("Mundo pronto", completed, totalWork);
+            await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+        }
+        catch (Exception ex)
+        {
+            GD.PushError($"Falha ao preparar o mundo: {ex}");
+            loading?.SetFailure("Falha ao preparar o mundo.");
+            await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+        }
+        finally
+        {
+            if (GodotObject.IsInstanceValid(loading))
+                loading.QueueFree();
+            tree.Paused = previousPaused;
         }
     }
 
