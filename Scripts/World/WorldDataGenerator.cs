@@ -24,6 +24,9 @@ public static class WorldDataGenerator
     private const uint ParkingLayoutStream = 0x5041524C;
     private const uint ParkingCarStream = 0x50434152;
     private const uint FarmSiteStream = 0x4641524D;
+    private const uint FarmTreeStream = 0x46545245;
+    private const uint FarmTreeVisualStream = 0x46545649;
+    private const uint FarmReedStream = 0x46524545;
     private const uint StoreBrandStream = 0x53544252;
     private const uint BlockVisualStream = 0x56495355;
     private const uint BlockDecorationStream = 0x4445434F;
@@ -65,6 +68,8 @@ public static class WorldDataGenerator
         var blocks = new List<WorldBlockData>();
         var deliveryPoints = new List<WorldDeliveryPointData>();
         var farmSites = new List<WorldFarmSitePlan>();
+        var farmTrees = new List<WorldFarmTreePlan>();
+        var farmReeds = new List<WorldFarmReedPlan>();
         WorldServiceData services = WorldServiceData.Empty();
         var spawnPoints = new Dictionary<string, WorldSpawnPoint>(StringComparer.Ordinal);
 
@@ -140,13 +145,19 @@ public static class WorldDataGenerator
             progress?.Invoke(new WorldGenerationProgress("Calculando sítios e destinos do rancho", 0, 1));
             BuildFarmSitePlans(seed, farmExtent, farmNames, farmSites, deliveryPoints);
             progress?.Invoke(new WorldGenerationProgress("Calculando sítios e destinos do rancho", 1, 1));
+
+            progress?.Invoke(new WorldGenerationProgress("Planejando árvores e vegetação do rancho", 0, 1));
+            BuildFarmTreePlans(seed, farmExtent, farmSites, farmTrees);
+            BuildFarmReedPlans(seed, farmReeds);
+            progress?.Invoke(new WorldGenerationProgress("Planejando árvores e vegetação do rancho", 1, 1));
+
             BuildFarmSpawnPoints(spawnPoints, blockSize);
         }
 
         progress?.Invoke(new WorldGenerationProgress("Preparando pontos de início", 1, 1));
         return new WorldGenerationData(
             seed, CurrentGeneratorVersion, biome, chunkSize, centeredGrid,
-            chunks, blocks, deliveryPoints, farmSites, services, spawnPoints);
+            chunks, blocks, deliveryPoints, farmSites, farmTrees, farmReeds, services, spawnPoints);
     }
 
     private static void BuildCityBlockPlans(
@@ -851,17 +862,7 @@ public static class WorldDataGenerator
         List<WorldFarmSitePlan> sites,
         List<WorldDeliveryPointData> deliveryPoints)
     {
-        var roads = new List<FarmRoadPlan>
-        {
-            new("Estrada do Rancho", new Vector2(0f, 14f), new Vector2(0f, 300f), 8f),
-            new("Estrada da Cooperativa", new Vector2(14f, 0f), new Vector2(300f, 0f), 8f),
-            new("Estrada Velha", new Vector2(-300f, 130f), new Vector2(300f, 130f), 8f),
-            new("Estrada do Açude", new Vector2(-185f, -265f), new Vector2(-185f, 130f), 8f),
-            new("Estrada da Serra", new Vector2(-185f, -265f), new Vector2(225f, -265f), 8f),
-            new("Estrada da Serra", new Vector2(225f, -265f), new Vector2(225f, 0f), 8f),
-            new("Estrada do Pequi", new Vector2(150f, 130f), new Vector2(150f, 300f), 8f),
-            new("Trilha do Pesqueiro", new Vector2(-185f, -120f), new Vector2(-125f, -120f), 5f),
-        };
+        List<FarmRoadPlan> roads = CreateFarmRoadPlans();
 
         string[] fallbackNames = farmNames is { Count: > 0 }
             ? CopyNames(farmNames)
@@ -954,6 +955,123 @@ public static class WorldDataGenerator
             }
         }
 
+    }
+
+    private static List<FarmRoadPlan> CreateFarmRoadPlans()
+    {
+        return new List<FarmRoadPlan>
+        {
+            new("Estrada do Rancho", new Vector2(0f, 14f), new Vector2(0f, 300f), 8f),
+            new("Estrada da Cooperativa", new Vector2(14f, 0f), new Vector2(300f, 0f), 8f),
+            new("Estrada Velha", new Vector2(-300f, 130f), new Vector2(300f, 130f), 8f),
+            new("Estrada do Açude", new Vector2(-185f, -265f), new Vector2(-185f, 130f), 8f),
+            new("Estrada da Serra", new Vector2(-185f, -265f), new Vector2(225f, -265f), 8f),
+            new("Estrada da Serra", new Vector2(225f, -265f), new Vector2(225f, 0f), 8f),
+            new("Estrada do Pequi", new Vector2(150f, 130f), new Vector2(150f, 300f), 8f),
+            new("Trilha do Pesqueiro", new Vector2(-185f, -120f), new Vector2(-125f, -120f), 5f),
+        };
+    }
+
+    private static void BuildFarmTreePlans(
+        int worldSeed,
+        float farmExtent,
+        IReadOnlyList<WorldFarmSitePlan> farmSites,
+        List<WorldFarmTreePlan> destination)
+    {
+        List<FarmRoadPlan> roads = CreateFarmRoadPlans();
+        var occupied = new List<(Vector2 Center, float Radius)>
+        {
+            (Vector2.Zero, 34f),
+            (new Vector2(-95f, -120f), 42f),
+            (new Vector2(17f, 146f), 18f),
+            (new Vector2(-14f, 140f), 10f),
+            (new Vector2(-10f, 26f), 8f),
+            (new Vector2(36f, 146f), 14f),
+        };
+        foreach (WorldFarmSitePlan site in farmSites)
+            occupied.Add((new Vector2(site.Center.X, site.Center.Z), site.OccupiedRadius));
+
+        var rng = new RandomNumberGenerator
+        {
+            Seed = DeriveChunkSeed(worldSeed, new WorldChunkCoordinate(0, 0), FarmTreeStream),
+        };
+
+        int placed = 0;
+        for (int attempt = 0; attempt < 1600 && placed < 900; attempt++)
+        {
+            Vector2 point = new(
+                rng.RandfRange(-farmExtent + 6f, farmExtent - 6f),
+                rng.RandfRange(-farmExtent + 6f, farmExtent - 6f));
+            if (DistanceToFarmRoads(point, roads) < 4f ||
+                !IsFarmSiteFree(point, 3f, farmExtent, occupied))
+                continue;
+
+            Vector3 basePosition = new(point.X, 0f, point.Y);
+            if (rng.Randf() < 0.05f)
+            {
+                int variant = rng.RandiRange(0, 2) + AssetProps.Hash(basePosition, 3) % 3;
+                float rotation = rng.Randf() * Mathf.Tau;
+                float scale = rng.RandfRange(1.2f, 1.8f) * 0.3f;
+                destination.Add(new WorldFarmTreePlan(basePosition, false, true, variant,
+                    rotation, scale, 0UL));
+            }
+            else
+            {
+                bool pine = rng.Randf() < 0.45f;
+                ulong visualSeed = DeriveChunkSeed(
+                    worldSeed,
+                    new WorldChunkCoordinate(placed, 1),
+                    FarmTreeVisualStream);
+                destination.Add(new WorldFarmTreePlan(basePosition, pine, false, 0,
+                    0f, 1f, visualSeed));
+            }
+
+            placed++;
+        }
+
+        // Mata fechada na borda: preserva o mesmo contorno de quatro lados do gerador visual.
+        for (float t = -farmExtent; t <= farmExtent; t += 7f)
+        {
+            foreach (Vector2 edgePoint in new[]
+            {
+                new Vector2(t, -farmExtent),
+                new Vector2(t, farmExtent),
+                new Vector2(-farmExtent, t),
+                new Vector2(farmExtent, t),
+            })
+            {
+                Vector2 jitter = new(rng.RandfRange(-2.5f, 2.5f), rng.RandfRange(-2.5f, 2.5f));
+                bool pine = rng.Randf() < 0.6f;
+                ulong visualSeed = DeriveChunkSeed(
+                    worldSeed,
+                    new WorldChunkCoordinate(destination.Count, 2),
+                    FarmTreeVisualStream);
+                destination.Add(new WorldFarmTreePlan(
+                    new Vector3(edgePoint.X + jitter.X, 0f, edgePoint.Y + jitter.Y),
+                    pine, false, 0, 0f, 1f, visualSeed));
+            }
+        }
+    }
+
+    private static void BuildFarmReedPlans(int worldSeed, List<WorldFarmReedPlan> destination)
+    {
+        var rng = new RandomNumberGenerator
+        {
+            Seed = DeriveChunkSeed(worldSeed, new WorldChunkCoordinate(-1, -1), FarmReedStream),
+        };
+        Vector3 lakeCenter = new(-95f, 0f, -120f);
+        const float lakeRadius = 32f;
+        for (int i = 0; i < 70; i++)
+        {
+            float angle = rng.Randf() * Mathf.Tau;
+            float radius = lakeRadius + rng.RandfRange(-1.2f, 1.5f);
+            float height = rng.RandfRange(0.6f, 1.4f);
+            Vector3 position = lakeCenter + new Vector3(
+                Mathf.Cos(angle) * radius,
+                height * 0.5f,
+                Mathf.Sin(angle) * radius);
+            destination.Add(new WorldFarmReedPlan(position, height));
+        }
     }
 
     private static string[] CopyNames(IReadOnlyList<string> names)
