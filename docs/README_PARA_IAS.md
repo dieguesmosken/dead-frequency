@@ -23,6 +23,7 @@ Inverse Kinematics ou otimização de cenário no **Dead Frequency**. Vale para 
 | [`tech/01_ARQUITETURA_MODO_HISTORIA.md`](tech/01_ARQUITETURA_MODO_HISTORIA.md) | `StoryManager`, `JobEvents`, `ChapterTransitionZone` e o save |
 | [`tech/02_OTIMIZACAO_IK_E_MULTIPLAYER.md`](tech/02_OTIMIZACAO_IK_E_MULTIPLAYER.md) | IK nos personagens, MultiMesh/oclusão e o que muda (ou não) no multiplayer |
 | [`ASSETS_E_SONS.md`](ASSETS_E_SONS.md) | De onde baixar assets e sons (só CC0/compatível) e onde publicamos os nossos |
+| [`radio/ANUNCIOS_966.md`](radio/ANUNCIOS_966.md) | Roteiros dos anúncios, eventos, comunicados e vinhetas da Rádio 96.6 (com o CSV para gerar os áudios por TTS) |
 | [`templates/`](templates/README.md) | Modelos de código C# prontos para adaptar (`.cs.txt`, não compilam) |
 
 O planejamento com datas e versões fica no [`ROADMAP.md`](../ROADMAP.md), seção "Modo História e novas fases".
