@@ -16,6 +16,7 @@ public partial class GariJob : JobBase
 
     private readonly List<Node3D> _bags = new();
     private readonly List<Node3D> _dumpsters = new();
+    private readonly Dictionary<Node3D, Vector3> _bagPinPositions = new();
     private int _carrying;      // total na mão (sacos + sucata)
     private int _scrap;         // quantos desses são sucata
     private Node3D _primo;      // balança do Conserta-Tudo do Primo (se a fase tiver)
@@ -62,6 +63,9 @@ public partial class GariJob : JobBase
 
     public override void _ExitTree()
     {
+        foreach (Vector3 position in _bagPinPositions.Values)
+            City?.UnpinChunkForPosition(position);
+        _bagPinPositions.Clear();
         foreach (Node3D n in _bags)
             if (IsInstanceValid(n))
                 n.QueueFree();
@@ -109,6 +113,8 @@ public partial class GariJob : JobBase
             _ => PickBag(captured),
             p => _carrying < MaxCarry && !p.IsHolding && p.CurrentVehicle == null);
         _bags.Add(bag);
+        if (City.PinChunkForPosition(pos))
+            _bagPinPositions[bag] = pos;
     }
 
     private void SpawnScrap(Vector3 pos)
@@ -149,6 +155,8 @@ public partial class GariJob : JobBase
             return;
         bool scrap = bag.HasMeta("scrap");
         _bags.Remove(bag);
+        if (_bagPinPositions.Remove(bag, out Vector3 pinnedPosition))
+            City.UnpinChunkForPosition(pinnedPosition);
         bag.QueueFree();
         _carrying++;
         if (scrap)

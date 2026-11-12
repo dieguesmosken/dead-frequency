@@ -190,7 +190,8 @@ public partial class PlayerController : CharacterBody3D
             SpotRange = 22f,
             SpotAngle = 24f,
             SpotAttenuation = 0.9f,
-            ShadowEnabled = true,
+            // Sombras da lanterna são desativadas no preset Baixo para reduzir custo de GPU.
+            ShadowEnabled = (GameSettings.Instance?.Quality ?? 2) >= 1,
             Position = new Vector3(0.15f, -0.1f, 0f),
         };
         GetAimCamera().AddChild(_flashlight);
@@ -218,6 +219,8 @@ public partial class PlayerController : CharacterBody3D
         _invertY = s.InvertY;
         if (_camera != null)
             _camera.Fov = s.Fov;
+        if (_flashlight != null)
+            _flashlight.ShadowEnabled = s.Quality >= 1;
     }
 
     // ---------------- Input ----------------

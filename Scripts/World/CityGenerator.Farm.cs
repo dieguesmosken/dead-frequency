@@ -1,3 +1,4 @@
+using System;
 // Scripts/World/CityGenerator.Farm.cs
 // Fase 2 — Rancho. Mesmo CityGenerator, outro bioma: estradas de terra (desenhadas pelo shader
 // do chão), sítios e fazendas com casa, celeiro, silo, plantação, curral, trator e cata-vento,
@@ -37,6 +38,8 @@ public partial class CityGenerator
         "Sítio Antena Torta", "Rancho do Chiado", "Fazenda Estática", "Sítio Galinha Morta",
         "Fazenda Vaca Mugindo", "Chácara do Seu Quinzinho", "Sítio Onda Curta", "Fazenda Válvula Queimada",
     };
+    internal static IReadOnlyList<string> FarmNameCatalog => FarmNames;
+
 
     private static readonly Color[] HousePalette =
     {
@@ -54,6 +57,7 @@ public partial class CityGenerator
 
     private readonly Dictionary<string, Batch> _batches = new();
     private StaticBody3D _farmBody;
+    private StaticBody3D _activeFarmBody;
     private StandardMaterial3D _farmWindow, _roofRed, _roofBrown, _barnRed, _barnWhite, _metalSilo, _hay, _cornGreen,
         _soil, _cowWhite, _cowBlack, _pigPink, _waterMat, _tractorGreen, _tractorRed, _treeTint, _wheelBlack, _reed;
     private PrismMesh _roofPrism;
@@ -82,13 +86,13 @@ public partial class CityGenerator
     private void BuildFarm()
     {
         BuildFarmResources();
-        _farmBody = new StaticBody3D { Name = "FarmCollision", CollisionLayer = 1, CollisionMask = 0 };
+        _farmBody = new StaticBody3D { Name = "FarmCollision_Global", CollisionLayer = 1, CollisionMask = 0 };
         _staticRoot.AddChild(_farmBody);
 
         DefineFarmRoads();
         BuildFarmGround();
 
-        // Cooperativa no centro: o mesmo galpão/escritório da cidade, com cerca de madeira.
+        // Cooperativa, lago, capela e outros pontos centrais permanecem como estrutura global leve.
         BuildDepot(farm: true);
         _occupied.Add((Vector2.Zero, 34f));
         _occupied.Add((new Vector2(_lakeCenter.X, _lakeCenter.Z), LakeRadius + 10f));
@@ -101,19 +105,187 @@ public partial class CityGenerator
         _occupied.Add((new Vector2(36f, 146f), 14f)); // cemitério
         BuildFarmProps();
 
-        PlaceFarms();
+        if (_useLogicalWorldData && WorldData != null)
+        {
+            // Todos os sítios reservam espaço desde o início, inclusive os que ainda não têm mesh.
+            foreach (WorldFarmSitePlan site in WorldData.FarmSites)
+                _occupied.Add((new Vector2(site.Center.X, site.Center.Z), site.OccupiedRadius));
+        }
+        else
+        {
+            PlaceFarms();
+        }
+
         BuildRoadLamps();
         BuildRoadSigns();
         BuildFarmPhones();
-        BuildTrees();
-        BuildUndergrowth();
-        BuildFarmGrass();
+
+        // No modo lógico, sítios, árvores, mato e capim são renderizados sob demanda por chunk.
+        if (!_useLogicalWorldData)
+        {
+            BuildTrees();
+            BuildUndergrowth();
+            BuildFarmGrass();
+        }
+
         BuildFarmBoundary();
         BuildRadioTower(new Vector3(-FarmExtent + 25f, 0f, -FarmExtent + 25f));
 
         FlushBatches(_staticRoot);
         OptimizeVisibility(this);
         AddChild(new Mosquitoes { Name = "Pernilongos" });
+    }
+
+    /// <summary>Renderiza apenas os sítios e a vegetação que pertencem ao chunk solicitado.</summary>
+    private bool BuildFarmChunkVisuals(WorldChunkData chunk)
+    {
+        if (Biome != WorldBiome.Farm || WorldData == null || IsChunkVisualized(chunk.Coordinate))
+            return false;
+
+        var root = new Node3D { Name = $"FarmChunk_{chunk.Coordinate.X}_{chunk.Coordinate.Z}" };
+        _staticRoot.AddChild(root);
+        _chunkRoots[chunk.Coordinate] = root;
+
+        Node3D previousRoot = _activeChunkRoot;
+        WorldChunkCoordinate? previousCoordinate = _activeChunkCoordinate;
+        StaticBody3D previousFarmBody = _activeFarmBody;
+        RandomNumberGenerator previousRng = _rng;
+        _activeChunkRoot = root;
+        _activeChunkCoordinate = chunk.Coordinate;
+        _activeFarmBody = new StaticBody3D
+        {
+            Name = $"FarmCollision_{chunk.Coordinate.X}_{chunk.Coordinate.Z}",
+            CollisionLayer = 1,
+            CollisionMask = 0,
+        };
+        root.AddChild(_activeFarmBody);
+
+        try
+        {
+            foreach (WorldFarmSitePlan site in WorldData.FarmSites)
+            {
+                if (GetFarmPlanChunkCoordinate(site.Center) != chunk.Coordinate)
+                    continue;
+
+                _rng = new RandomNumberGenerator { Seed = site.VisualSeed };
+                BuildFarmstead(
+                    site.GatePosition,
+                    site.TowardRoad,
+                    site.Width,
+                    site.Depth,
+                    site.Name,
+                    site.Address);
+            }
+
+            foreach (WorldFarmTreePlan treePlan in WorldData.FarmTrees)
+            {
+                if (GetFarmPlanChunkCoordinate(treePlan.Position) != chunk.Coordinate)
+                    continue;
+
+                RenderFarmTreePlan(treePlan);
+            }
+
+            foreach (WorldFarmUndergrowthPlan plan in WorldData.FarmUndergrowth)
+            {
+                if (GetFarmPlanChunkCoordinate(plan.Position) != chunk.Coordinate)
+                    continue;
+
+                if (NatureKit.Get(plan.Model) is not Mesh mesh)
+                    continue;
+
+                var transform = new Transform3D(
+                    new Basis(Vector3.Up, plan.RotationY) * Basis.FromScale(Vector3.One * plan.Scale),
+                    plan.Position);
+                AddInstance("qg_" + plan.Model, mesh, null, transform, Colors.White);
+            }
+
+            BuildFarmGrassForChunk(chunk);
+            FlushBatches(root);
+            OptimizeVisibility(root);
+            if (_chunkLightRoots.TryGetValue(chunk.Coordinate, out Node3D chunkLights) &&
+                GodotObject.IsInstanceValid(chunkLights))
+                OptimizeVisibility(chunkLights);
+            ChunkVisualized?.Invoke(chunk.Coordinate);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            GD.PushError($"Falha ao construir chunk rural {chunk.Coordinate.X},{chunk.Coordinate.Z}: {ex}");
+            _batches.Clear();
+            UnloadChunkVisuals(chunk.Coordinate);
+            return false;
+        }
+        finally
+        {
+            _activeChunkRoot = previousRoot;
+            _activeChunkCoordinate = previousCoordinate;
+            _activeFarmBody = previousFarmBody;
+            _rng = previousRng;
+        }
+    }
+
+    private WorldChunkCoordinate GetFarmPlanChunkCoordinate(Vector3 position)
+    {
+        WorldChunkCoordinate coordinate = WorldData.GetChunkCoordinate(position);
+        if (WorldData.TryGetChunk(coordinate, out _))
+            return coordinate;
+
+        // Árvores da mata de borda recebem jitter e podem passar alguns centímetros
+        // do limite lógico do terreno. Atribuímos esses elementos ao chunk de borda mais próximo.
+        int min = Mathf.FloorToInt(-FarmExtent / WorldData.ChunkSize);
+        int max = Mathf.CeilToInt(FarmExtent / WorldData.ChunkSize) - 1;
+        return new WorldChunkCoordinate(
+            Mathf.Clamp(coordinate.X, min, max),
+            Mathf.Clamp(coordinate.Z, min, max));
+    }
+
+    private void RenderFarmTreePlan(WorldFarmTreePlan treePlan)
+    {
+        if (treePlan.Dead)
+        {
+            string model = NatureKit.DeadTrees[Mathf.PosMod(treePlan.VariantIndex, NatureKit.DeadTrees.Length)];
+            if (NatureKit.Get(model) is Mesh deadMesh)
+            {
+                var transform = new Transform3D(
+                    new Basis(Vector3.Up, treePlan.RotationY) *
+                    Basis.FromScale(Vector3.One * treePlan.Scale),
+                    treePlan.Position);
+                AddInstance("q_" + model, deadMesh, null, transform, Colors.White);
+            }
+
+            AddShape(
+                new CylinderShape3D { Radius = 0.35f, Height = 4f },
+                new Transform3D(Basis.Identity, treePlan.Position + new Vector3(0f, 2f, 0f)));
+            return;
+        }
+
+        RandomNumberGenerator previousRng = _rng;
+        _rng = new RandomNumberGenerator { Seed = treePlan.VisualSeed };
+        try
+        {
+            Tree(new Vector2(treePlan.Position.X, treePlan.Position.Z), treePlan.Pine);
+        }
+        finally
+        {
+            _rng = previousRng;
+        }
+    }
+
+    private void BuildFarmGrassForChunk(WorldChunkData chunk)
+    {
+        Vector3 center = chunk.Center;
+        Vector2 size = chunk.Size;
+        GrassTufts.Fill(
+            _activeChunkRoot ?? _staticRoot,
+            center,
+            size,
+            1.25f,
+            new Color(0.95f, 0.9f, 0.7f),
+            point => point.X >= chunk.Min.X && point.X < chunk.Max.X
+                && point.Y >= chunk.Min.Z && point.Y < chunk.Max.Z
+                && Mathf.Max(Mathf.Abs(point.X), Mathf.Abs(point.Y)) > 20f
+                && DistanceToRoads(point) > 1.2f
+                && IsFree(point, 0.3f));
     }
 
     private void BuildFarmResources()
@@ -239,6 +411,31 @@ public partial class CityGenerator
 
     private void PlaceFarms()
     {
+        if (_useLogicalWorldData && WorldData != null)
+        {
+            RandomNumberGenerator previousRng = _rng;
+            try
+            {
+                foreach (WorldFarmSitePlan site in WorldData.FarmSites)
+                {
+                    _occupied.Add((new Vector2(site.Center.X, site.Center.Z), site.OccupiedRadius));
+                    _rng = new RandomNumberGenerator { Seed = site.VisualSeed };
+                    BuildFarmstead(
+                        site.GatePosition,
+                        site.TowardRoad,
+                        site.Width,
+                        site.Depth,
+                        site.Name,
+                        site.Address);
+                }
+            }
+            finally
+            {
+                _rng = previousRng;
+            }
+            return;
+        }
+
         var names = new List<string>(FarmNames);
         for (int i = names.Count - 1; i > 0; i--)
         {
@@ -283,12 +480,13 @@ public partial class CityGenerator
     private void BuildFarmstead(Vector3 gate, Vector3 towardRoad, float width, float depth, string name, string address)
     {
         var farm = new Node3D { Name = "Farm_" + _deliveryPoints.Count, Position = gate, Rotation = new Vector3(0f, Mathf.Atan2(towardRoad.X, towardRoad.Z), 0f) };
-        _staticRoot.AddChild(farm);
+        (_activeChunkRoot ?? _staticRoot).AddChild(farm);
         Transform3D xf = farm.Transform;
         float hw = width * 0.5f;
 
-        // Ponto de entrega logo depois da porteira.
-        _deliveryPoints.Add(new DeliveryPoint { Position = xf * new Vector3(0f, 0f, -2.5f), Address = address });
+        // Em mundos lógicos o destino já foi registrado antes de carregar as meshes.
+        if (!_useLogicalWorldData)
+            _deliveryPoints.Add(new DeliveryPoint { Position = xf * new Vector3(0f, 0f, -2.5f), Address = address });
 
         // Cerca com porteira aberta na frente.
         Fence(xf, new Vector3(-hw, 0f, 0f), new Vector3(-4f, 0f, 0f));
@@ -649,13 +847,27 @@ public partial class CityGenerator
         });
         // Não deixa a van entrar no lago: borda invisível (o barro e as taboas mostram onde é).
         AddShape(new CylinderShape3D { Radius = LakeRadius - 1f, Height = 1.2f }, new Transform3D(Basis.Identity, _lakeCenter + new Vector3(0f, 0.6f, 0f)));
-        for (int i = 0; i < 70; i++)
+        if (_useLogicalWorldData && WorldData != null)
         {
-            float a = _rng.Randf() * Mathf.Tau;
-            float r = LakeRadius + _rng.RandfRange(-1.2f, 1.5f);
-            float hgt = _rng.RandfRange(0.6f, 1.4f);
-            var reed = new Transform3D(Basis.FromScale(new Vector3(0.12f, hgt, 0.12f)), _lakeCenter + new Vector3(Mathf.Cos(a) * r, hgt * 0.5f, Mathf.Sin(a) * r));
-            AddInstance("reed", _unitBox, _cornGreen, reed, new Color(0.8f, 0.9f, 0.6f));
+            foreach (WorldFarmReedPlan reedPlan in WorldData.FarmReeds)
+            {
+                var reed = new Transform3D(
+                    Basis.FromScale(new Vector3(0.12f, reedPlan.Height, 0.12f)),
+                    reedPlan.Position);
+                AddInstance("reed", _unitBox, _cornGreen, reed, new Color(0.8f, 0.9f, 0.6f));
+            }
+        }
+        else
+        {
+            for (int i = 0; i < 70; i++)
+            {
+                float a = _rng.Randf() * Mathf.Tau;
+                float r = LakeRadius + _rng.RandfRange(-1.2f, 1.5f);
+                float hgt = _rng.RandfRange(0.6f, 1.4f);
+                var reed = new Transform3D(Basis.FromScale(new Vector3(0.12f, hgt, 0.12f)),
+                    _lakeCenter + new Vector3(Mathf.Cos(a) * r, hgt * 0.5f, Mathf.Sin(a) * r));
+                AddInstance("reed", _unitBox, _cornGreen, reed, new Color(0.8f, 0.9f, 0.6f));
+            }
         }
 
         // Píer do pesqueiro, virado para a trilha (lado -X).
@@ -683,11 +895,14 @@ public partial class CityGenerator
         AddBox(boat, new Vector3(0f, 0.2f, 0f), new Vector3(1.2f, 0.4f, 3f), _signWhite, false);
         AddBox(boat, new Vector3(0f, 0.32f, 0f), new Vector3(1.0f, 0.2f, 2.8f), _signBlue, false);
 
-        _deliveryPoints.Add(new DeliveryPoint
+        if (!_useLogicalWorldData)
         {
-            Position = _lakeCenter + new Vector3(-LakeRadius - 4f, 0f, 0f),
-            Address = "Pesqueiro Lambari Feliz · Trilha do Pesqueiro",
-        });
+            _deliveryPoints.Add(new DeliveryPoint
+            {
+                Position = _lakeCenter + new Vector3(-LakeRadius - 4f, 0f, 0f),
+                Address = "Pesqueiro Lambari Feliz · Trilha do Pesqueiro",
+            });
+        }
         var poi = new Node3D { Position = new Vector3(-LakeRadius - 4f, 0f, 0f) };
         lake.AddChild(poi);
         MarkPoi(poi, "P", new Color(0.2f, 0.55f, 0.85f));
@@ -730,13 +945,13 @@ public partial class CityGenerator
     {
         const float height = 6.2f;
         var lamp = new Node3D { Position = basePos };
-        _staticRoot.AddChild(lamp);
+        (_activeChunkRoot ?? _staticRoot).AddChild(lamp);
         AddCylinder(lamp, new Vector3(0f, height * 0.5f, 0f), 0.12f, height, _trunk);
         Vector3 arm = towardRoad.Normalized();
         AddBox(lamp, arm * 0.7f + new Vector3(0f, height - 0.2f, 0f), new Vector3(Mathf.Abs(arm.X) * 1.4f + 0.08f, 0.08f, Mathf.Abs(arm.Z) * 1.4f + 0.08f), _trunk, false);
         AddBox(lamp, arm * 1.35f + new Vector3(0f, height - 0.35f, 0f), new Vector3(0.45f, 0.14f, 0.45f), _lampHead, false);
         AddShape(new CylinderShape3D { Radius = 0.15f, Height = height }, new Transform3D(Basis.Identity, basePos + new Vector3(0f, height * 0.5f, 0f)));
-        _lightsRoot.AddChild(new OmniLight3D
+        ActiveLightsRoot.AddChild(new OmniLight3D
         {
             Position = basePos + arm * 1.35f + new Vector3(0f, height - 0.7f, 0f),
             LightColor = new Color(1f, 0.75f, 0.45f),
@@ -815,6 +1030,40 @@ public partial class CityGenerator
 
     private void BuildTrees()
     {
+        if (_useLogicalWorldData && WorldData != null)
+        {
+            foreach (WorldFarmTreePlan treePlan in WorldData.FarmTrees)
+            {
+                Vector2 position = new(treePlan.Position.X, treePlan.Position.Z);
+                if (treePlan.Dead)
+                {
+                    string model = NatureKit.DeadTrees[Mathf.PosMod(treePlan.VariantIndex, NatureKit.DeadTrees.Length)];
+                    var transform = new Transform3D(
+                        new Basis(Vector3.Up, treePlan.RotationY) *
+                        Basis.FromScale(Vector3.One * treePlan.Scale),
+                        treePlan.Position);
+                    if (NatureKit.Get(model) is Mesh deadMesh)
+                        AddInstance("q_" + model, deadMesh, null, transform, Colors.White);
+                    AddShape(new CylinderShape3D { Radius = 0.35f, Height = 4f },
+                        new Transform3D(Basis.Identity, treePlan.Position + new Vector3(0f, 2f, 0f)));
+                }
+                else
+                {
+                    RandomNumberGenerator previousRng = _rng;
+                    _rng = new RandomNumberGenerator { Seed = treePlan.VisualSeed };
+                    try
+                    {
+                        Tree(position, treePlan.Pine);
+                    }
+                    finally
+                    {
+                        _rng = previousRng;
+                    }
+                }
+            }
+            return;
+        }
+
         int count = 0;
         for (int i = 0; i < 1600 && count < 900; i++)
         {
@@ -884,6 +1133,21 @@ public partial class CityGenerator
     /// <summary>Capim, samambaias, moitas, flores e pedras espalhados (sorteio próprio: não mexe no mapa).</summary>
     private void BuildUndergrowth()
     {
+        if (_useLogicalWorldData && WorldData != null)
+        {
+            foreach (WorldFarmUndergrowthPlan plan in WorldData.FarmUndergrowth)
+            {
+                if (NatureKit.Get(plan.Model) is not Mesh mesh)
+                    return;
+
+                var transform = new Transform3D(
+                    new Basis(Vector3.Up, plan.RotationY) * Basis.FromScale(Vector3.One * plan.Scale),
+                    plan.Position);
+                AddInstance("qg_" + plan.Model, mesh, null, transform, Colors.White);
+            }
+            return;
+        }
+
         var rng = new RandomNumberGenerator { Seed = 96601 };
         int placed = 0;
         for (int i = 0; i < 9000 && placed < 2600; i++)
@@ -929,6 +1193,33 @@ public partial class CityGenerator
         var cap = Flat(new Color(0.38f, 0.36f, 0.33f), 0.95f);
         var mountainMat = Flat(new Color(0.22f, 0.33f, 0.17f), 1f);
         var cone = new CylinderMesh { TopRadius = 0.05f, BottomRadius = 0.5f, Height = 1f, RadialSegments = 7, Rings = 2 };
+
+        if (_useLogicalWorldData && WorldData != null)
+        {
+            foreach (WorldFarmBoundaryPlan plan in WorldData.FarmBoundary)
+            {
+                switch (plan.Kind)
+                {
+                    case "wall":
+                        AddInstance("muro", _unitBox, stone,
+                            new Transform3D(Basis.FromScale(plan.Scale), plan.Position), plan.Tint);
+                        break;
+                    case "pillar":
+                        AddInstance("muro_pilar", _unitBox, cap,
+                            new Transform3D(Basis.FromScale(plan.Scale), plan.Position), Colors.White);
+                        break;
+                    case "mountain":
+                        AddInstance("serra", cone, mountainMat,
+                            new Transform3D(
+                                new Basis(Vector3.Up, plan.RotationY) * Basis.FromScale(plan.Scale),
+                                plan.Position),
+                            plan.Tint);
+                        break;
+                }
+            }
+            return;
+        }
+
         float wallX = limit - 0.6f;
         foreach ((Vector3 dir, Vector3 along) in new[] { (Vector3.Right, Vector3.Back), (Vector3.Left, Vector3.Back), (Vector3.Back, Vector3.Right), (Vector3.Forward, Vector3.Right) })
         {
@@ -982,7 +1273,7 @@ public partial class CityGenerator
 
     private void AddShape(Shape3D shape, Transform3D transform)
     {
-        _farmBody.AddChild(new CollisionShape3D { Shape = shape, Transform = transform });
+        (_activeFarmBody ?? _farmBody).AddChild(new CollisionShape3D { Shape = shape, Transform = transform });
     }
 
     private void AddInstance(string key, Mesh mesh, Material material, Transform3D transform, Color color)

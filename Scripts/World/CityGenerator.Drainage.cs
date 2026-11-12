@@ -8,6 +8,9 @@ public partial class CityGenerator
 
     private void BuildStreetDrainage()
     {
+        if (_useLogicalBlockPlans)
+            return; // Drenos e bueiros são criados por chunk.
+
         var root = new Node3D { Name = "StreetDrainage" };
         _staticRoot.AddChild(root);
 
@@ -55,6 +58,50 @@ public partial class CityGenerator
                 BuildManhole(root, manholePosition, manholeRim, grateDark);
             }
         }
+    }
+
+    private void BuildStreetDrainageForBlock(int bx, int bz)
+    {
+        var root = new Node3D { Name = $"StreetDrainage_{bx}_{bz}" };
+        (_activeChunkRoot ?? _staticRoot).AddChild(root);
+
+        StandardMaterial3D grateDark = Flat(new Color(0.025f, 0.03f, 0.03f), 0.65f);
+        StandardMaterial3D grateMetal = Flat(new Color(0.36f, 0.38f, 0.36f), 0.55f);
+        StandardMaterial3D manholeRim = Flat(new Color(0.28f, 0.28f, 0.26f), 0.75f);
+        AudioStreamWav waterFlow = _waterFlow ??= CreateWaterFlow();
+
+        Vector3 blockCenter = BlockCenter(bx, bz);
+        int hash = AssetProps.Hash(blockCenter, 53);
+        if (hash % 2 == 0)
+        {
+            int sideIndex = hash / 3 % 4;
+            Vector3 outward = sideIndex switch
+            {
+                0 => Vector3.Right,
+                1 => Vector3.Left,
+                2 => Vector3.Back,
+                _ => Vector3.Forward,
+            };
+            Vector3 along = sideIndex switch
+            {
+                0 => Vector3.Back,
+                1 => Vector3.Forward,
+                2 => Vector3.Right,
+                _ => Vector3.Left,
+            };
+            float alongOffset = (hash / 12 % 11 - 5) * 1.1f;
+            Vector3 position = blockCenter
+                + outward * (BlockSize * 0.5f + 0.025f)
+                + along * alongOffset
+                + Vector3.Up * (CurbHeight * 0.5f);
+            BuildStormDrain(root, position, outward, grateDark, grateMetal, waterFlow);
+        }
+
+        float manholeOffset = (hash / 97 % 9 - 4) * 1.25f;
+        Vector3 manholePosition = blockCenter
+            + Vector3.Back * (BlockSize * 0.5f + RoadWidth * 0.5f)
+            + Vector3.Right * manholeOffset;
+        BuildManhole(root, manholePosition, manholeRim, grateDark);
     }
 
     private void BuildStormDrain(Node3D parent, Vector3 position, Vector3 outward, Material dark, Material metal, AudioStreamWav waterFlow)

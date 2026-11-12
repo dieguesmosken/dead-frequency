@@ -22,6 +22,11 @@ public partial class TaxiJob : JobBase
 
     private int _pickup = -1;
     private int _dest = -1;
+    private Vector3 _pickupPinPosition;
+    private Vector3 _destPinPosition;
+    private bool _hasPickupPin;
+    private bool _hasDestPin;
+    private readonly System.Collections.Generic.List<Vector3> _pendingPassengerPins = new();
     private bool _riding;
     private CharacterModel _passenger;
     private Node3D _marker;
@@ -48,17 +53,42 @@ public partial class TaxiJob : JobBase
         if (_rideVan != null && IsInstanceValid(_rideVan))
             _rideVan.Crashed -= OnCrash;
         JobMarkers.Free(ref _marker);
+        ReleasePickupPin();
+        ReleaseDestinationPin();
+        foreach (Vector3 position in _pendingPassengerPins)
+            City?.UnpinChunkForPosition(position);
+        _pendingPassengerPins.Clear();
         if (_passenger != null && IsInstanceValid(_passenger))
             _passenger.QueueFree();
     }
 
+    private void ReleasePickupPin()
+    {
+        if (!_hasPickupPin)
+            return;
+        City?.UnpinChunkForPosition(_pickupPinPosition);
+        _hasPickupPin = false;
+    }
+
+    private void ReleaseDestinationPin()
+    {
+        if (!_hasDestPin)
+            return;
+        City?.UnpinChunkForPosition(_destPinPosition);
+        _hasDestPin = false;
+    }
+
     private void NewPassenger()
     {
+        ReleasePickupPin();
+        ReleaseDestinationPin();
         _riding = false;
         _pickup = RandomPoint(PlayerPos, 60f, 320f);
         if (_pickup < 0)
             return;
         DeliveryPoint p = City.DeliveryPoints[_pickup];
+        _pickupPinPosition = p.Position;
+        _hasPickupPin = City.PinChunkForPosition(_pickupPinPosition);
         var rng = new RandomNumberGenerator();
         rng.Randomize();
         _mood = (Mood)rng.RandiRange(0, 2);
@@ -179,8 +209,21 @@ public partial class TaxiJob : JobBase
         _crashes = 0;
         _warnedSpeed = false;
         _passenger.Visible = false;
+        ReleasePickupPin();
         _dest = RandomPoint(City.DeliveryPoints[_pickup].Position, 140f, 600f, _pickup);
+        if (_dest < 0)
+        {
+            // Sem destino válido, encerra a tentativa e deixa o passageiro esperando novamente.
+            _riding = false;
+            _passenger.Visible = true;
+            _pickupPinPosition = City.DeliveryPoints[_pickup].Position;
+            _hasPickupPin = City.PinChunkForPosition(_pickupPinPosition);
+            _wait = 2.0;
+            return;
+        }
         DeliveryPoint d = City.DeliveryPoints[_dest];
+        _destPinPosition = d.Position;
+        _hasDestPin = City.PinChunkForPosition(_destPinPosition);
         JobMarkers.Free(ref _marker);
         _marker = JobMarkers.Create(this, d.Position, Yellow, "DESTINO");
         string line = string.Format(Lines[Rng.RandiRange(0, Lines.Length - 1)], d.Address);
@@ -212,10 +255,24 @@ public partial class TaxiJob : JobBase
             _passenger.GlobalPosition = City.DeliveryPoints[_dest].Position;
             CharacterModel p = _passenger;
             _passenger = null;
+            Vector3 destinationPin = _destPinPosition;
+            bool releaseDestinationPin = _hasDestPin;
+            _hasDestPin = false;
             Tween tw = p.CreateTween();
             Vector3 away = p.GlobalPosition + new Vector3(Rng.RandfRange(-6f, 6f), 0f, Rng.RandfRange(-6f, 6f));
             tw.TweenProperty(p, "global_position", away, 4.0);
-            tw.TweenCallback(Callable.From(p.QueueFree));
+            tw.TweenCallback(Callable.From(() =>
+            {
+                p.QueueFree();
+                if (releaseDestinationPin && _pendingPassengerPins.Remove(destinationPin))
+                    City?.UnpinChunkForPosition(destinationPin);
+            }));
+            if (releaseDestinationPin)
+                _pendingPassengerPins.Add(destinationPin);
+        }
+        else
+        {
+            ReleaseDestinationPin();
         }
         _riding = false;
         _pickup = -1;

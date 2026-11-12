@@ -209,7 +209,7 @@ public partial class CityGenerator
         {
             AddBox(tower, new Vector3(0f, y, 0f), new Vector3(0.4f, 0.4f, 0.4f), _redBeacon, false);
             var beacon = new OmniLight3D { Position = world + new Vector3(0f, y, 0f), LightColor = new Color(1f, 0.1f, 0.05f), LightEnergy = 3f, OmniRange = 18f };
-            _lightsRoot.AddChild(beacon);
+            ActiveLightsRoot.AddChild(beacon);
             Tween blink = CreateTween().SetLoops();
             blink.TweenProperty(beacon, "light_energy", 0.0, 0.7);
             blink.TweenProperty(beacon, "light_energy", 3.0, 0.1);
