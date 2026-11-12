@@ -20,6 +20,9 @@ public static class WorldDataGenerator
     private const uint BlockLayoutStream = 0x4C41594F;
     private const uint BuildingVisualStream = 0x42564953;
     private const uint BuildingDecorationStream = 0x42444543;
+    private const uint ParkLayoutStream = 0x5041524B;
+    private const uint ParkingLayoutStream = 0x5041524C;
+    private const uint ParkingCarStream = 0x50434152;
     private const uint StoreBrandStream = 0x53544252;
     private const uint BlockVisualStream = 0x56495355;
     private const uint BlockDecorationStream = 0x4445434F;
@@ -217,13 +220,23 @@ public static class WorldDataGenerator
                         worldSeed, coordinate, radius, blockSize, sidewalkWidth, roadWidth, curbHeight,
                         storefrontChance, safeBrandCount, brandQueue, brandRng)
                     : new List<WorldBuildingPlan>();
+                float period = blockSize + roadWidth;
+                List<WorldParkTreePlan> parkTrees = kind == WorldBlockKind.Park
+                    ? BuildCityParkTrees(worldSeed, coordinate, blockSize, sidewalkWidth, period)
+                    : new List<WorldParkTreePlan>();
+                List<WorldParkBenchPlan> parkBenches = kind == WorldBlockKind.Park
+                    ? BuildCityParkBenches(worldSeed, coordinate, blockSize, sidewalkWidth, curbHeight, period)
+                    : new List<WorldParkBenchPlan>();
+                List<WorldParkingCarPlan> parkingCars = kind == WorldBlockKind.ParkingLot
+                    ? BuildCityParkingCars(worldSeed, coordinate, blockSize, sidewalkWidth, curbHeight, period)
+                    : new List<WorldParkingCarPlan>();
 
                 destination.Add(new WorldBlockData(
                     coordinate,
                     kind,
                     DeriveChunkSeed(worldSeed, coordinate, BlockVisualStream),
                     DeriveChunkSeed(worldSeed, coordinate, BlockDecorationStream),
-                    buildings));
+                    buildings, parkTrees, parkBenches, parkingCars));
 
                 completed++;
                 progress?.Invoke(new WorldGenerationProgress("Planejando quarteirões e prédios", completed, total));
@@ -348,6 +361,100 @@ public static class WorldDataGenerator
                 DeriveChunkSeed(worldSeed, coordinate, BuildingVisualStream + index),
                 DeriveChunkSeed(worldSeed, coordinate, BuildingDecorationStream + index),
                 brandIndex));
+        }
+
+        return result;
+    }
+
+    private static List<WorldParkTreePlan> BuildCityParkTrees(
+        int worldSeed,
+        WorldChunkCoordinate coordinate,
+        float blockSize,
+        float sidewalkWidth,
+        float period)
+    {
+        float inner = blockSize - sidewalkWidth * 2f;
+        Vector3 center = new(coordinate.X * period, 0f, coordinate.Z * period);
+        var rng = new RandomNumberGenerator
+        {
+            Seed = DeriveChunkSeed(worldSeed, coordinate, ParkLayoutStream),
+        };
+
+        int count = rng.RandiRange(7, 14);
+        var result = new List<WorldParkTreePlan>(count);
+        for (int i = 0; i < count; i++)
+        {
+            Vector3 position = center + new Vector3(
+                rng.RandfRange(-inner * 0.45f, inner * 0.45f),
+                0f,
+                rng.RandfRange(-inner * 0.45f, inner * 0.45f));
+            float scale = rng.RandfRange(0.8f, 1.4f);
+            string model = NatureKit.CommonTrees[AssetProps.Hash(position, 4) % NatureKit.CommonTrees.Length];
+            float rotation = AssetProps.Hash(position, 7) % 628 / 100f;
+            result.Add(new WorldParkTreePlan(position, scale, model, rotation));
+        }
+
+        return result;
+    }
+
+    private static List<WorldParkBenchPlan> BuildCityParkBenches(
+        int worldSeed,
+        WorldChunkCoordinate coordinate,
+        float blockSize,
+        float sidewalkWidth,
+        float curbHeight,
+        float period)
+    {
+        float inner = blockSize - sidewalkWidth * 2f;
+        Vector3 center = new(coordinate.X * period, 0f, coordinate.Z * period);
+        var rng = new RandomNumberGenerator
+        {
+            Seed = DeriveChunkSeed(worldSeed, coordinate, ParkLayoutStream ^ 0x42454E43u),
+        };
+
+        var result = new List<WorldParkBenchPlan>(3);
+        for (int i = 0; i < 3; i++)
+        {
+            Vector3 position = center + new Vector3(
+                rng.RandfRange(-inner * 0.35f, inner * 0.35f),
+                curbHeight + 0.25f,
+                rng.RandfRange(-inner * 0.35f, inner * 0.35f));
+            result.Add(new WorldParkBenchPlan(position, rng.RandfRange(0f, Mathf.Pi)));
+        }
+
+        return result;
+    }
+
+    private static List<WorldParkingCarPlan> BuildCityParkingCars(
+        int worldSeed,
+        WorldChunkCoordinate coordinate,
+        float blockSize,
+        float sidewalkWidth,
+        float curbHeight,
+        float period)
+    {
+        float inner = blockSize - sidewalkWidth * 2f;
+        Vector3 center = new(coordinate.X * period, 0f, coordinate.Z * period);
+        var rng = new RandomNumberGenerator
+        {
+            Seed = DeriveChunkSeed(worldSeed, coordinate, ParkingLayoutStream),
+        };
+
+        int count = rng.RandiRange(3, 7);
+        int stalls = Mathf.FloorToInt(inner * 0.86f / 3f);
+        float slotStart = -stalls * 3f * 0.5f;
+        var result = new List<WorldParkingCarPlan>(count);
+        for (int i = 0; i < count; i++)
+        {
+            float x = -inner * 0.4f + i * (inner * 0.8f / Mathf.Max(1, count - 1));
+            // Encaixa no meio de uma vaga pintada (a primeira é a PCD, fica livre).
+            int slot = Mathf.Clamp(Mathf.RoundToInt((x - slotStart - 1.5f) / 3f), 1, stalls - 1);
+            x = slotStart + slot * 3f + 1.5f;
+            float z = (rng.Randf() < 0.5f ? -1f : 1f) * inner * 0.25f;
+            result.Add(new WorldParkingCarPlan(
+                center + new Vector3(x, curbHeight, z),
+                0f,
+                DeriveChunkSeed(worldSeed, coordinate, ParkingCarStream + unchecked((uint)i))));
         }
 
         return result;
