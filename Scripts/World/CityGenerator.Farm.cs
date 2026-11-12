@@ -241,22 +241,28 @@ public partial class CityGenerator
 
     private void PlaceFarms()
     {
-        if (_useLogicalWorldData && WorldData != null && WorldData.FarmSites.Count > 0)
+        if (_useLogicalWorldData && WorldData != null)
         {
             RandomNumberGenerator previousRng = _rng;
-            foreach (WorldFarmSitePlan site in WorldData.FarmSites)
+            try
             {
-                _occupied.Add((new Vector2(site.Center.X, site.Center.Z), site.OccupiedRadius));
-                _rng = new RandomNumberGenerator { Seed = site.VisualSeed };
-                BuildFarmstead(
-                    site.GatePosition,
-                    site.TowardRoad,
-                    site.Width,
-                    site.Depth,
-                    site.Name,
-                    site.Address);
+                foreach (WorldFarmSitePlan site in WorldData.FarmSites)
+                {
+                    _occupied.Add((new Vector2(site.Center.X, site.Center.Z), site.OccupiedRadius));
+                    _rng = new RandomNumberGenerator { Seed = site.VisualSeed };
+                    BuildFarmstead(
+                        site.GatePosition,
+                        site.TowardRoad,
+                        site.Width,
+                        site.Depth,
+                        site.Name,
+                        site.Address);
+                }
             }
-            _rng = previousRng;
+            finally
+            {
+                _rng = previousRng;
+            }
             return;
         }
 
