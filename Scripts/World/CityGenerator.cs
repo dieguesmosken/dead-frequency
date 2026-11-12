@@ -1417,6 +1417,11 @@ public partial class CityGenerator : Node3D
 
         foreach (WorldRoadCarPlan carPlan in blockPlan.RoadCars)
         {
+            // Zonas dinâmicas (por exemplo, pontos de ônibus) podem ser registradas depois
+            // da geração lógica inicial; nunca renderiza um carro dentro delas.
+            if (InNoParking(carPlan.Position))
+                continue;
+
             RandomNumberGenerator previousRng = _rng;
             _rng = new RandomNumberGenerator { Seed = carPlan.VisualSeed };
             try
@@ -1461,21 +1466,26 @@ public partial class CityGenerator : Node3D
         if (!alreadyPrepared)
             _noParking.Add((center, normalizedDir, halfLength, owner));
 
-        if (!_useLogicalBlockPlans)
+        for (int i = _parkedCars.Count - 1; i >= 0; i--)
         {
-            for (int i = _parkedCars.Count - 1; i >= 0; i--)
+            Node3D car = _parkedCars[i];
+            if (GodotObject.IsInstanceValid(car) && InNoParking(car.GlobalPosition))
             {
-                if (IsInstanceValid(_parkedCars[i]) && InNoParking(_parkedCars[i].Position))
-                {
-                    _parkedCars[i].QueueFree();
-                    _parkedCars.RemoveAt(i);
-                }
+                car.QueueFree();
+                _parkedCars.RemoveAt(i);
             }
         }
-        if (_curbMarkingsBuilt && !_useLogicalBlockPlans)
+
+        if (_useLogicalBlockPlans)
+        {
+            if (!alreadyPrepared)
+                RenderDynamicNoParkingZone(center, normalizedDir, halfLength, owner, signLabel);
+            return;
+        }
+
+        if (_curbMarkingsBuilt)
             PaintNoParkingCurb(center, normalizedDir, halfLength);
-        if (!_useLogicalBlockPlans)
-            BuildNoParkingSigns(center, normalizedDir, signLabel);
+        BuildNoParkingSigns(center, normalizedDir, signLabel);
     }
 
     private void BuildCurbMarkings()
@@ -1507,6 +1517,34 @@ public partial class CityGenerator : Node3D
     {
         _curbWhite ??= Flat(new Color(0.88f, 0.87f, 0.82f), 0.8f);
         _curbYellow ??= Flat(new Color(0.95f, 0.74f, 0.08f), 0.75f);
+    }
+
+    private void RenderDynamicNoParkingZone(
+        Vector3 center,
+        Vector3 direction,
+        float halfLength,
+        WorldChunkCoordinate owner,
+        string label)
+    {
+        if (!_chunkRoots.TryGetValue(owner, out Node3D root) ||
+            !GodotObject.IsInstanceValid(root))
+            return; // A zona fica no plano e será renderizada quando esse chunk carregar.
+
+        Node3D previousRoot = _activeChunkRoot;
+        WorldChunkCoordinate? previousCoordinate = _activeChunkCoordinate;
+        _activeChunkRoot = root;
+        _activeChunkCoordinate = owner;
+        try
+        {
+            EnsureCurbMaterials();
+            PaintNoParkingCurb(center, direction, halfLength);
+            BuildNoParkingSigns(center, direction, label);
+        }
+        finally
+        {
+            _activeChunkRoot = previousRoot;
+            _activeChunkCoordinate = previousCoordinate;
+        }
     }
 
     private void BuildNoParkingSignsForBlock(int bx, int bz)
