@@ -74,6 +74,7 @@ jobs:
           for f in export_presets.cfg launcher/app/export_presets.cfg; do
             sed -i "s|^application/file_version=.*|application/file_version=\"$VER.0\"|; s|^application/product_version=.*|application/product_version=\"$VER.0\"|" "$f"
           done
+          sed -i "/^config\/version=/d; s|^config/name=.*|&\nconfig/version=\"$VER\"|" project.godot
 
       - name: Importar assets e compilar o C#
         if: steps.ver.outputs.exists == 'false'

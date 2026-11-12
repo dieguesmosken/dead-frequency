@@ -594,7 +594,7 @@ public partial class GameHud : CanvasLayer
 
         double frameMs = Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000.0;
         double physMs = Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000.0;
-        _debug.Text = $"Dead Frequency {GameVersion.Display}  ·  FPS {Engine.GetFramesPerSecond()}  ({frameMs:0.0} ms lógica · {physMs:0.0} ms física)\n" +
+        _debug.Text = $"Dead Frequency {GameVersion.Build}  ·  FPS {Engine.GetFramesPerSecond()}  ({frameMs:0.0} ms lógica · {physMs:0.0} ms física)\n" +
                       $"Posição X {p.X:0.0}  Y {p.Y:0.0}  Z {p.Z:0.0}  ·  olhando {facing} ({yaw:0}°)\n" +
                       where +
                       _debugStats + "\n" +

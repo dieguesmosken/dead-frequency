@@ -159,7 +159,7 @@ public partial class MainMenu : Control
         string save = SaveManager.Summary();
         var footerRow = new HBoxContainer();
         footerRow.AddThemeConstantOverride("separation", 8);
-        footerRow.AddChild(UiStyle.MakeLabel($"v{GameVersion.Display}", 14, HorizontalAlignment.Left, UiStyle.PhosphorDim));
+        footerRow.AddChild(UiStyle.MakeLabel($"v{GameVersion.Build}", 14, HorizontalAlignment.Left, UiStyle.PhosphorDim));
         footerRow.AddChild(UiStyle.AlphaBadge());
         if (save.Length > 0)
             footerRow.AddChild(UiStyle.MakeLabel("·   " + save, 14, HorizontalAlignment.Left, UiStyle.PhosphorDim));
@@ -173,7 +173,12 @@ public partial class MainMenu : Control
         AddChild(_updateBox);
         _updateBox.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomRight, LayoutPresetMode.Minsize, 16);
         _updateBox.GrowHorizontal = GrowDirection.Begin;
-        if (GameSettings.Instance?.CheckUpdates != false)
+        if (GameSettings.Instance?.CheckUpdates != false && AppUpdater.Supported)
+        {
+            // Celular: o próprio jogo baixa e instala o APK novo (não tem launcher no Android).
+            AppUpdater.Check(this, ShowApkUpdate);
+        }
+        else if (GameSettings.Instance?.CheckUpdates != false)
         {
             UpdateChecker.Check(this, (tag, url) =>
             {
@@ -192,6 +197,8 @@ public partial class MainMenu : Control
 
         // Primeira vez nesta versão: mostra o que mudou (uma vez só).
         GameSettings settings = GameSettings.Instance;
+        if (AppUpdater.Supported)
+            AppUpdater.CleanUp();
         if (settings != null && settings.LastSeenVersion != GameVersion.Current)
         {
             string previous = settings.LastSeenVersion;
@@ -199,6 +206,61 @@ public partial class MainMenu : Control
             settings.Save();
             Callable.From(() => ShowInfo(true, previous)).CallDeferred();
         }
+    }
+
+    /// <summary>Aviso de APK novo no canto: Atualizar → barra de progresso → instalador do Android.</summary>
+    private void ShowApkUpdate(AppUpdater.ApkRelease release)
+    {
+        if (!IsInstanceValid(this))
+            return;
+        foreach (Node n in _updateBox.GetChildren())
+            n.QueueFree();
+        string mb = release.Size > 0 ? $" ({release.Size / 1048576f:0} MB)" : "";
+        Label status = UiStyle.MakeLabel($"Nova versão {release.Tag}{mb}", 16, color: UiStyle.Warning);
+        _updateBox.AddChild(status);
+        // Um botão só, que muda de papel: Atualizar → (baixando) → Instalar, ou Navegador se falhar.
+        int stage = 0; // 0 = atualizar, 1 = baixando, 2 = instalar, 3 = navegador
+        Button button = null;
+        button = UiStyle.MakeButton("Atualizar", () =>
+        {
+            switch (stage)
+            {
+                case 2:
+                    AppUpdater.Install(release);
+                    return;
+                case 3:
+                    OS.ShellOpen(release.Url);
+                    return;
+                case 1:
+                    return;
+            }
+            stage = 1;
+            button.Disabled = true;
+            status.Text = "Baixando... 0%";
+            AppUpdater.Download(this, release,
+                p => { if (IsInstanceValid(status)) status.Text = $"Baixando... {p * 100f:0}%"; },
+                (ok, message) =>
+                {
+                    if (!IsInstanceValid(status))
+                        return;
+                    button.Disabled = false;
+                    if (ok)
+                    {
+                        stage = 2;
+                        status.Text = "Pronto: confirme a instalação.";
+                        button.Text = "Instalar";
+                        AppUpdater.Install(release);
+                    }
+                    else
+                    {
+                        stage = 3;
+                        status.Text = message;
+                        button.Text = "Navegador";
+                    }
+                });
+        }, 160);
+        _updateBox.AddChild(button);
+        _updateBox.Visible = true;
     }
 
     private void ShowInfo(bool justUpdated, string previousVersion = null)
