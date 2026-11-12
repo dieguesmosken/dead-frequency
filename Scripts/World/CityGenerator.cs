@@ -301,12 +301,41 @@ public partial class CityGenerator : Node3D
         _useLogicalServiceData = Biome == WorldBiome.City;
         _useLogicalBlockPlans = _useLogicalWorldData;
 
+        int gridWidth = Radius * 2 + 1;
+        int logicalChunkCount = Biome == WorldBiome.City
+            ? gridWidth * gridWidth
+            : Mathf.Pow((int)Mathf.CeilToInt(WorldDataGenerator.FarmChunkSize > 0f
+                ? FarmExtent * 2f / WorldDataGenerator.FarmChunkSize
+                : 0f), 2);
+        int logicalBlockCount = Biome == WorldBiome.City ? logicalChunkCount : 0;
+        int logicalServiceCount = Biome == WorldBiome.City ? logicalChunkCount - 1 : 0;
+        int logicalDeliveryCount = Biome == WorldBiome.City && _useLogicalWorldData ? logicalChunkCount - 1 : 0;
+        int logicalTotal = Mathf.Max(1,
+            logicalChunkCount + logicalBlockCount + logicalServiceCount + logicalDeliveryCount + 1);
+
+        var logicalOffsets = new Dictionary<string, int>();
+        if (Biome == WorldBiome.City)
+        {
+            logicalOffsets["Indexando chunks da cidade"] = 0;
+            logicalOffsets["Distribuindo tipos de quarteirão"] = logicalChunkCount;
+            logicalOffsets["Calculando locais de serviço"] = logicalChunkCount + logicalBlockCount;
+            logicalOffsets["Calculando endereços e entregas"] =
+                logicalChunkCount + logicalBlockCount + logicalServiceCount;
+            logicalOffsets["Preparando pontos de início"] =
+                logicalChunkCount + logicalBlockCount + logicalServiceCount + logicalDeliveryCount;
+        }
+        else
+        {
+            logicalOffsets["Indexando chunks do rancho"] = 0;
+            logicalOffsets["Preparando pontos de início"] = logicalChunkCount;
+        }
+
         WorldLoadingScreen loading = null;
         if (_useLogicalBlockPlans)
         {
             loading = new WorldLoadingScreen { Name = "WorldLoading" };
             AddChild(loading);
-            loading.SetProgress("Calculando os dados lógicos do mundo...", 0, 1);
+            loading.SetProgress("Calculando os dados lógicos do mundo...", 0, 1, 0f);
         }
 
         // Esta etapa não cria Nodes nem geometria; os dados ficam prontos antes dos sistemas de missão.
@@ -318,7 +347,12 @@ public partial class CityGenerator : Node3D
             progress =>
             {
                 WorldDataProgress?.Invoke(progress);
-                loading?.SetProgress(progress.Stage, progress.Completed, progress.Total);
+                if (loading != null)
+                {
+                    int stageOffset = logicalOffsets.TryGetValue(progress.Stage, out int offset) ? offset : 0;
+                    float logicalRatio = (float)(stageOffset + progress.Completed) / logicalTotal;
+                    loading.SetProgress(progress.Stage, progress.Completed, progress.Total, logicalRatio * 0.68f);
+                }
             });
 
         if (Biome == WorldBiome.City)
@@ -397,30 +431,33 @@ public partial class CityGenerator : Node3D
         bool previousPaused = tree.Paused;
         try
         {
-            loading.SetProgress("Dados lógicos prontos", 1, 1);
+            loading.SetProgress("Dados lógicos prontos", logicalTotal, logicalTotal, 0.68f);
             await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
             tree.Paused = true;
 
-            loading.SetProgress("Carregando materiais e recursos...", 0, 1);
+            loading.SetProgress("Carregando materiais e recursos...", 0, 1, 0.68f);
             BuildResources();
             BuildLandmarkResources();
             _staticRoot = new Node3D { Name = "Static" };
             _lightsRoot = new Node3D { Name = "Lights" };
             AddChild(_staticRoot);
             AddChild(_lightsRoot);
-            loading.SetProgress("Materiais e recursos carregados", 1, 1);
+            loading.SetProgress("Materiais e recursos carregados", 1, 1, 0.72f);
             await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
 
             if (Biome == WorldBiome.Farm)
             {
-                loading.SetProgress("Construindo o rancho", 0, 1);
+                loading.SetProgress("Construindo o rancho", 0, 1, 0.72f);
                 BuildFarm();
-                loading.SetProgress("Rancho preparado", 1, 1);
+                loading.SetProgress("Rancho preparado", 1, 1, 1f);
                 await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
                 return;
             }
 
             BuildGround();
+            loading.SetProgress("Terreno preparado", 1, 1, 0.74f);
+            await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+
             PlayerController player = GetParent()?.GetNodeOrNull<PlayerController>("Player");
             Vector3 fallback = player != null ? player.GlobalPosition : new Vector3(-3f, 0f, 8f);
             string profession = GetInitialProfessionForWorld();
@@ -431,18 +468,16 @@ public partial class CityGenerator : Node3D
 
             IReadOnlyList<WorldChunkData> initialChunks =
                 WorldData.GetChunksAround(_initialChunkPosition, radius: 1);
-            int totalWork = Mathf.Max(1, initialChunks.Count + 3);
-            int completed = 1;
-            loading.SetProgress("Preparando o terreno", completed, totalWork);
-            await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
-
+            int totalChunkVisuals = Mathf.Max(1, initialChunks.Count);
+            int completedChunks = 0;
             foreach (WorldChunkData chunk in initialChunks)
             {
                 BuildChunkVisuals(chunk);
-                completed++;
+                completedChunks++;
+                float chunkRatio = 0.74f + 0.21f * completedChunks / totalChunkVisuals;
                 loading.SetProgress(
                     $"Construindo região inicial ({chunk.Coordinate.X}, {chunk.Coordinate.Z})",
-                    completed, totalWork);
+                    completedChunks, initialChunks.Count, chunkRatio);
                 await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
             }
 
@@ -461,8 +496,7 @@ public partial class CityGenerator : Node3D
             BuildBoundary();
             BuildBillboards();
             OptimizeVisibility(this);
-            completed++;
-            loading.SetProgress("Preparando elementos globais", completed, totalWork);
+            loading.SetProgress("Preparando elementos globais", 1, 1, 0.99f);
             await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
 
             if (player != null)
@@ -477,8 +511,7 @@ public partial class CityGenerator : Node3D
                 AddChild(_chunkManager);
             }
 
-            completed = totalWork;
-            loading.SetProgress("Mundo pronto", completed, totalWork);
+            loading.SetProgress("Mundo pronto", 1, 1, 1f);
             await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
         }
         catch (Exception ex)
