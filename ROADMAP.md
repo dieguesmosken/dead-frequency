@@ -111,7 +111,7 @@ streaming por chunks) estar na Internal.
 
 | Ideia | Como funciona no jogo |
 |---|---|
-| **Exportar para Android** | Preset Android no `export_presets.cfg` (C#/.NET, arm64), APK de teste gerado pelo CI junto com o prerelease da Internal. A chave de assinatura de release fica com o Matheus (segredo no GitHub, nunca no repositório). |
+| 🚧 **Exportar para Android** | Preset "Android" no `export_presets.cfg` (C#/.NET, arm64, sem gradle) e workflow `android-test.yml`, que gera um APK debug como artefato (botão Run workflow ou push em `android/**` / `feat/android-*`). No celular o renderizador é o Compatibility, com texturas ETC2/ASTC. Falta: chave de release (segredo do Matheus), APK no prerelease da Internal e testar nos aparelhos. |
 | **Controles de toque** | Joystick virtual à esquerda (andar e dirigir), arrastar à direita (câmera) e botões grandes para E (interagir), pular/freio, R (rádio), N (visão noturna) e inventário. Só aparecem em tela de toque; controle Bluetooth também funciona. |
 | **Modo gráfico leve** | Renderizador Compatibility/Mobile, resolução interna baixa (combina com o visual PS1 de 320x240/640x480), sombras desligadas, neblina mais perto e menos luzes acesas. Meta: 30 fps estáveis. |
 | **Menus e HUD para tela pequena** | Botões e fontes maiores, menu e pausa por toque, respeito ao entalhe da câmera (safe area) e opção de tamanho dos controles. |
