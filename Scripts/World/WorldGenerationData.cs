@@ -82,6 +82,18 @@ public sealed class WorldGenerationData
     public bool TryGetProfessionSpawn(string profession, out WorldSpawnPoint spawn) =>
         _spawnPoints.TryGetValue(profession, out spawn);
 
+    /// <summary>Resolve os chunks iniciais a partir do spawn calculado da profissão.</summary>
+    public IReadOnlyList<WorldChunkData> GetInitialChunks(
+        string profession,
+        Vector3 fallbackPosition,
+        int radius = 1)
+    {
+        Vector3 spawnPosition = _spawnPoints.TryGetValue(profession, out WorldSpawnPoint spawn)
+            ? spawn.Position
+            : fallbackPosition;
+        return GetChunksAround(spawnPosition, radius);
+    }
+
     public bool TryGetChunk(WorldChunkCoordinate coordinate, out WorldChunkData chunk) =>
         _chunkIndex.TryGetValue(coordinate, out chunk);
 
