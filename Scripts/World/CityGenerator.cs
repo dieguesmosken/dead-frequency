@@ -308,7 +308,7 @@ public partial class CityGenerator : Node3D
         _useLogicalBlockPlans = _useLogicalWorldData;
 
         int gridWidth = Radius * 2 + 1;
-        int farmChunkWidth = Mathf.CeilToInt(FarmExtent * 2f / WorldDataGenerator.FarmChunkSize);
+        int farmChunkWidth = Mathf.CeilToInt(FarmExtent / WorldDataGenerator.FarmChunkSize) * 2;
         int logicalChunkCount = Biome == WorldBiome.City
             ? gridWidth * gridWidth
             : farmChunkWidth * farmChunkWidth;
