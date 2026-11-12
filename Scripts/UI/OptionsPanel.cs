@@ -179,6 +179,11 @@ public partial class OptionsPanel : VBoxContainer
         p.AddChild(Hint("Pressione V durante a partida para alternar entre primeira e terceira pessoa. A terceira pessoa é ativada por padrão."));
         Toggle(p, "Balanço da câmera ao andar", s.HeadBob, b => s.HeadBob = b, "Desativado por padrão para reduzir movimentos visuais. Ative apenas se preferir esse efeito.");
 
+        Section(p, "TOQUE (CELULAR)");
+        Choice(p, "Controles de toque", new[] { "Automático", "Sempre", "Nunca" }, s.TouchMode, i => s.TouchMode = i,
+            "Automático: aparecem só em tela de toque. Joystick à esquerda, arrastar à direita mexe a câmera.");
+        Slider(p, "Tamanho dos botões", 0.7, 1.5, 0.05, s.TouchScale, v => s.TouchScale = (float)v, v => $"{v:0.00}x");
+
         Section(p, "TECLAS");
         p.AddChild(Hint("Clique no botão e aperte a tecla nova (ou um botão do mouse). Esc cancela."));
         foreach ((string action, string label) in GameSettings.RebindableActions)

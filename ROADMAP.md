@@ -15,7 +15,7 @@ rádio 96.6 e ajuda a cidade a funcionar. Ordem sugerida: de cima para baixo; ca
 | **Cidade** | Bancos, lotéricas, padarias, mercados, postos, lava-jato, caixa d'água, bombeiros, delegacia, ônibus 966, pedestres que desviam, outdoors iluminados, orelhões. Fase 2: rancho. |
 | **Online** | Servidor oficial (Cloudflare), servidor próprio ou hospedar no PC com link público, lista de salas públicas. Protocolo 5. |
 | **Gente e bichos** | Personagens animados (Quaternius) para jogadores e NPCs, bichos no sítio, caramelos. |
-| **Distribuição** | Release automático no GitHub (Windows e Linux) com SHA256SUMS e atestado de build, launcher que atualiza sozinho, site em www.teuzin.com.br/dead-frequency. |
+| 🚧 **Distribuição** | O prerelease da Internal (`vX.Y.Z.N-pre`) passa a trazer o `DeadFrequency-…-android.apk`. Sem a chave do Matheus (segredos `ANDROID_KEYSTORE_*`), cada APK sai com uma chave de debug nova e é preciso desinstalar o anterior. Link no site e Play Store ficam para depois. |
 
 ---
 
@@ -112,7 +112,7 @@ streaming por chunks) estar na Internal.
 | Ideia | Como funciona no jogo |
 |---|---|
 | 🚧 **Exportar para Android** | Preset "Android" no `export_presets.cfg` (C#/.NET, arm64, sem gradle) e workflow `android-test.yml`, que gera um APK debug como artefato (botão Run workflow ou push em `android/**` / `feat/android-*`). No celular o renderizador é o Compatibility, com texturas ETC2/ASTC. Falta: chave de release (segredo do Matheus), APK no prerelease da Internal e testar nos aparelhos. |
-| **Controles de toque** | Joystick virtual à esquerda (andar e dirigir), arrastar à direita (câmera) e botões grandes para E (interagir), pular/freio, R (rádio), N (visão noturna) e inventário. Só aparecem em tela de toque; controle Bluetooth também funciona. |
+| ✅ **Controles de toque** | `Scripts/UI/TouchControls.cs` (autoload, desenhado em código): joystick que nasce onde o dedo encosta, arrastar à direita mexe a câmera, botões USAR, PULAR/FREIO, ITEM/JOGAR, SOLTAR, CORRER e, no canto de cima, PAUSA, MOCHILA, LUZ, VISÃO e RÁDIO/ESTAÇÃO na van. Com tela aberta só aparece o VOLTAR. Tudo vira ação do Input Map. Opções > Controles > Toque: automático/sempre/nunca e tamanho dos botões. |
 | **Modo gráfico leve** | Renderizador Compatibility/Mobile, resolução interna baixa (combina com o visual PS1 de 320x240/640x480), sombras desligadas, neblina mais perto e menos luzes acesas. Meta: 30 fps estáveis. |
 | **Menus e HUD para tela pequena** | Botões e fontes maiores, menu e pausa por toque, respeito ao entalhe da câmera (safe area) e opção de tamanho dos controles. |
 | **Online entre PC e celular** | Mesmo servidor e protocolo (WebSocket): sem mudança no `server/`. Testar sala com PC e celular juntos. |
