@@ -253,17 +253,19 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
       const roomName = r.name ? '<br><span class="muted" style="letter-spacing:0;font-size:11px">' + esc(r.name) + '</span>' : "";
       const permanentTag = r.permanent ? '<span class="tag">PERMANENTE</span>' : "";
       const passwordTag = r.hasPassword ? '<span class="tag">SENHA</span>' : "";
+      const protocol = Number(r.protocol || 7);
+      const protocolTag = '<span class="tag">PROTOCOLO ' + protocol + '</span>';
       return '<tr class="' + (r.players ? "" : "empty") + '">' +
-        '<td class="code">' + esc(r.code) + roomName + '<br>' + permanentTag + passwordTag + '</td>' +
+        '<td class="code">' + esc(r.code) + roomName + '<br>' + protocolTag + permanentTag + passwordTag + '</td>' +
         '<td class="names">' + r.players + ' · ' + names + '</td>' +
         '<td>' + r.shift + '</td>' +
         '<td>' + r.pendingJobs + ' pendentes</td>' +
         '<td>' + money(r.money) + '</td>' +
         '<td>há ' + ago(r.createdAt) + '</td>' +
         '<td>há ' + ago(r.updatedAt) + '</td>' +
-        '<td><button data-detail="' + esc(r.code) + '">Detalhes</button> ' +
+        '<td><button data-detail="' + esc(r.code) + '" data-protocol="' + protocol + '">Detalhes</button> ' +
         (r.permanent ? '<button disabled title="Salas permanentes não expiram nem podem ser encerradas.">Permanente</button>' :
-          '<button class="danger" data-close="' + esc(r.code) + '">Encerrar</button>') + '</td></tr>';
+          '<button class="danger" data-close="' + esc(r.code) + '" data-protocol="' + protocol + '">Encerrar</button>') + '</td></tr>';
     }).join("");
   }
 
@@ -313,11 +315,11 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
     ).join("");
   }
 
-  async function renderDetail(code) {
-    openRoom = code;
+  async function renderDetail(code, protocol = 7) {
+    openRoom = { code, protocol };
     const box = $("detail");
     try {
-      const d = await api("/rooms/" + encodeURIComponent(code));
+      const d = await api("/rooms/" + encodeURIComponent(code) + "?protocol=" + protocol);
       const players = d.players.length ? d.players.map((p) => {
         const st = p.state;
         const where = st ? (st.st === 1 ? "dirigindo a van" : (st.held ? "segurando " + esc(st.held) : "a pé")) : "sem dados ainda";
@@ -360,7 +362,7 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
       $("serverInfo").textContent = "protocolo v" + srv.protocol + " · até " + srv.maxPlayers + " jogadores por sala · datacenter " + srv.colo +
         " · instância do worker ativa há " + ago(srv.isolateStartedAt) + " · atualizado " + new Date().toLocaleTimeString("pt-BR");
       setLive(true, "no ar");
-      if (openRoom) renderDetail(openRoom);
+      if (openRoom) renderDetail(openRoom.code, openRoom.protocol);
     } catch (e) {
       if (e.status === 401) { logout("Token inválido."); return; }
       setLive(false, e.status === 503 ? "painel desativado" : "sem resposta");
@@ -448,15 +450,16 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
   $("rooms").onclick = async (e) => {
     const detail = e.target.closest("[data-detail]");
     const close = e.target.closest("[data-close]");
-    if (detail) renderDetail(detail.dataset.detail);
+    if (detail) renderDetail(detail.dataset.detail, Number(detail.dataset.protocol || 7));
     if (close) {
       const code = close.dataset.close;
-      if (!confirm("Encerrar a sala " + code + "? Todos os jogadores serão desconectados.")) return;
+      const protocol = Number(close.dataset.protocol || 7);
+      if (!confirm("Encerrar a sala " + code + " (protocolo " + protocol + ")? Todos os jogadores serão desconectados.")) return;
       close.disabled = true;
       try {
-        await api("/rooms/" + encodeURIComponent(code) + "/close", { method: "POST" });
+        await api("/rooms/" + encodeURIComponent(code) + "/close?protocol=" + protocol, { method: "POST" });
         show($("appMsg"), "Sala " + code + " encerrada.", "ok");
-        if (openRoom === code) { openRoom = null; $("detail").className = "panel"; }
+        if (openRoom && openRoom.code === code && openRoom.protocol === protocol) { openRoom = null; $("detail").className = "panel"; }
         refresh();
       } catch (err) { show($("appMsg"), err.message, "err"); close.disabled = false; }
     }
