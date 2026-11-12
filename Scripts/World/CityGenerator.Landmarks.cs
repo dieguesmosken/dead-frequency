@@ -168,18 +168,20 @@ public partial class CityGenerator
         return new Vector3(0f, 0f, Mathf.Sign(toLot.Z));
     }
 
-    private void DecorateBuilding(Node3D parent, Vector3 baseCenter, float width, float depth, float height, Vector3 blockCenter, Vector3 front, bool hasStorefront)
+    private void DecorateBuilding(Node3D parent, Vector3 baseCenter, float width, float depth, float height, Vector3 blockCenter, Vector3 front, bool hasStorefront, int storeBrandIndex = -1)
     {
         if (hasStorefront)
-            BuildStorefront(parent, baseCenter, width, depth, front, blockCenter);
+            BuildStorefront(parent, baseCenter, width, depth, front, blockCenter, storeBrandIndex);
 
         if (_decoRng.Randf() < WallAcChance && height > 6f)
             BuildWallAcs(parent, baseCenter, width, depth, height, front);
     }
 
-    private void BuildStorefront(Node3D parent, Vector3 baseCenter, float width, float depth, Vector3 front, Vector3 blockCenter)
+    private void BuildStorefront(Node3D parent, Vector3 baseCenter, float width, float depth, Vector3 front, Vector3 blockCenter, int brandIndex = -1)
     {
-        StoreBrand brand = NextBrand();
+        StoreBrand brand = brandIndex >= 0 && brandIndex < _brands.Count
+            ? _brands[brandIndex]
+            : NextBrand();
         float facadeWidth = Mathf.Abs(front.X) > 0.5f ? depth : width;
         float halfDepth = Mathf.Abs(front.X) > 0.5f ? width * 0.5f : depth * 0.5f;
         float signWidth = Mathf.Min(facadeWidth * 0.85f, 9f);
