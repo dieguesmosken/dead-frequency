@@ -349,6 +349,7 @@ public partial class NetClient : Node
             _socket = null;
             {
                 string message = code == 4001 ? "Sala encerrada pelo administrador."
+                    : code == 4000 && reason == "version" ? "Protocolo incompatível. Esta sala exige outra versão do jogo."
                     : Status == ConnectionStatus.Online
                     ? "Conexão com o servidor perdida."
                     : !string.IsNullOrEmpty(_connectFailureMessage) ? _connectFailureMessage
