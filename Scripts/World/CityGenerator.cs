@@ -1410,70 +1410,27 @@ public partial class CityGenerator : Node3D
 
     private void BuildParkedCarsForBlock(int bx, int bz)
     {
-        if (bx < -Radius || bx > Radius || bz < -Radius || bz > Radius)
+        if (WorldData == null ||
+            !WorldData.TryGetBlock(new WorldChunkCoordinate(bx, bz), out WorldBlockData blockPlan))
             return;
 
-        // Cada vaga tem seu próprio stream: a ordem de carregamento não altera os carros.
-        for (int road = -Radius - 1; road <= Radius; road++)
+        foreach (WorldRoadCarPlan carPlan in blockPlan.RoadCars)
         {
-            foreach (int side in new[] { -1, 1 })
+            RandomNumberGenerator previousRng = _rng;
+            _rng = new RandomNumberGenerator { Seed = carPlan.VisualSeed };
+            try
             {
-                int owner = side < 0 ? road : road + 1;
-                if (owner == bx)
-                    BuildParkedCarCandidate(road, bz, side, vertical: true);
-                if (owner == bz)
-                    BuildParkedCarCandidate(road, bx, side, vertical: false);
+                BuildCar(
+                    _activeChunkRoot ?? _staticRoot,
+                    carPlan.Position,
+                    carPlan.RotationY,
+                    carPlan.CurbOffset,
+                    carPlan.HasCurb);
             }
-        }
-    }
-
-    private void BuildParkedCarCandidate(int road, int segment, int side, bool vertical)
-    {
-        float laneOffset = RoadWidth * 0.5f - 1.4f;
-        float reach = BlockSize * 0.5f - 4f;
-        bool hasCurb = side < 0
-            ? road >= -Radius && road <= Radius
-            : road + 1 >= -Radius && road + 1 <= Radius;
-
-        int seedX = vertical ? road : segment;
-        int seedZ = vertical ? segment : road;
-        uint stream = unchecked(0x43415200u
-            + (uint)(road + Radius + 1) * 4u
-            + (side > 0 ? 2u : 0u)
-            + (vertical ? 0u : 1u));
-
-        RandomNumberGenerator previousRng = _rng;
-        _rng = new RandomNumberGenerator
-        {
-            Seed = WorldDataGenerator.DeriveChunkSeed(
-                Seed, new WorldChunkCoordinate(seedX, seedZ), stream),
-        };
-
-        try
-        {
-            if (_rng.Randf() >= ParkedCarChance)
-                return;
-
-            float roadPos = road * Period + Period * 0.5f;
-            float along = segment * Period;
-            float offset = _rng.RandfRange(-reach, reach);
-            Vector3 groundPosition = vertical
-                ? new Vector3(roadPos + side * laneOffset, 0f, along + offset)
-                : new Vector3(along + offset, 0f, roadPos + side * laneOffset);
-
-            if (InNoParking(groundPosition))
-                return;
-
-            BuildCar(
-                _activeChunkRoot ?? _staticRoot,
-                groundPosition,
-                vertical ? 0f : Mathf.Pi * 0.5f,
-                offset,
-                hasCurb);
-        }
-        finally
-        {
-            _rng = previousRng;
+            finally
+            {
+                _rng = previousRng;
+            }
         }
     }
 
