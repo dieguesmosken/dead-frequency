@@ -1062,10 +1062,20 @@ public partial class CityGenerator : Node3D
         if (_useLogicalBlockPlans)
             return; // Cada chunk recebe suas próprias marcações.
 
+        // Mantém o caminho legado intacto: todas as marcações e zonas proibidas são pintadas
+        // uma única vez, com a mesma ordem que existia antes do streaming.
         EnsureCurbMaterials();
         for (int bx = -Radius; bx <= Radius; bx++)
+        {
             for (int bz = -Radius; bz <= Radius; bz++)
-                BuildCurbMarkingsForBlock(bx, bz);
+            {
+                Vector3 center = BlockCenter(bx, bz);
+                PaintCurbEdge(center, Vector3.Right, Vector3.Back);
+                PaintCurbEdge(center, Vector3.Left, Vector3.Forward);
+                PaintCurbEdge(center, Vector3.Back, Vector3.Left);
+                PaintCurbEdge(center, Vector3.Forward, Vector3.Right);
+            }
+        }
 
         _curbMarkingsBuilt = true;
         foreach ((Vector3 center, Vector3 dir, float halfLength) in _noParking)
