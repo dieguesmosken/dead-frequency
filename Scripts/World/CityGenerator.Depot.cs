@@ -2,7 +2,7 @@
 // Galpão do depósito por dentro: paredes com o portão de carga e a porta de pessoas abertos,
 // prateleiras porta-paletes com produtos, paletes no chão, empilhadeira, luzes industriais
 // e o escritório com o PC que mostra os ganhos (OfficeComputer).
-// Também estaciona a frota (caminhões e moto da Kenney, CC0) no pátio.
+// Também estaciona a frota (caminhões e moto da Kenney, CC0; táxi e van de viagem do CarModels) no pátio.
 //
 // Coordenadas locais do quarteirão do depósito (centro = origem). O galpão ocupa
 // x -13..13 e z -17..-5, com a fachada (portões) em z = -5 virada para +Z.
@@ -467,18 +467,32 @@ public partial class CityGenerator
     /// </summary>
     private void BuildDepotFleet(Node3D depot)
     {
+        // v0.9.9: caminhões mais para a frente do pátio, liberando o portão novo do lado -X (z -5..5).
         (VehicleKind Kind, Vector3 Pos, float RotDeg)[] fleet =
         {
-            (VehicleKind.TruckYellow, new Vector3(-13.6f, 0.3f, 3.5f), 90f),
-            (VehicleKind.TruckRed, new Vector3(-13.6f, 0.3f, 9.5f), 90f),
+            (VehicleKind.TruckYellow, new Vector3(-13.6f, 0.3f, 9f), 90f),
+            (VehicleKind.TruckRed, new Vector3(-13.6f, 0.3f, 14.5f), 90f),
             (VehicleKind.Moto, new Vector3(11.2f, 0.3f, -2.6f), 20f),
         };
         foreach ((VehicleKind kind, Vector3 pos, float rot) in fleet)
+            Park(VehicleFactory.Build(kind), pos, rot);
+
+        // Táxi da cooperativa e van de viagem, lado a lado no canto da frente encostados no muro +X,
+        // de bico para o portão desse lado (o orelhão do pátio fica em x 8, z 16,6: longe do caminho).
+        Taxi = Park(VehicleFactory.BuildTaxi(), new Vector3(15.4f, 0.3f, 13f), 180f);
+        TravelVan = Park(VehicleFactory.BuildTravelVan(), new Vector3(12.2f, 0.3f, 13f), 180f);
+
+        VanController Park(VanController v, Vector3 pos, float rotDeg)
         {
-            VanController v = VehicleFactory.Build(kind);
             v.Position = depot.Position + pos;
-            v.RotationDegrees = new Vector3(0f, rot, 0f);
+            v.RotationDegrees = new Vector3(0f, rotDeg, 0f);
             AddChild(v); // fora do Static: é um corpo que se mexe
+            return v;
         }
     }
+
+    /// <summary>Táxi amarelo do pátio (o TaxiJob só faz corrida com ele).</summary>
+    public VanController Taxi { get; private set; }
+    /// <summary>Van de viagem anos 80 do Modo História.</summary>
+    public VanController TravelVan { get; private set; }
 }

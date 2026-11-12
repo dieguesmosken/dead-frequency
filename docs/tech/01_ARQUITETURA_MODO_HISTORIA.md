@@ -100,6 +100,9 @@ Detalhes que o modelo já resolve:
 - Só dispara se for o jogador local ao volante e se estiver offline.
 - Se o carregamento falhar, desliga o piloto automático, esconde o banner e avisa no console, em vez de travar o jogo.
 
+**A van da viagem já existe** (v0.9.9): `CityGenerator.TravelVan` (NetId `van_viagem`, modelo `CarType.Van80`),
+parada no pátio da central. A zona pode aceitar só ela (`body == City.TravelVan`) quando a história exigir a van.
+
 **Falta no jogo hoje:** a `VanController` não tem piloto automático. Quando for implementar, criar
 `public void SetAutoDrive(bool on, float speedMs)` na `VanController` (acelera até a velocidade e
 mantém o volante reto). A zona chama esse método direto, sem `Call("...")` por string.

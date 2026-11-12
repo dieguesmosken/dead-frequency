@@ -58,7 +58,7 @@ function roomSummaryKey(protocol: number | undefined, code: string): string {
   return (protocol ?? 7) === 7 ? `room:${code}` : `room:v${protocol}:${code}`;
 }
 /** Veículos da fase (VanController.NetId no Godot): a van e, desde a v0.9.3, a moto e os caminhões do pátio. */
-const VEHICLES = ["van", "moto", "truck_yellow", "truck_red", "car_gou", "car_fusca", "car_opalinha"];
+const VEHICLES = ["van", "moto", "truck_yellow", "truck_red", "car_gou", "car_fusca", "car_opalinha", "taxi", "van_viagem"];
 /** Carros da concessionária (v0.9.7): comprados uma vez por sala, com o dinheiro do grupo. */
 const CARS = ["car_gou", "car_fusca", "car_opalinha"];
 const MAX_PLAYERS = 8;
