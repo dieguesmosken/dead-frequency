@@ -102,6 +102,10 @@ public readonly record struct WorldBuildingPlan(
     ulong DecorationSeed,
     int StoreBrandIndex);
 
+public readonly record struct WorldParkTreePlan(Vector3 Position, float Scale, string Model, float RotationY);
+public readonly record struct WorldParkBenchPlan(Vector3 Position, float RotationY);
+public readonly record struct WorldParkingCarPlan(Vector3 Position, float RotationY, ulong VisualSeed);
+
 /// <summary>Plano determinístico de um quarteirão, com streams aleatórios independentes.</summary>
 public sealed class WorldBlockData
 {
@@ -110,19 +114,28 @@ public sealed class WorldBlockData
     public ulong VisualSeed { get; }
     public ulong DecorationSeed { get; }
     public IReadOnlyList<WorldBuildingPlan> Buildings { get; }
+    public IReadOnlyList<WorldParkTreePlan> ParkTrees { get; }
+    public IReadOnlyList<WorldParkBenchPlan> ParkBenches { get; }
+    public IReadOnlyList<WorldParkingCarPlan> ParkingCars { get; }
 
     internal WorldBlockData(
         WorldChunkCoordinate coordinate,
         WorldBlockKind kind,
         ulong visualSeed,
         ulong decorationSeed,
-        List<WorldBuildingPlan> buildings = null)
+        List<WorldBuildingPlan> buildings = null,
+        List<WorldParkTreePlan> parkTrees = null,
+        List<WorldParkBenchPlan> parkBenches = null,
+        List<WorldParkingCarPlan> parkingCars = null)
     {
         Coordinate = coordinate;
         Kind = kind;
         VisualSeed = visualSeed;
         DecorationSeed = decorationSeed;
         Buildings = Array.AsReadOnly((buildings ?? new List<WorldBuildingPlan>()).ToArray());
+        ParkTrees = Array.AsReadOnly((parkTrees ?? new List<WorldParkTreePlan>()).ToArray());
+        ParkBenches = Array.AsReadOnly((parkBenches ?? new List<WorldParkBenchPlan>()).ToArray());
+        ParkingCars = Array.AsReadOnly((parkingCars ?? new List<WorldParkingCarPlan>()).ToArray());
     }
 }
 
