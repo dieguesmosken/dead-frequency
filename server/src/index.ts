@@ -50,12 +50,12 @@ function normalizeProtocol(value: unknown): SupportedProtocol | null {
 
 /** Mantém os IDs históricos do V7; versões futuras recebem namespaces próprios. */
 function roomDurableId(protocol: SupportedProtocol, code: string): string {
-  return protocol === 7 ? code : \`v\${protocol}:\${code}\`;
+  return protocol === 7 ? code : `v${protocol}:${code}`;
 }
 
 /** Mantém as chaves antigas do Registry para não perder salas V7 já registradas. */
 function roomSummaryKey(protocol: number | undefined, code: string): string {
-  return (protocol ?? 7) === 7 ? \`room:\${code}\` : \`room:v\${protocol}:\${code}\`;
+  return (protocol ?? 7) === 7 ? `room:${code}` : `room:v${protocol}:${code}`;
 }
 /** Veículos da fase (VanController.NetId no Godot): a van e, desde a v0.9.3, a moto e os caminhões do pátio. */
 const VEHICLES = ["van", "moto", "truck_yellow", "truck_red", "car_gou", "car_fusca", "car_opalinha"];
@@ -961,6 +961,7 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.room) return false;
     if (this.room.permanent) return false;
     const code = this.room.code;
+    const protocol = this.room.protocol ?? 7;
     for (const socket of this.connected()) {
       try {
         socket.send(JSON.stringify({ t: "kick", msg: "Sala encerrada pelo administrador." }));
@@ -974,7 +975,7 @@ export class GameRoom extends DurableObject<Env> {
     this.objects.clear();
     await this.ctx.storage.deleteAll();
     const registry = this.env.REGISTRY.get(this.env.REGISTRY.idFromName("global"));
-    await registry.remove(code, this.room?.protocol ?? 7);
+    await registry.remove(code, protocol);
     return true;
   }
 
