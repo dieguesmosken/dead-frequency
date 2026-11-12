@@ -16,7 +16,7 @@ public static class GameVersion
     {
         new("0.9.8", "10/11/2026", "Rua de verdade", new[]
         {
-            "Meio-fio branco nos trechos permitidos e amarelo nos cruzamentos e pontos proibidos; carros gerados só estacionam junto às marcações brancas.",
+            "Meio-fio de concreto cinza com faixas brancas intercaladas e tinta gasta pelo tempo; amarelo nos cruzamentos e trechos proibidos, com a linha amarela oficial no asfalto junto à sarjeta (como manda a Resolução CONTRAN 973/2022). Carros gerados só estacionam onde é permitido.",
             "Placas de proibido estacionar finas e chapadas nos trechos amarelos, de frente para quem vem pela rua, com POLÍCIA e BOMBEIROS nas respectivas áreas; pontos de ônibus com a placa azul de ÔNIBUS.",
             "Céu procedural com nuvens em movimento, estrelas e transição de cores sincronizada ao ciclo de dia e noite.",
             "Bocas de lobo com grades, tampas de bueiro nas ruas e som de água corrente audível nas proximidades.",

@@ -85,6 +85,11 @@ Já feito nesta build (feedback de 08/11):
 | ✅ **Ciclovia e ciclista** | Faixa de ciclovia pintada e um ciclista NPC que roda pela cidade como o ônibus (posição pelo relógio, igual para todos) e toca o sininho quando você está na frente. |
 | ✅ **Polícia** | Faixa identificada na fachada da delegacia, ícone no minimapa e policiais NPC fardados (só figurantes por enquanto). |
 
+Ideias para depois (pesquisa de 12/11 sobre as regras do CTB):
+- **Meio-fio amarelo "de morador"**: em bairros residenciais, trechos pintados de amarelo por conta própria, sem placa (é irregular na vida real e não proíbe nada). Toque de realismo para quando houver multas.
+- **Multas do Art. 181 do CTB** (quando a carreira tiver economia): estacionar a menos de 5 m da esquina, em frente a guia rebaixada, sobre a calçada/faixa/ciclovia, em frente a hidrante ou no ponto de ônibus, ou a mais de 50 cm da guia.
+- **Meio-fio e calçada com mais detalhe**: rachaduras com normal map e vaga azul de idoso/PCD pintada no asfalto.
+
 ### v0.9.9 — Lojas de verdade
 | Ideia | Como funciona no jogo |
 |---|---|

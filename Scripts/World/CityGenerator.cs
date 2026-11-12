@@ -75,8 +75,9 @@ public partial class CityGenerator : Node3D
     private StandardMaterial3D _stopRed;
     private StandardMaterial3D _signBlue;
     private StandardMaterial3D _signWhite;
-    private StandardMaterial3D _curbWhite;
-    private StandardMaterial3D _curbYellow;
+    private Material _curbYellow;
+    /// <summary>Linha amarela contínua no asfalto junto à sarjeta (LPP, Resolução CONTRAN 973/2022).</summary>
+    private StandardMaterial3D _lppYellow;
     private CylinderMesh _octagon;
     private readonly Dictionary<Color, StandardMaterial3D> _carMaterials = new();
 
@@ -217,6 +218,8 @@ public partial class CityGenerator : Node3D
         _sidewalkMaterial.SetShaderParameter("slab_tex", GD.Load<Texture2D>("res://Assets/Textures/City/sidewalk.png"));
         _sidewalkMaterial.SetShaderParameter("pt_tex", GD.Load<Texture2D>("res://Assets/Textures/City/sidewalk_pt.svg"));
         _sidewalkMaterial.SetShaderParameter("block_period", Period);
+        _sidewalkMaterial.SetShaderParameter("block_half", BlockSize * 0.5f);
+        _sidewalkMaterial.SetShaderParameter("curb_height", CurbHeight);
 
         _darkMetal = Flat(new Color(0.12f, 0.12f, 0.13f), 0.6f);
         _concrete = Flat(new Color(0.38f, 0.37f, 0.35f));
@@ -787,8 +790,12 @@ public partial class CityGenerator : Node3D
 
     private void BuildCurbMarkings()
     {
-        _curbWhite = Flat(new Color(0.88f, 0.87f, 0.82f), 0.8f);
-        _curbYellow = Flat(new Color(0.95f, 0.74f, 0.08f), 0.75f);
+        // v0.9.8: o meio-fio padrão (cinza com faixas brancas intercaladas) é desenhado pelo shader da
+        // calçada; aqui só entram os trechos amarelos, com a mesma tinta gasta.
+        var yellow = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/curb_paint.gdshader") };
+        yellow.SetShaderParameter("curb_height", CurbHeight);
+        _curbYellow = yellow;
+        _lppYellow = Flat(new Color(0.9f, 0.7f, 0.1f), 0.7f);
         for (int bx = -Radius; bx <= Radius; bx++)
         {
             for (int bz = -Radius; bz <= Radius; bz++)
@@ -825,8 +832,9 @@ public partial class CityGenerator : Node3D
                 continue;
             float midpoint = start + length * 0.5f;
             Vector3 parkingSpot = blockCenter + outward * (half + RoadWidth * 0.5f - 1.4f) + along * midpoint;
-            Material material = InNoParking(parkingSpot) ? _curbYellow : _curbWhite;
-            PaintCurbStripe(blockCenter, outward, along, midpoint, length, material);
+            // Onde pode parar fica o meio-fio padrão (cinza e branco, no shader da calçada).
+            if (InNoParking(parkingSpot))
+                PaintCurbStripe(blockCenter, outward, along, midpoint, length, _curbYellow);
         }
     }
 
@@ -838,6 +846,13 @@ public partial class CityGenerator : Node3D
             ? new Vector3(0.03f, CurbHeight, length)
             : new Vector3(length, CurbHeight, 0.03f);
         AddBox(_staticRoot, position, size, material, false);
+        if (material == _curbYellow)
+        {
+            // Linha amarela oficial no asfalto, 20 cm para dentro da pista.
+            Vector3 line = blockCenter + outward * (BlockSize * 0.5f + 0.2f) + along * midpoint;
+            line.Y = 0.006f;
+            AddBox(_staticRoot, line, Mathf.Abs(outward.X) > 0.5f ? new Vector3(0.1f, 0.012f, length) : new Vector3(length, 0.012f, 0.1f), _lppYellow, false);
+        }
     }
 
     private void PaintNoParkingCurb(Vector3 center, Vector3 dir, float halfLength)
@@ -853,6 +868,7 @@ public partial class CityGenerator : Node3D
                     continue;
                 Vector3 curb = new(roadX + side * (RoadWidth * 0.5f - 0.045f), CurbHeight * 0.5f, center.Z);
                 AddBox(_staticRoot, curb, new Vector3(0.03f, CurbHeight, length), _curbYellow, false);
+                AddBox(_staticRoot, new Vector3(roadX + side * (RoadWidth * 0.5f - 0.2f), 0.006f, center.Z), new Vector3(0.1f, 0.012f, length), _lppYellow, false);
             }
         }
         else
@@ -865,6 +881,7 @@ public partial class CityGenerator : Node3D
                     continue;
                 Vector3 curb = new(center.X, CurbHeight * 0.5f, roadZ + side * (RoadWidth * 0.5f - 0.045f));
                 AddBox(_staticRoot, curb, new Vector3(length, CurbHeight, 0.03f), _curbYellow, false);
+                AddBox(_staticRoot, new Vector3(center.X, 0.006f, roadZ + side * (RoadWidth * 0.5f - 0.2f)), new Vector3(length, 0.012f, 0.1f), _lppYellow, false);
             }
         }
     }
