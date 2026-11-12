@@ -285,6 +285,7 @@ public partial class CityGenerator : Node3D
             if (plan.Kind == WorldBlockKind.Buildings)
             {
                 // A base e o ponto lógico são leves; cada prédio é criado em seu próprio frame.
+                Node3D blockRoot = null;
                 await RunChunkVisualStepAsync(
                     chunk.Coordinate, root, chunkRandom,
                     () =>
@@ -292,10 +293,10 @@ public partial class CityGenerator : Node3D
                         int bx = chunk.Coordinate.X;
                         int bz = chunk.Coordinate.Z;
                         Vector3 center = BlockCenter(bx, bz);
-                        var block = new Node3D { Name = $"Block_{bx}_{bz}" };
-                        root.AddChild(block);
+                        blockRoot = new Node3D { Name = $"Block_{bx}_{bz}" };
+                        root.AddChild(blockRoot);
                         AddBox(
-                            block,
+                            blockRoot,
                             center + new Vector3(0f, CurbHeight * 0.5f, 0f),
                             new Vector3(BlockSize, CurbHeight, BlockSize),
                             _sidewalkMaterial);
@@ -313,20 +314,19 @@ public partial class CityGenerator : Node3D
                         chunk.Coordinate, root, buildingRandom,
                         () =>
                         {
-                            Vector3 center = BlockCenter(chunk.Coordinate.X, chunk.Coordinate.Z);
-                            Node block = root.GetNodeOrNull($"Block_{chunk.Coordinate.X}_{chunk.Coordinate.Z}");
-                            if (block == null)
+                            if (blockRoot == null || !GodotObject.IsInstanceValid(blockRoot))
                                 return;
 
+                            Vector3 center = BlockCenter(chunk.Coordinate.X, chunk.Coordinate.Z);
                             BuildBuilding(
-                                block,
+                                blockRoot,
                                 building.BaseCenter,
                                 building.Width,
                                 building.Depth,
                                 building.Height,
                                 building.HasStorefront);
                             DecorateBuilding(
-                                block,
+                                blockRoot,
                                 building.BaseCenter,
                                 building.Width,
                                 building.Depth,
