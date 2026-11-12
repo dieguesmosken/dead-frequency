@@ -15,6 +15,11 @@ public static class WorldDataGenerator
 
     private const ulong FnvOffset = 14695981039346656037UL;
     private const ulong FnvPrime = 1099511628211UL;
+    private const uint DeliveryPointStream = 0x444C5652;
+    private static readonly string[] StreetNamesX =
+        { "Rua das Antenas", "Rua Estática", "Rua do Chiado", "Rua Ruído Branco", "Rua da Interferência", "Rua Onda Curta", "Rua do Sintonizador", "Rua Válvula", "Rua do Eco" };
+    private static readonly string[] StreetNamesZ =
+        { "Av. Marconi", "Av. Hertz", "Av. Tesla", "Av. Landell", "Av. Faraday", "Av. Maxwell", "Av. Morse", "Av. Volta", "Av. Ampère" };
 
     public static WorldGenerationData Generate(
         int seed,
@@ -32,6 +37,7 @@ public static class WorldDataGenerator
         float chunkSize = biome == WorldBiome.City ? blockSize + roadWidth : FarmChunkSize;
         bool centeredGrid = biome == WorldBiome.City;
         var chunks = new List<WorldChunkData>();
+        var deliveryPoints = new List<WorldDeliveryPointData>();
         var spawnPoints = new Dictionary<string, WorldSpawnPoint>(StringComparer.Ordinal);
 
         if (centeredGrid)
@@ -56,6 +62,7 @@ public static class WorldDataGenerator
                 }
             }
 
+            BuildCityDeliveryPoints(seed, cityRadius, blockSize, chunkSize, curbHeight, deliveryPoints, progress);
             BuildCitySpawnPoints(
                 spawnPoints, blockSize, chunkSize, curbHeight, cityRadius,
                 marketBlock, radioStationBlock, gasStations);
@@ -90,8 +97,75 @@ public static class WorldDataGenerator
 
         progress?.Invoke(new WorldGenerationProgress("Preparando pontos de início", 1, 1));
         return new WorldGenerationData(
-            seed, CurrentGeneratorVersion, biome, chunkSize, centeredGrid, chunks, spawnPoints);
+            seed, CurrentGeneratorVersion, biome, chunkSize, centeredGrid, chunks, deliveryPoints, spawnPoints);
     }
+
+    private static void BuildCityDeliveryPoints(
+        int worldSeed,
+        int radius,
+        float blockSize,
+        float period,
+        float curbHeight,
+        List<WorldDeliveryPointData> destination,
+        Action<WorldGenerationProgress> progress)
+    {
+        int total = (radius * 2 + 1) * (radius * 2 + 1) - 1;
+        int completed = 0;
+        float edge = blockSize * 0.5f - 1.5f;
+
+        // Mantém a mesma ordem do gerador visual legado: X externo, Z interno, sem o depósito.
+        for (int bx = -radius; bx <= radius; bx++)
+        {
+            for (int bz = -radius; bz <= radius; bz++)
+            {
+                if (bx == 0 && bz == 0)
+                    continue;
+
+                var coordinate = new WorldChunkCoordinate(bx, bz);
+                var rng = new RandomNumberGenerator
+                {
+                    Seed = DeriveChunkSeed(worldSeed, coordinate, DeliveryPointStream),
+                };
+
+                int side = rng.RandiRange(0, 3);
+                Vector3 offset;
+                string street;
+                switch (side)
+                {
+                    case 0:
+                        offset = new Vector3(edge, 0f, 0f);
+                        street = StreetX(bx);
+                        break;
+                    case 1:
+                        offset = new Vector3(-edge, 0f, 0f);
+                        street = StreetX(bx - 1);
+                        break;
+                    case 2:
+                        offset = new Vector3(0f, 0f, edge);
+                        street = StreetZ(bz);
+                        break;
+                    default:
+                        offset = new Vector3(0f, 0f, -edge);
+                        street = StreetZ(bz - 1);
+                        break;
+                }
+
+                int addressNumber = rng.RandiRange(10, 999);
+                Vector3 center = new(bx * period, 0f, bz * period);
+                destination.Add(new WorldDeliveryPointData(
+                    bx,
+                    bz,
+                    center + offset + new Vector3(0f, curbHeight, 0f),
+                    $"{street}, nº {addressNumber}"));
+
+                completed++;
+                progress?.Invoke(new WorldGenerationProgress("Calculando endereços e entregas", completed, total));
+            }
+        }
+    }
+
+    private static string StreetX(int index) => StreetNamesX[Mathf.PosMod(index, StreetNamesX.Length)];
+    private static string StreetZ(int index) => StreetNamesZ[Mathf.PosMod(index, StreetNamesZ.Length)];
 
     /// <summary>
     /// Seed estável independente da ordem em que os chunks forem carregados.
