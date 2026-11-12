@@ -350,11 +350,12 @@ public partial class CityGenerator : Node3D
             ? gridWidth * gridWidth
             : farmChunkWidth * farmChunkWidth;
         int logicalBlockCount = Biome == WorldBiome.City ? logicalChunkCount : 0;
+        int logicalFarmSiteCount = Biome == WorldBiome.Farm ? 1 : 0;
         int logicalNoParkingCount = Biome == WorldBiome.City ? 1 : 0;
         int logicalServiceCount = Biome == WorldBiome.City ? logicalChunkCount - 1 : 0;
         int logicalDeliveryCount = Biome == WorldBiome.City && _useLogicalWorldData ? logicalChunkCount - 1 : 0;
         int logicalTotal = Mathf.Max(1,
-            logicalChunkCount + logicalBlockCount + logicalNoParkingCount +
+            logicalChunkCount + logicalBlockCount + logicalFarmSiteCount + logicalNoParkingCount +
             logicalServiceCount + logicalDeliveryCount + 1);
 
         var logicalOffsets = new Dictionary<string, int>();
@@ -375,7 +376,8 @@ public partial class CityGenerator : Node3D
         else
         {
             logicalOffsets["Indexando chunks do rancho"] = 0;
-            logicalOffsets["Preparando pontos de início"] = logicalChunkCount;
+            logicalOffsets["Calculando sítios e destinos do rancho"] = logicalChunkCount;
+            logicalOffsets["Preparando pontos de início"] = logicalChunkCount + logicalFarmSiteCount;
         }
 
         WorldLoadingScreen loading = null;
@@ -391,7 +393,8 @@ public partial class CityGenerator : Node3D
             Seed, Biome, Radius, BlockSize, SidewalkWidth, RoadWidth, FarmExtent, CurbHeight,
             MarketBlock, RadioStationBlock, FireStationBlock, PoliceStationBlock,
             ShoppingMallBlock, ApartmentBlock, DealerBlock, WaterTowerBlock, CarWashBlock,
-            ParkChance, ParkingLotChance, GasStations, StoreBrandCount, StorefrontChance, _useLogicalWorldData,
+            ParkChance, ParkingLotChance, GasStations, StoreBrandCount, StorefrontChance,
+            FarmNameCatalog, _useLogicalWorldData,
             progress =>
             {
                 WorldDataProgress?.Invoke(progress);
@@ -427,6 +430,12 @@ public partial class CityGenerator : Node3D
             MarketStockPoint = WorldData.Services.MarketStockPoint;
             MarketEntrance = WorldData.Services.MarketEntrance;
             RadioConsolePoint = WorldData.Services.RadioConsolePoint;
+        }
+        else if (Biome == WorldBiome.Farm && _useLogicalWorldData)
+        {
+            _deliveryPoints.Clear();
+            foreach (WorldDeliveryPointData point in WorldData.DeliveryPoints)
+                _deliveryPoints.Add(new DeliveryPoint { Position = point.Position, Address = point.Address });
         }
 
         _rng = new RandomNumberGenerator { Seed = (ulong)Seed };
