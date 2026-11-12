@@ -261,14 +261,13 @@ public partial class ShopScreen : ModalScreen
             Refresh();
             return;
         }
-        PlayerInventory inv = PlayerInventory.Instance;
-        if (price <= 0 || inv == null || !inv.TryRemoveItem(itemId))
+        if (price <= 0)
         {
-            GD.PushError("ShopScreen: venda confirmada sem item correspondente no inventário local.");
-            _feedback.Text = "Venda concluída, mas o item não foi encontrado na mochila.";
+            _feedback.Text = "O servidor retornou um valor de venda inválido.";
             Refresh();
             return;
         }
+        // O servidor já removeu o item e enviou o inventário atualizado em "itemsState".
         _feedback.Text = $"{ItemCatalog.Get(itemId)?.Name ?? "Item"} vendido por $ {price}.";
         Refresh();
     }
@@ -333,7 +332,9 @@ public partial class ShopScreen : ModalScreen
             Refresh();
             return;
         }
-        PlayerInventory.Instance?.TryAdd(def.Id);
+        // No multiplayer o servidor já adicionou/equipou o item e enviou "itemsState".
+        if (!Online)
+            PlayerInventory.Instance?.TryAdd(def.Id);
         _feedback.Text = def.IsGear ? $"{def.Name} comprado e equipado (veja no inventário: I)." : $"{def.Name} foi para a mochila.";
         Refresh();
     }

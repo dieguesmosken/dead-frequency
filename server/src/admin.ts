@@ -66,6 +66,10 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
   #detail { margin-top: 12px; display: none; }
   #detail.show { display: block; }
   .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+  .tabs { display:flex; gap:8px; flex-wrap:wrap; margin: 12px 0 18px; }
+  .tab-btn[aria-selected="true"] { background: var(--fg); color:#000; border-color:var(--fg); }
+  .tab-panel[hidden] { display:none; }
+  .usage-note { line-height:1.55; white-space:normal; }
   .status-pending { color: var(--warn); }
   .status-delivered { color: var(--fg); }
   .status-lost { color: var(--bad); }
@@ -90,7 +94,7 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
       <h1>CENTRAL DE RÁDIO<small>Dead Frequency · painel do servidor</small></h1>
       <div class="row">
         <span><span id="liveDot" class="dot"></span><span id="liveText" class="muted">conectando…</span></span>
-        <label class="row muted" style="gap:6px"><input id="autoRefresh" type="checkbox" checked> auto (5 s)</label>
+        <label class="row muted" style="gap:6px"><input id="autoRefresh" type="checkbox" checked> auto (60 s)</label>
         <button id="refreshBtn">Atualizar</button>
         <button id="logoutBtn">Sair</button>
       </div>
@@ -98,6 +102,12 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
 
     <div id="appMsg" class="msg"></div>
 
+    <nav class="tabs" aria-label="Seções do painel">
+      <button type="button" class="tab-btn" data-tab="overview" aria-selected="true">Visão geral</button>
+      <button type="button" class="tab-btn" data-tab="usage" aria-selected="false">Uso e limites</button>
+    </nav>
+
+    <section id="tab-overview" class="tab-panel">
     <div class="cards" id="cards"></div>
 
     <h2>Aviso para todas as salas</h2>
@@ -138,7 +148,36 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
     <section id="detail" class="panel"></section>
 
     <footer id="serverInfo"></footer>
-  </section>
+    </section>
+
+    <section id="tab-usage" class="tab-panel" hidden>
+      <h2>Uso observado · WebSocket / Durable Objects</h2>
+      <div class="cards" id="trafficCards"></div>
+      <p id="trafficNote" class="panel usage-note muted">Aguardando métricas…</p>
+
+      <h2>Mensagens recebidas por tipo · hoje (UTC)</h2>
+      <div class="table-wrap">
+        <table><thead><tr><th>Tipo</th><th>Mensagens</th></tr></thead><tbody id="trafficTypes"></tbody></table>
+      </div>
+
+      <h2>Histórico diário · últimos 30 dias (UTC)</h2>
+      <div class="table-wrap">
+        <table><thead><tr><th>Dia</th><th>Mensagens WS</th><th>Conexões</th><th>Equivalente DO*</th><th>Dados recebidos</th></tr></thead><tbody id="trafficDays"></tbody></table>
+      </div>
+
+      <h2>Limites de referência · plano Free</h2>
+      <div class="grid2">
+        <div class="panel usage-note">
+          <strong>Workers · 100.000 requisições/dia</strong>
+          <p>O código do jogo não consegue consultar o consumo total oficial da conta. Esse total inclui requisições HTTP e a abertura das conexões WebSocket. Consulte o painel de métricas da Cloudflare para o valor exato.</p>
+          <a href="https://dash.cloudflare.com/" target="_blank" rel="noopener">Abrir painel Cloudflare ↗</a>
+        </div>
+        <div class="panel usage-note">
+          <strong>Durable Objects · 100.000 requisições/dia</strong>
+          <p>*Equivalente parcial estimado: conexões WebSocket + 1 requisição para cada 20 mensagens recebidas e 1 RPC por lote de métricas. Ainda não inclui outros RPCs, requisições HTTP internas nem alarmes.</p>
+        </div>
+      </div>
+    </section>
 </main>
 
 <script>
@@ -214,18 +253,56 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
       const roomName = r.name ? '<br><span class="muted" style="letter-spacing:0;font-size:11px">' + esc(r.name) + '</span>' : "";
       const permanentTag = r.permanent ? '<span class="tag">PERMANENTE</span>' : "";
       const passwordTag = r.hasPassword ? '<span class="tag">SENHA</span>' : "";
+      const protocol = Number(r.protocol || 7);
+      const protocolTag = '<span class="tag">PROTOCOLO ' + protocol + '</span>';
       return '<tr class="' + (r.players ? "" : "empty") + '">' +
-        '<td class="code">' + esc(r.code) + roomName + '<br>' + permanentTag + passwordTag + '</td>' +
+        '<td class="code">' + esc(r.code) + roomName + '<br>' + protocolTag + permanentTag + passwordTag + '</td>' +
         '<td class="names">' + r.players + ' · ' + names + '</td>' +
         '<td>' + r.shift + '</td>' +
         '<td>' + r.pendingJobs + ' pendentes</td>' +
         '<td>' + money(r.money) + '</td>' +
         '<td>há ' + ago(r.createdAt) + '</td>' +
         '<td>há ' + ago(r.updatedAt) + '</td>' +
-        '<td><button data-detail="' + esc(r.code) + '">Detalhes</button> ' +
+        '<td><button data-detail="' + esc(r.code) + '" data-protocol="' + protocol + '">Detalhes</button> ' +
         (r.permanent ? '<button disabled title="Salas permanentes não expiram nem podem ser encerradas.">Permanente</button>' :
-          '<button class="danger" data-close="' + esc(r.code) + '">Encerrar</button>') + '</td></tr>';
+          '<button class="danger" data-close="' + esc(r.code) + '" data-protocol="' + protocol + '">Encerrar</button>') + '</td></tr>';
     }).join("");
+  }
+
+  function formatBytes(value) {
+    const n = Number(value || 0);
+    if (n < 1024) return n + " B";
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+    return (n / (1024 * 1024)).toFixed(2) + " MB";
+  }
+
+  function renderTraffic(traffic, server) {
+    const t = traffic?.today || { messages: 0, connections: 0, bytes: 0, byType: {}, estimatedDoRequests: 0 };
+    const limit = Number(server?.limits?.durableObjectsFreeRequestsPerDay || 100000);
+    const used = Number(t.estimatedDoRequests || 0);
+    const percent = Math.min(100, used / limit * 100);
+    const cards = [
+      ["Mensagens WebSocket", Number(t.messages || 0).toLocaleString("pt-BR"), "recebidas hoje · UTC"],
+      ["Conexões WebSocket", Number(t.connections || 0).toLocaleString("pt-BR"), "aberturas registradas hoje"],
+      ["Equivalente DO estimado", used.toLocaleString("pt-BR"), percent.toFixed(2).replace(".", ",") + "% da referência Free"],
+      ["Dados recebidos", formatBytes(t.bytes), "payloads WebSocket"],
+    ];
+    $("trafficCards").innerHTML = cards.map(([label, value, note]) =>
+      '<div class="card"><span>' + esc(label) + '</span><b>' + esc(value) + '</b><em>' + esc(note) + '</em></div>').join("");
+
+    const types = Object.entries(t.byType || {}).sort((a, b) => b[1] - a[1]);
+    $("trafficTypes").innerHTML = types.length
+      ? types.map(([type, count]) => "<tr><td>" + esc(type) + "</td><td>" + Number(count).toLocaleString("pt-BR") + "</td></tr>").join("")
+      : '<tr class="empty"><td colspan="2">Nenhuma mensagem registrada hoje.</td></tr>';
+
+    const days = traffic?.days || [];
+    $("trafficDays").innerHTML = days.length
+      ? days.map((d) => "<tr><td>" + esc(d.day) + "</td><td>" + Number(d.messages || 0).toLocaleString("pt-BR") +
+        "</td><td>" + Number(d.connections || 0).toLocaleString("pt-BR") + "</td><td>" +
+        Number(d.estimatedDoRequests || 0).toLocaleString("pt-BR") + "</td><td>" + esc(formatBytes(d.bytes)) + "</td></tr>").join("")
+      : '<tr class="empty"><td colspan="5">Ainda não há histórico de tráfego.</td></tr>';
+
+    $("trafficNote").textContent = "Contadores agregados em lotes (a cada 100 mensagens ou 10 conexões) e enviados ao registro global. O valor é aproximado: hibernação ou reinicialização antes da gravação pode perder o lote ainda não persistido. A equivalência soma conexões, mensagens recebidas na regra 20:1 e RPCs de gravação das métricas; outros RPCs e requisições internas não estão incluídos. Não substitui o Analytics oficial da Cloudflare.";
   }
 
   function renderChatStats(records) {
@@ -238,11 +315,11 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
     ).join("");
   }
 
-  async function renderDetail(code) {
-    openRoom = code;
+  async function renderDetail(code, protocol = 7) {
+    openRoom = { code, protocol };
     const box = $("detail");
     try {
-      const d = await api("/rooms/" + encodeURIComponent(code));
+      const d = await api("/rooms/" + encodeURIComponent(code) + "?protocol=" + protocol);
       const players = d.players.length ? d.players.map((p) => {
         const st = p.state;
         const where = st ? (st.st === 1 ? "dirigindo a van" : (st.held ? "segurando " + esc(st.held) : "a pé")) : "sem dados ainda";
@@ -279,12 +356,13 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
       renderCards(data);
       renderRooms(data.rooms);
       renderChatStats(data.chatByDayRoom);
+      renderTraffic(data.traffic, data.server);
       renderInitialPasswords(data.initialPasswords);
       const srv = data.server;
       $("serverInfo").textContent = "protocolo v" + srv.protocol + " · até " + srv.maxPlayers + " jogadores por sala · datacenter " + srv.colo +
         " · instância do worker ativa há " + ago(srv.isolateStartedAt) + " · atualizado " + new Date().toLocaleTimeString("pt-BR");
       setLive(true, "no ar");
-      if (openRoom) renderDetail(openRoom);
+      if (openRoom) renderDetail(openRoom.code, openRoom.protocol);
     } catch (e) {
       if (e.status === 401) { logout("Token inválido."); return; }
       setLive(false, e.status === 503 ? "painel desativado" : "sem resposta");
@@ -333,7 +411,7 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
 
   function schedule() {
     clearInterval(timer);
-    if ($("autoRefresh").checked) timer = setInterval(refresh, 5000);
+    if ($("autoRefresh").checked) timer = setInterval(refresh, 60000);
   }
 
   function login(value) {
@@ -355,6 +433,15 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
     $("tokenInput").focus();
   }
 
+  document.querySelectorAll("[data-tab]").forEach((button) => {
+    button.onclick = () => {
+      const selected = button.dataset.tab;
+      document.querySelectorAll("[data-tab]").forEach((item) => item.setAttribute("aria-selected", String(item === button)));
+      $("tab-overview").hidden = selected !== "overview";
+      $("tab-usage").hidden = selected !== "usage";
+    };
+  });
+
   $("loginForm").onsubmit = (e) => { e.preventDefault(); if ($("tokenInput").value.trim()) login($("tokenInput").value); };
   $("logoutBtn").onclick = () => logout();
   $("refreshBtn").onclick = refresh;
@@ -363,15 +450,16 @@ export const ADMIN_HTML = /* html */ `<!doctype html>
   $("rooms").onclick = async (e) => {
     const detail = e.target.closest("[data-detail]");
     const close = e.target.closest("[data-close]");
-    if (detail) renderDetail(detail.dataset.detail);
+    if (detail) renderDetail(detail.dataset.detail, Number(detail.dataset.protocol || 7));
     if (close) {
       const code = close.dataset.close;
-      if (!confirm("Encerrar a sala " + code + "? Todos os jogadores serão desconectados.")) return;
+      const protocol = Number(close.dataset.protocol || 7);
+      if (!confirm("Encerrar a sala " + code + " (protocolo " + protocol + ")? Todos os jogadores serão desconectados.")) return;
       close.disabled = true;
       try {
-        await api("/rooms/" + encodeURIComponent(code) + "/close", { method: "POST" });
+        await api("/rooms/" + encodeURIComponent(code) + "/close?protocol=" + protocol, { method: "POST" });
         show($("appMsg"), "Sala " + code + " encerrada.", "ok");
-        if (openRoom === code) { openRoom = null; $("detail").className = "panel"; }
+        if (openRoom && openRoom.code === code && openRoom.protocol === protocol) { openRoom = null; $("detail").className = "panel"; }
         refresh();
       } catch (err) { show($("appMsg"), err.message, "err"); close.disabled = false; }
     }

@@ -38,7 +38,25 @@ export interface Env {
 /** Momento em que esta instância do Worker atendeu a primeira requisição (Date.now() no escopo global vale 0). */
 let SERVER_STARTED = 0;
 
-const PROTOCOL_VERSION = 6;
+const PROTOCOL_VERSION = 7;
+/** Protocolos com isolamento de sala habilitado. V8 inicia com o mesmo contrato de mensagens do V7. */
+const SUPPORTED_PROTOCOLS = [7, 8] as const;
+type SupportedProtocol = (typeof SUPPORTED_PROTOCOLS)[number];
+
+function normalizeProtocol(value: unknown): SupportedProtocol | null {
+  const protocol = typeof value === "number" ? value : typeof value === "string" && /^\d+$/.test(value) ? Number(value) : NaN;
+  return SUPPORTED_PROTOCOLS.includes(protocol as SupportedProtocol) ? protocol as SupportedProtocol : null;
+}
+
+/** Mantém os IDs históricos do V7; versões futuras recebem namespaces próprios. */
+function roomDurableId(protocol: SupportedProtocol, code: string): string {
+  return protocol === 7 ? code : `v${protocol}:${code}`;
+}
+
+/** Mantém as chaves antigas do Registry para não perder salas V7 já registradas. */
+function roomSummaryKey(protocol: number | undefined, code: string): string {
+  return (protocol ?? 7) === 7 ? `room:${code}` : `room:v${protocol}:${code}`;
+}
 /** Veículos da fase (VanController.NetId no Godot): a van e, desde a v0.9.3, a moto e os caminhões do pátio. */
 const VEHICLES = ["van", "moto", "truck_yellow", "truck_red", "car_gou", "car_fusca", "car_opalinha"];
 /** Carros da concessionária (v0.9.7): comprados uma vez por sala, com o dinheiro do grupo. */
@@ -49,10 +67,18 @@ const CODE_LENGTH = 5;
 const MAX_MESSAGE_BYTES = 8 * 1024;
 const MAX_INVENTORY_ITEMS = 10;
 const MAX_WORLD_ITEMS = 64;
+const MAX_WORLD_COORDINATE = 10000;
+const MAX_DROP_DISTANCE = 3.5;
+const MAX_PICKUP_DISTANCE = 3.5;
 const BUYBACK_PERCENT = 50;
 const CHAT_WINDOW_MS = 5000;
 const CHAT_MAX_MESSAGES = 3;
 const CHAT_STATS_RETENTION_DAYS = 30;
+const TRAFFIC_STATS_RETENTION_DAYS = 30;
+const TRAFFIC_FLUSH_MESSAGES = 100;
+const TRAFFIC_FLUSH_CONNECTIONS = 10;
+const FREE_DAILY_REQUEST_LIMIT = 100_000;
+const WS_MESSAGES_PER_BILLABLE_REQUEST = 20;
 const ROOM_PASSWORD_LENGTH = 10;
 const PERMANENT_ROOMS = [
   { code: "ADMNA", name: "ADMIN 1 - CIDADE", level: "city", isPublic: false, passwordProtected: true },
@@ -84,6 +110,15 @@ const CARGO_CATALOG = [
 ];
 
 /** Preços da loja — mesmos de ItemCatalog.cs no Godot. */
+const ITEM_SLOTS: Record<string, string> = {
+  radar: "wrist",
+  nightvision: "head",
+  gloves: "hands",
+  backpack: "back",
+  chinelos: "feet",
+  chinelos_quebrados: "feet",
+};
+
 const SHOP_PRICES: Record<string, number> = {
   radar: 400,
   nightvision: 350,
@@ -169,7 +204,7 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
 
     if (url.pathname === "/" || url.pathname === "/health") {
-      return json({ ok: true, game: "dead-frequency", protocol: PROTOCOL_VERSION });
+      return json({ ok: true, game: "dead-frequency", protocol: PROTOCOL_VERSION, supportedProtocols: SUPPORTED_PROTOCOLS });
     }
 
     if (url.pathname === "/admin" || url.pathname === "/admin/") {
@@ -186,34 +221,42 @@ export default {
     if (url.pathname === "/api/stats" && request.method === "GET") {
       const registry = env.REGISTRY.get(env.REGISTRY.idFromName("global"));
       const stats = await registry.publicStats();
-      return new Response(JSON.stringify({ ok: true, protocol: PROTOCOL_VERSION, maxPlayers: MAX_PLAYERS, ...stats, now: Date.now() }), {
+      return new Response(JSON.stringify({ ok: true, protocol: PROTOCOL_VERSION, supportedProtocols: SUPPORTED_PROTOCOLS, maxPlayers: MAX_PLAYERS, ...stats, now: Date.now() }), {
         headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=15", ...CORS },
       });
     }
 
     if (url.pathname === "/api/rooms" && request.method === "GET") {
+      const protocol = normalizeProtocol(url.searchParams.get("protocol") ?? String(PROTOCOL_VERSION));
+      if (!protocol) return json({ error: "Protocolo não suportado.", supportedProtocols: SUPPORTED_PROTOCOLS }, 400);
       const registry = env.REGISTRY.get(env.REGISTRY.idFromName("global"));
       await registry.ensurePermanentRooms();
-      return json({ rooms: await registry.publicRooms() });
+      return json({ protocol, rooms: await registry.publicRooms(protocol) });
     }
 
     if (url.pathname === "/api/rooms" && request.method === "POST") {
       let level = "city";
       let autoProfession = false;
       let isPublic = true;
+      let protocol: SupportedProtocol = PROTOCOL_VERSION;
       try {
-        const body = (await request.json()) as { level?: unknown; autoProfession?: unknown; isPublic?: unknown };
+        const body = (await request.json()) as { level?: unknown; autoProfession?: unknown; isPublic?: unknown; protocol?: unknown };
         if (typeof body.level === "string" && LEVELS.includes(body.level)) level = body.level;
         autoProfession = body.autoProfession === true;
         isPublic = body.isPublic !== false;
+        if (body.protocol !== undefined) {
+          const requested = normalizeProtocol(body.protocol);
+          if (!requested) return json({ error: "Protocolo não suportado.", supportedProtocols: SUPPORTED_PROTOCOLS }, 400);
+          protocol = requested;
+        }
       } catch {
-        // corpo vazio ou inválido: cidade
+        // corpo vazio ou inválido: cidade, protocolo atual
       }
       for (let attempt = 0; attempt < 6; attempt++) {
         const code = randomCode();
-        const stub = env.ROOMS.get(env.ROOMS.idFromName(code));
-        const res = await stub.fetch("https://room/init", { method: "POST", body: JSON.stringify({ code, level, autoProfession, isPublic }) });
-        if (res.status === 200) return json({ code });
+        const stub = env.ROOMS.get(env.ROOMS.idFromName(roomDurableId(protocol, code)));
+        const res = await stub.fetch("https://room/init", { method: "POST", body: JSON.stringify({ code, protocol, level, autoProfession, isPublic }) });
+        if (res.status === 200) return json({ code, protocol });
         if (res.status !== 409) return json({ error: "Falha ao criar sala" }, 500);
       }
       return json({ error: "Não foi possível gerar um código livre" }, 503);
@@ -221,11 +264,13 @@ export default {
 
     const match = url.pathname.match(/^\/api\/rooms\/([A-Za-z0-9]+)(\/ws)?$/);
     if (match) {
+      const protocol = normalizeProtocol(url.searchParams.get("protocol") ?? String(PROTOCOL_VERSION));
+      if (!protocol) return json({ error: "Protocolo não suportado.", supportedProtocols: SUPPORTED_PROTOCOLS }, 400);
       const registry = env.REGISTRY.get(env.REGISTRY.idFromName("global"));
       await registry.ensurePermanentRooms();
       const code = normalizeCode(match[1]);
       if (!code) return json({ error: "Código inválido" }, 400);
-      const stub = env.ROOMS.get(env.ROOMS.idFromName(code));
+      const stub = env.ROOMS.get(env.ROOMS.idFromName(roomDurableId(protocol, code)));
       if (match[2]) {
         if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
           return json({ error: "Esperado WebSocket" }, 426);
@@ -264,7 +309,7 @@ async function handleAdmin(request: Request, url: URL, env: Env): Promise<Respon
     await registry.ensurePermanentRooms();
     const status = await registry.status();
     const colo = (request as Request & { cf?: { colo?: string } }).cf?.colo ?? "local";
-    return json({ ...status, server: { protocol: PROTOCOL_VERSION, maxPlayers: MAX_PLAYERS, colo, isolateStartedAt: SERVER_STARTED, now: Date.now() } });
+    return json({ ...status, server: { protocol: PROTOCOL_VERSION, supportedProtocols: SUPPORTED_PROTOCOLS, maxPlayers: MAX_PLAYERS, colo, isolateStartedAt: SERVER_STARTED, now: Date.now(), limits: { workersFreeRequestsPerDay: FREE_DAILY_REQUEST_LIMIT, durableObjectsFreeRequestsPerDay: FREE_DAILY_REQUEST_LIMIT, wsMessagesPerBillableRequest: WS_MESSAGES_PER_BILLABLE_REQUEST } } });
   }
 
   if (path === "/initial-passwords/ack" && request.method === "POST") {
@@ -276,9 +321,12 @@ async function handleAdmin(request: Request, url: URL, env: Env): Promise<Respon
     const { msg } = (await request.json().catch(() => ({}))) as { msg?: string };
     const text = String(msg ?? "").trim().slice(0, 120);
     if (!text) return json({ error: "Mensagem vazia" }, 400);
-    const codes = await registry.activeCodes();
-    await Promise.all(codes.map((code) => env.ROOMS.get(env.ROOMS.idFromName(code)).adminAnnounce(text)));
-    return json({ ok: true, rooms: codes.length });
+    const rooms = await registry.activeCodes();
+    await Promise.all(rooms.map(({ code, protocol }) => {
+      const supported = normalizeProtocol(protocol);
+      return supported ? env.ROOMS.get(env.ROOMS.idFromName(roomDurableId(supported, code))).adminAnnounce(text) : Promise.resolve();
+    }));
+    return json({ ok: true, rooms: rooms.length });
   }
 
   if (path === "/permanent-rooms" && request.method === "POST") {
@@ -302,12 +350,14 @@ async function handleAdmin(request: Request, url: URL, env: Env): Promise<Respon
   const match = path.match(/^\/rooms\/([A-Za-z0-9]+)(\/close)?$/);
   if (match) {
     const code = normalizeCode(match[1]);
+    const protocol = normalizeProtocol(url.searchParams.get("protocol") ?? String(PROTOCOL_VERSION));
     if (!code) return json({ error: "Código inválido" }, 400);
-    const room = env.ROOMS.get(env.ROOMS.idFromName(code));
+    if (!protocol) return json({ error: "Protocolo não suportado.", supportedProtocols: SUPPORTED_PROTOCOLS }, 400);
+    const room = env.ROOMS.get(env.ROOMS.idFromName(roomDurableId(protocol, code)));
     if (match[2] && request.method === "POST") {
       const closed = await room.adminClose();
       if (!closed) return json({ error: "Sala permanente ou inexistente não pode ser encerrada." }, 409);
-      await registry.remove(code);
+      await registry.remove(code, protocol);
       return json({ ok: true, closed });
     }
     const detail = await room.adminDetail();
@@ -321,6 +371,7 @@ async function handleAdmin(request: Request, url: URL, env: Env): Promise<Respon
 
 export interface RoomSummary {
   code: string;
+  protocol?: number;
   name?: string;
   players: number;
   names: string[];
@@ -349,6 +400,14 @@ interface DebugAuthAttemptResult {
   allowed: boolean;
   lockedUntil: number;
   attemptsRemaining: number;
+}
+
+interface TrafficDailyRecord {
+  messages: number;
+  connections: number;
+  flushes: number;
+  bytes: number;
+  byType: Record<string, number>;
 }
 
 interface GlobalStats {
@@ -499,6 +558,7 @@ export class Registry extends DurableObject<Env> {
   }
 
   private lastChatPrunedDay = "";
+  private lastTrafficPrunedDay = "";
 
   private async recordChat(day: string, room: string, amount: number): Promise<void> {
     if (this.lastChatPrunedDay !== day) {
@@ -586,24 +646,50 @@ export class Registry extends DurableObject<Env> {
     if (event === "lost") stats.lostCargo++;
     if (event === "shift") stats.shiftsCompleted++;
     if (event === "chat")
-      await this.recordChat(new Date().toISOString().slice(0, 10), summary.code, amount);
+      await this.recordChat(new Date().toISOString().slice(0, 10), (summary.protocol ?? 7) === 7 ? summary.code : `v${summary.protocol}-${summary.code}`, amount);
 
-    await this.ctx.storage.put(`room:${summary.code}`, summary);
+    await this.ctx.storage.put(roomSummaryKey(summary.protocol, summary.code), summary);
     const online = await this.onlinePlayers();
     if (online > stats.peakPlayers) { stats.peakPlayers = online; stats.peakPlayersAt = Date.now(); }
     await this.ctx.storage.put("stats", stats);
   }
 
+  /** Persiste contadores agregados em lotes para não gerar uma escrita por mensagem WebSocket. */
+  async recordTraffic(day: string, messages: number, connections: number, bytes: number, byType: Record<string, number>): Promise<void> {
+    if (this.lastTrafficPrunedDay !== day) {
+      const cutoff = new Date(Date.now() - TRAFFIC_STATS_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const records = await this.ctx.storage.list<TrafficDailyRecord>({ prefix: "traffic:" });
+      for (const key of records.keys()) {
+        if (key.slice(8, 18) < cutoff) await this.ctx.storage.delete(key);
+      }
+      this.lastTrafficPrunedDay = day;
+    }
+
+    const key = `traffic:${day}`;
+    await this.ctx.storage.transaction(async (txn) => {
+      const record = (await txn.get<TrafficDailyRecord>(key)) ?? { messages: 0, connections: 0, flushes: 0, bytes: 0, byType: {} };
+      record.messages += messages;
+      record.connections += connections;
+      record.flushes = (record.flushes ?? 0) + 1;
+      record.bytes += bytes;
+      for (const [type, count] of Object.entries(byType)) {
+        record.byType[type] = (record.byType[type] ?? 0) + count;
+      }
+      await txn.put(key, record);
+    });
+  }
+
   /** Salas abertas e públicas, para a lista do menu Multiplayer (sem nomes além do anfitrião). */
-  async publicRooms(): Promise<unknown[]> {
+  async publicRooms(protocol: SupportedProtocol = PROTOCOL_VERSION): Promise<unknown[]> {
     const rooms = await this.ctx.storage.list<RoomSummary>({ prefix: "room:" });
     const stale = Date.now() - 6 * 60 * 60 * 1000;
     return Array.from(rooms.values())
-      .filter((r) => (r.players > 0 || r.permanent === true) && r.isPublic !== false && (r.permanent === true || r.updatedAt > stale))
+      .filter((r) => (r.protocol ?? 7) === protocol && (r.players > 0 || r.permanent === true) && r.isPublic !== false && (r.permanent === true || r.updatedAt > stale))
       .sort((a, b) => Number(b.permanent === true) - Number(a.permanent === true) || b.players - a.players || b.updatedAt - a.updatedAt)
       .slice(0, 30)
       .map((r) => ({
         code: r.code,
+        protocol: r.protocol ?? 7,
         name: r.name ?? "",
         players: r.players,
         max: MAX_PLAYERS,
@@ -640,20 +726,20 @@ export class Registry extends DurableObject<Env> {
     };
   }
 
-  async remove(code: string): Promise<void> {
-    await this.ctx.storage.delete(`room:${code}`);
+  async remove(code: string, protocol: number = 7): Promise<void> {
+    await this.ctx.storage.delete(roomSummaryKey(protocol, code));
   }
 
   async acknowledgeInitialPasswords(): Promise<void> {
     await this.ctx.storage.delete("initial-room-passwords");
   }
 
-  async activeCodes(): Promise<string[]> {
+  async activeCodes(): Promise<Array<{ code: string; protocol: number }>> {
     const rooms = await this.ctx.storage.list<RoomSummary>({ prefix: "room:" });
-    return Array.from(rooms.values()).filter((r) => r.players > 0).map((r) => r.code);
+    return Array.from(rooms.values()).filter((r) => r.players > 0).map((r) => ({ code: r.code, protocol: r.protocol ?? 7 }));
   }
 
-  async status(): Promise<{ stats: GlobalStats; rooms: RoomSummary[]; onlinePlayers: number; activeRooms: number; chatByDayRoom: { day: string; room: string; messages: number }[]; initialPasswords: Record<string, string> }> {
+  async status(): Promise<{ stats: GlobalStats; rooms: RoomSummary[]; onlinePlayers: number; activeRooms: number; chatByDayRoom: { day: string; room: string; messages: number }[]; traffic: { today: TrafficDailyRecord & { day: string; estimatedDoRequests: number }; days: (TrafficDailyRecord & { day: string; estimatedDoRequests: number })[] }; initialPasswords: Record<string, string> }> {
     const rooms = Array.from((await this.ctx.storage.list<RoomSummary>({ prefix: "room:" })).values())
       .sort((a, b) => b.players - a.players || b.updatedAt - a.updatedAt);
     const cutoff = new Date(Date.now() - CHAT_STATS_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -666,6 +752,17 @@ export class Registry extends DurableObject<Env> {
       .sort((a, b) => b.day.localeCompare(a.day) || a.room.localeCompare(b.room));
     const stats = await this.stats();
     stats.chatMessages = chatByDayRoom.reduce((sum, record) => sum + record.messages, 0);
+    const trafficRecords = Array.from((await this.ctx.storage.list<TrafficDailyRecord>({ prefix: "traffic:" })).entries())
+      .map(([key, record]) => {
+        const day = key.slice(8);
+        return { day, ...record, estimatedDoRequests: record.connections + Math.ceil(record.messages / WS_MESSAGES_PER_BILLABLE_REQUEST) + (record.flushes ?? 0) };
+      })
+      .sort((a, b) => b.day.localeCompare(a.day))
+      .filter((record) => record.day >= cutoff);
+    const today = new Date().toISOString().slice(0, 10);
+    const todayTraffic = trafficRecords.find((record) => record.day === today) ?? {
+      day: today, messages: 0, connections: 0, flushes: 0, bytes: 0, byType: {}, estimatedDoRequests: 0,
+    };
     const initialPasswords = (await this.ctx.storage.get<Record<string, string>>("initial-room-passwords")) ?? {};
     return {
       stats,
@@ -673,6 +770,7 @@ export class Registry extends DurableObject<Env> {
       onlinePlayers: rooms.reduce((sum, r) => sum + r.players, 0),
       activeRooms: rooms.filter((r) => r.players > 0).length,
       chatByDayRoom,
+      traffic: { today: todayTraffic, days: trafficRecords },
       initialPasswords,
     };
   }
@@ -702,6 +800,8 @@ const LEVELS = ["city", "farm"];
 
 interface RoomState {
   code: string;
+  /** Versão da sala; ausente em dados legados significa V7. */
+  protocol?: number;
   name?: string;
   /** Fase da sala: todos os jogadores carregam a mesma. Salas antigas não têm (= cidade). */
   level?: string;
@@ -746,6 +846,8 @@ interface Attachment {
   debugAuthorizedUntil?: number;
   /** HMAC-SHA-256 do IP de origem; nunca contém o IP original. */
   debugClientId?: string;
+  lastBuyReq?: number;
+  lastSellReq?: number;
 }
 
 interface PlayerSnapshot {
@@ -775,6 +877,11 @@ export class GameRoom extends DurableObject<Env> {
   /** Último pagamento de profissão de cada jogador (limite de frequência). */
   private lastEarn = new Map<number, number>();
   private chatTimestamps = new Map<number, number[]>();
+  private trafficPendingMessages = 0;
+  private trafficPendingConnections = 0;
+  private trafficPendingBytes = 0;
+  private trafficPendingByType = new Map<string, number>();
+  private trafficFlushPromise: Promise<void> | null = null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -794,6 +901,7 @@ export class GameRoom extends DurableObject<Env> {
     const joined = this.connected().map(attachmentOf).filter((a) => a.joined && a.id !== excludeId);
     return {
       code: room.code,
+      protocol: room.protocol ?? 7,
       name: room.name,
       players: joined.length,
       names: joined.map((a) => a.name),
@@ -853,6 +961,7 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.room) return false;
     if (this.room.permanent) return false;
     const code = this.room.code;
+    const protocol = this.room.protocol ?? 7;
     for (const socket of this.connected()) {
       try {
         socket.send(JSON.stringify({ t: "kick", msg: "Sala encerrada pelo administrador." }));
@@ -866,7 +975,7 @@ export class GameRoom extends DurableObject<Env> {
     this.objects.clear();
     await this.ctx.storage.deleteAll();
     const registry = this.env.REGISTRY.get(this.env.REGISTRY.idFromName("global"));
-    await registry.remove(code);
+    await registry.remove(code, protocol);
     return true;
   }
 
@@ -877,10 +986,13 @@ export class GameRoom extends DurableObject<Env> {
 
     if (url.pathname === "/init") {
       if (this.room) return json({ error: "exists" }, 409);
-      const { code, name, level, autoProfession, isPublic, permanent, passwordSalt, passwordHash } =
-        (await request.json()) as { code: string; name?: string; level?: string; autoProfession?: boolean; isPublic?: boolean; permanent?: boolean; passwordSalt?: string; passwordHash?: string };
+      const { code, protocol: requestedProtocol, name, level, autoProfession, isPublic, permanent, passwordSalt, passwordHash } =
+        (await request.json()) as { code: string; protocol?: number; name?: string; level?: string; autoProfession?: boolean; isPublic?: boolean; permanent?: boolean; passwordSalt?: string; passwordHash?: string };
+      const protocol = normalizeProtocol(requestedProtocol ?? 7);
+      if (!protocol) return json({ error: "Protocolo não suportado." }, 400);
       this.room = {
         code,
+        protocol,
         name: name ? sanitizeRoomName(name) : undefined,
         level: level && LEVELS.includes(level) ? level : "city",
         autoProfession: autoProfession === true,
@@ -912,6 +1024,7 @@ export class GameRoom extends DurableObject<Env> {
     if (url.pathname === "/info") {
       return json({
         code: this.room.code,
+        protocol: this.room.protocol ?? 7,
         name: this.room.name ?? "",
         players: this.connected().length,
         max: MAX_PLAYERS,
@@ -943,6 +1056,7 @@ export class GameRoom extends DurableObject<Env> {
         debugClientId,
       };
       this.ctx.acceptWebSocket(server);
+      this.trackTraffic("ws_connect", 0, 0, 1);
       server.serializeAttachment(attachment);
       this.room.emptySince = null;
       await this.save();
@@ -956,6 +1070,7 @@ export class GameRoom extends DurableObject<Env> {
 
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
     if (!this.room) {
+      this.trackTraffic("room_missing", 1, typeof raw === "string" ? new TextEncoder().encode(raw).byteLength : raw.byteLength);
       // Sala apagada (admin/expirou) mas o socket ainda está vivo: manda sair.
       try {
         ws.send(JSON.stringify({ t: "kick", msg: "Esta sala não existe mais." }));
@@ -966,14 +1081,21 @@ export class GameRoom extends DurableObject<Env> {
       return;
     }
     const text = typeof raw === "string" ? raw : new TextDecoder().decode(raw);
-    if (text.length > MAX_MESSAGE_BYTES) return;
+    if (text.length > MAX_MESSAGE_BYTES) {
+      this.trackTraffic("oversized", 1, typeof raw === "string" ? new TextEncoder().encode(raw).byteLength : raw.byteLength);
+      return;
+    }
 
     let msg: any;
     try {
       msg = JSON.parse(text);
     } catch {
+      this.trackTraffic("invalid_json", 1, typeof raw === "string" ? new TextEncoder().encode(raw).byteLength : raw.byteLength);
       return;
     }
+    const rawBytes = typeof raw === "string" ? new TextEncoder().encode(raw).byteLength : raw.byteLength;
+    const messageType = typeof msg?.t === "string" ? msg.t.slice(0, 32) : "unknown";
+    this.trackTraffic(messageType, 1, rawBytes);
     const me = ws.deserializeAttachment() as Attachment;
 
     switch (msg.t) {
@@ -1059,11 +1181,7 @@ export class GameRoom extends DurableObject<Env> {
       case "sell":
         return this.onSell(ws, me, String(msg.item ?? ""), Number(msg.req) || 0);
       case "inventory":
-        if (me.joined) {
-          me.inventory = sanitizeInventory(msg.items);
-          ws.serializeAttachment(me);
-        }
-        return;
+        return this.onInventory(ws, me, msg.items, msg.eq);
       case "itemDrop":
         return this.onDropWorldItem(ws, me, msg);
       case "itemPickup":
@@ -1083,16 +1201,66 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   async webSocketClose(ws: WebSocket): Promise<void> {
+    await this.flushTraffic();
     await this.onLeave(ws);
   }
 
   async webSocketError(ws: WebSocket): Promise<void> {
+    await this.flushTraffic();
     await this.onLeave(ws);
+  }
+
+  private trackTraffic(type: string, messages = 0, bytes = 0, connections = 0): void {
+    this.trafficPendingMessages += messages;
+    this.trafficPendingConnections += connections;
+    this.trafficPendingBytes += bytes;
+    if (messages > 0) this.trafficPendingByType.set(type, (this.trafficPendingByType.get(type) ?? 0) + messages);
+    if (this.trafficPendingMessages >= TRAFFIC_FLUSH_MESSAGES || this.trafficPendingConnections >= TRAFFIC_FLUSH_CONNECTIONS)
+      this.ctx.waitUntil(this.flushTraffic());
+  }
+
+  private async flushTraffic(): Promise<void> {
+    if (this.trafficFlushPromise) {
+      try { await this.trafficFlushPromise; } catch { /* o lote é recolocado pelo flush original */ }
+      if (this.trafficPendingMessages > 0 || this.trafficPendingConnections > 0)
+        return this.flushTraffic();
+      return;
+    }
+    if (this.trafficPendingMessages === 0 && this.trafficPendingConnections === 0) return;
+
+    const messages = this.trafficPendingMessages;
+    const connections = this.trafficPendingConnections;
+    const bytes = this.trafficPendingBytes;
+    const byType = Object.fromEntries(this.trafficPendingByType);
+    this.trafficPendingMessages = 0;
+    this.trafficPendingConnections = 0;
+    this.trafficPendingBytes = 0;
+    this.trafficPendingByType.clear();
+
+    const registry = this.env.REGISTRY.get(this.env.REGISTRY.idFromName("global"));
+    const task = registry.recordTraffic(new Date().toISOString().slice(0, 10), messages, connections, bytes, byType);
+    this.trafficFlushPromise = task;
+    let persisted = false;
+    try {
+      await task;
+      persisted = true;
+    } catch {
+      // Se o registro estiver temporariamente indisponível, devolve o lote à memória para nova tentativa.
+      this.trafficPendingMessages += messages;
+      this.trafficPendingConnections += connections;
+      this.trafficPendingBytes += bytes;
+      for (const [type, count] of Object.entries(byType))
+        this.trafficPendingByType.set(type, (this.trafficPendingByType.get(type) ?? 0) + count);
+    } finally {
+      this.trafficFlushPromise = null;
+    }
+    if (persisted && (this.trafficPendingMessages > 0 || this.trafficPendingConnections > 0))
+      return this.flushTraffic();
   }
 
   private async onHello(ws: WebSocket, me: Attachment, msg: any): Promise<void> {
     const room = this.room!;
-    if (Number(msg.version) !== PROTOCOL_VERSION) {
+    if (Number(msg.version) !== (room.protocol ?? 7)) {
       ws.send(JSON.stringify({ t: "error", msg: "Versão do jogo diferente da do servidor. Atualize o jogo." }));
       ws.close(4000, "version");
       return;
@@ -1107,8 +1275,10 @@ export class GameRoom extends DurableObject<Env> {
         return;
       }
     }
-    me.inventory = sanitizeInventory(msg.items);
-    me.equipment = sanitizeEquipment(msg.eq);
+    // O inventário online começa vazio: dados locais enviados pelo cliente não são confiáveis.
+    // Itens comprados/coletados durante esta sessão passam a ser controlados pelo servidor.
+    me.inventory = [];
+    me.equipment = "";
     me.joined = true;
     me.prof = room.autoProfession ? this.assignProfession(me.id) : this.validProfession(String(msg.prof ?? ""));
     ws.serializeAttachment(me);
@@ -1130,6 +1300,7 @@ export class GameRoom extends DurableObject<Env> {
         name: me.name,
         color: me.color,
         code: room.code,
+        protocol: room.protocol ?? 7,
         seed: room.seed,
         level: room.level ?? "city",
         prof: me.prof,
@@ -1142,6 +1313,8 @@ export class GameRoom extends DurableObject<Env> {
         owners: room.owners,
         cars: room.cars ?? [],
         worldItems: room.worldItems ?? [],
+        items: me.inventory,
+        equipment: me.equipment,
         objects: Array.from(this.objects.values()),
       }),
     );
@@ -1152,10 +1325,11 @@ export class GameRoom extends DurableObject<Env> {
   private onTick(ws: WebSocket, me: Attachment, msg: any): void {
     if (!me.joined) return;
     const room = this.room!;
-    const equipment = sanitizeEquipment(msg.eq);
-    me.equipment = equipment;
+    const position = strictVector(msg.p, 3, MAX_WORLD_COORDINATE);
+    if (!position) return;
+    const equipment = sanitizeEquipment(me.equipment);
     const snapshot: PlayerSnapshot = {
-      p: vec(msg.p, 3),
+      p: position,
       ry: num(msg.ry),
       hp: num(msg.hp),
       st: msg.st === 1 ? 1 : msg.st === 2 ? 2 : 0,
@@ -1183,7 +1357,7 @@ export class GameRoom extends DurableObject<Env> {
 
   private async onClaim(ws: WebSocket, me: Attachment, id: string): Promise<void> {
     const room = this.room!;
-    if (!this.isKnownObject(id)) return;
+    if (!me.joined || !this.isKnownObject(id)) return;
     const owner = room.owners[id] ?? null;
     const ownerOnline = owner !== null && this.connected().some((s) => attachmentOf(s).id === owner);
     const ownerBusy = ownerOnline && owner !== me.id && this.isUsing(owner!, id);
@@ -1200,6 +1374,7 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private async onRelease(me: Attachment, id: string): Promise<void> {
+    if (!me.joined) return;
     const room = this.room!;
     // Caixas continuam com o último dono (ele segue simulando a física); só os veículos são liberados.
     if (!VEHICLES.includes(id) || room.owners[id] !== me.id) return;
@@ -1209,6 +1384,7 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private async onDeliver(me: Attachment, cargoId: string, integrity: number): Promise<void> {
+    if (!me.joined) return;
     const room = this.room!;
     const job = room.jobs.find((j) => j.id === cargoId);
     if (!job || job.status !== "pending" || room.owners[cargoId] !== me.id) return;
@@ -1226,20 +1402,56 @@ export class GameRoom extends DurableObject<Env> {
     await this.checkShiftDone();
   }
 
-  /** Compra na barraca: confere o preço e desconta do dinheiro do grupo. */
+  /** Compra na barraca: o servidor valida saldo, posse, capacidade e registra o item. */
   private async onBuy(ws: WebSocket, me: Attachment, item: string, req: number): Promise<void> {
     const room = this.room!;
-    const price = SHOP_PRICES[item];
-    const isCar = CARS.includes(item);
-    if (price === undefined || room.money < price || (isCar && (room.cars ?? []).includes(item))) {
+    if (!me.joined || !Number.isSafeInteger(req) || req <= 0 || req <= (me.lastBuyReq ?? 0)) {
       ws.send(JSON.stringify({ t: "buyFail", item, req }));
       return;
     }
+    me.lastBuyReq = req;
+    ws.serializeAttachment(me);
+
+    const price = SHOP_PRICES[item];
+    const isCar = CARS.includes(item);
+    if (price === undefined || room.money < price || (isCar && (room.cars ?? []).includes(item)) ||
+      (!isCar && !canPurchaseItem(me, item))) {
+      ws.send(JSON.stringify({ t: "buyFail", item, req }));
+      return;
+    }
+
     room.money -= price;
-    if (isCar) room.cars = [...(room.cars ?? []), item];
+    if (isCar) {
+      room.cars = [...(room.cars ?? []), item];
+    } else {
+      const slot = ITEM_SLOTS[item];
+      const equipped = equipmentItems(me.equipment ?? "");
+      if (slot && !equipped.some((id) => ITEM_SLOTS[id] === slot)) {
+        me.equipment = sanitizeEquipment([...equipped, item].join(","));
+      } else {
+        me.inventory = [...(me.inventory ?? []), item];
+      }
+      ws.serializeAttachment(me);
+      ws.send(JSON.stringify({ t: "itemsState", items: me.inventory, equipment: me.equipment }));
+    }
     await this.save();
     this.broadcast({ t: "money", money: room.money, by: me.id, name: me.name, item, req });
     this.report("update");
+  }
+
+  /** Aceita apenas remoções e movimentações entre mochila/equipamento; nunca criação de itens. */
+  private onInventory(ws: WebSocket, me: Attachment, rawItems: unknown, rawEquipment: unknown): void {
+    if (!me.joined) return;
+    const inventory = sanitizeInventory(rawItems);
+    const equipment = sanitizeEquipment(rawEquipment);
+    const capacity = equipmentItems(equipment).includes("backpack") ? MAX_INVENTORY_ITEMS : 4;
+    if (inventory.length > capacity || !isAllowedInventoryTransition(me.inventory ?? [], me.equipment ?? "", inventory, equipment)) {
+      ws.send(JSON.stringify({ t: "itemsState", items: me.inventory ?? [], equipment: me.equipment ?? "" }));
+      return;
+    }
+    me.inventory = inventory;
+    me.equipment = equipment;
+    ws.serializeAttachment(me);
   }
 
   private onChat(ws: WebSocket, me: Attachment, raw: unknown): void {
@@ -1261,14 +1473,20 @@ export class GameRoom extends DurableObject<Env> {
     this.report("chat", 1);
   }
 
-  /** Recompra apenas itens presentes na mochila sincronizada pelo jogador. */
+  /** Recompra apenas itens presentes no inventário autoritativo do jogador. */
   private async onSell(ws: WebSocket, me: Attachment, item: string, req: number): Promise<void> {
     const room = this.room!;
-    const inventory = me.inventory ?? [];
+    if (!me.joined || !Number.isSafeInteger(req) || req <= 0 || req <= (me.lastSellReq ?? 0)) {
+      ws.send(JSON.stringify({ t: "sellFail", item, req }));
+      return;
+    }
+    me.lastSellReq = req;
+    const inventory = [...(me.inventory ?? [])];
     const index = inventory.indexOf(item);
     const itemPrice = SHOP_PRICES[item];
     const price = itemPrice === undefined ? 0 : Math.floor(itemPrice * BUYBACK_PERCENT / 100);
-    if (!me.joined || index < 0 || itemPrice === undefined || CARS.includes(item) || price <= 0) {
+    if (index < 0 || itemPrice === undefined || CARS.includes(item) || price <= 0) {
+      ws.serializeAttachment(me);
       ws.send(JSON.stringify({ t: "sellFail", item, req }));
       return;
     }
@@ -1278,6 +1496,7 @@ export class GameRoom extends DurableObject<Env> {
     ws.serializeAttachment(me);
     room.money += price;
     await this.save();
+    ws.send(JSON.stringify({ t: "itemsState", items: me.inventory, equipment: me.equipment ?? "" }));
     this.broadcast({ t: "sold", money: room.money, by: me.id, name: me.name, item, price, req });
     this.report("update");
   }
@@ -1285,9 +1504,15 @@ export class GameRoom extends DurableObject<Env> {
   private async onDropWorldItem(ws: WebSocket, me: Attachment, msg: any): Promise<void> {
     const room = this.room!;
     const item = String(msg.item ?? "");
-    const inventory = me.inventory ?? [];
+    const inventory = [...(me.inventory ?? [])];
     const index = inventory.indexOf(item);
-    if (!me.joined || !Object.prototype.hasOwnProperty.call(SHOP_PRICES, item) || CARS.includes(item) || index < 0 || (room.worldItems ?? []).length >= MAX_WORLD_ITEMS) {
+    const player = this.players.get(me.id);
+    const position = strictVector(msg.p, 3, MAX_WORLD_COORDINATE);
+    const rotation = strictQuaternion(msg.q);
+    if (!me.joined || !player || !position || !rotation ||
+      distanceSquared(player.p, position) > MAX_DROP_DISTANCE * MAX_DROP_DISTANCE ||
+      !Object.prototype.hasOwnProperty.call(SHOP_PRICES, item) || CARS.includes(item) ||
+      index < 0 || (room.worldItems ?? []).length >= MAX_WORLD_ITEMS) {
       ws.send(JSON.stringify({ t: "itemDropFail", msg: "Nao foi possivel largar esse item." }));
       return;
     }
@@ -1298,12 +1523,12 @@ export class GameRoom extends DurableObject<Env> {
     const worldItem: WorldItemState = {
       id: crypto.randomUUID(),
       item,
-      p: vec(msg.p, 3),
-      q: vec(msg.q, 4),
+      p: position,
+      q: rotation,
     };
     room.worldItems = [...(room.worldItems ?? []), worldItem];
     await this.save();
-    ws.send(JSON.stringify({ t: "itemsState", items: inventory }));
+    ws.send(JSON.stringify({ t: "itemsState", items: inventory, equipment: me.equipment ?? "" }));
     this.broadcast({ t: "itemSpawn", ...worldItem });
   }
 
@@ -1311,24 +1536,33 @@ export class GameRoom extends DurableObject<Env> {
     const room = this.room!;
     const worldItems = room.worldItems ?? [];
     const index = worldItems.findIndex((item) => item.id === id);
-    if (!me.joined || index < 0) return;
-    const [worldItem] = worldItems.splice(index, 1);
-    const inventory = me.inventory ?? [];
+    const player = this.players.get(me.id);
+    if (!me.joined || index < 0 || !player) {
+      ws.send(JSON.stringify({ t: "itemPickupFail", msg: "Nao foi possivel pegar esse item." }));
+      return;
+    }
+    const worldItem = worldItems[index];
+    if (distanceSquared(player.p, worldItem.p) > MAX_PICKUP_DISTANCE * MAX_PICKUP_DISTANCE) {
+      ws.send(JSON.stringify({ t: "itemPickupFail", msg: "Voce esta longe demais desse item." }));
+      return;
+    }
+    const inventory = [...(me.inventory ?? [])];
     if (!canReceiveItem(me, worldItem.item, inventory.length)) {
-      worldItems.splice(index, 0, worldItem);
       ws.send(JSON.stringify({ t: "itemPickupFail", msg: "Mochila cheia." }));
       return;
     }
     inventory.push(worldItem.item);
+    worldItems.splice(index, 1);
     me.inventory = inventory;
     room.worldItems = worldItems;
     ws.serializeAttachment(me);
     await this.save();
-    ws.send(JSON.stringify({ t: "itemsState", items: inventory }));
+    ws.send(JSON.stringify({ t: "itemsState", items: inventory, equipment: me.equipment ?? "" }));
     this.broadcast({ t: "itemRemove", id });
   }
 
   private async onTransferItem(ws: WebSocket, me: Attachment, targetId: number, item: string): Promise<void> {
+    if (!me.joined) return;
     const targetSocket = this.connected().find((socket) => {
       const attachment = attachmentOf(socket);
       return attachment.joined && attachment.id === targetId;
@@ -1350,8 +1584,8 @@ export class GameRoom extends DurableObject<Env> {
     target.inventory = targetInventory;
     ws.serializeAttachment(me);
     targetSocket.serializeAttachment(target);
-    ws.send(JSON.stringify({ t: "itemsState", items: inventory }));
-    targetSocket.send(JSON.stringify({ t: "itemsState", items: targetInventory }));
+    ws.send(JSON.stringify({ t: "itemsState", items: inventory, equipment: me.equipment ?? "" }));
+    targetSocket.send(JSON.stringify({ t: "itemsState", items: targetInventory, equipment: target.equipment ?? "" }));
     this.broadcast({ t: "itemTransferred", from: me.id, to: target.id, item });
   }
 
@@ -1424,6 +1658,7 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private async onLost(me: Attachment, cargoId: string): Promise<void> {
+    if (!me.joined) return;
     const room = this.room!;
     const job = room.jobs.find((j) => j.id === cargoId);
     if (!job || job.status !== "pending" || room.owners[cargoId] !== me.id) return;
@@ -1541,7 +1776,7 @@ export class GameRoom extends DurableObject<Env> {
         const code = room.code;
         await this.ctx.storage.deleteAll();
         this.room = null;
-        await this.env.REGISTRY.get(this.env.REGISTRY.idFromName("global")).remove(code);
+        await this.env.REGISTRY.get(this.env.REGISTRY.idFromName("global")).remove(code, room.protocol ?? 7);
         return;
       }
       await this.ctx.storage.setAlarm(since + EMPTY_ROOM_TTL_MS);
@@ -1628,7 +1863,53 @@ function sanitizeInventory(raw: unknown): string[] {
 }
 
 function sanitizeEquipment(raw: unknown): string {
-  return typeof raw === "string" ? raw.replace(/[^a-z_,]/g, "").slice(0, 80) : "";
+  if (typeof raw !== "string") return "";
+  const ids = raw.split(",").filter(Boolean);
+  const slots = new Set<string>();
+  const unique = new Set<string>();
+  for (const id of ids) {
+    const slot = ITEM_SLOTS[id];
+    if (!slot || unique.has(id) || slots.has(slot)) return "";
+    unique.add(id);
+    slots.add(slot);
+  }
+  return Array.from(unique).sort().join(",");
+}
+
+function equipmentItems(raw: string): string[] {
+  return sanitizeEquipment(raw).split(",").filter(Boolean);
+}
+
+function canPurchaseItem(attachment: Attachment, item: string): boolean {
+  const slot = ITEM_SLOTS[item];
+  const equipped = equipmentItems(attachment.equipment ?? "");
+  if (slot && !equipped.some((id) => ITEM_SLOTS[id] === slot)) return true;
+  return canReceiveItem(attachment, item, (attachment.inventory ?? []).length);
+}
+
+function isAllowedInventoryTransition(currentItems: string[], currentEquipment: string, nextItems: string[], nextEquipment: string): boolean {
+  const before = new Map<string, number>();
+  const after = new Map<string, number>();
+  const add = (map: Map<string, number>, id: string) => map.set(id, (map.get(id) ?? 0) + 1);
+  for (const id of [...currentItems, ...equipmentItems(currentEquipment)]) add(before, id);
+  for (const id of [...nextItems, ...equipmentItems(nextEquipment)]) add(after, id);
+
+  const oldFeet = equipmentItems(currentEquipment).find((id) => ITEM_SLOTS[id] === "feet") ?? "";
+  const newFeet = equipmentItems(nextEquipment).find((id) => ITEM_SLOTS[id] === "feet") ?? "";
+  const repairsSlippers = oldFeet === "chinelos_quebrados" && newFeet === "chinelos";
+  const breaksSlippers = oldFeet === "chinelos" && newFeet === "chinelos_quebrados";
+  if (repairsSlippers || breaksSlippers) {
+    const nailsBefore = before.get("prego") ?? 0;
+    const nailsAfter = after.get("prego") ?? 0;
+    if (nailsAfter >= nailsBefore) return false;
+    before.delete(oldFeet);
+    after.delete(newFeet);
+  }
+
+  for (const [id, count] of after) {
+    if (count > (before.get(id) ?? 0)) return false;
+  }
+  return true;
 }
 
 function canReceiveItem(attachment: Attachment | null, item: string, count: number): boolean {
@@ -1636,6 +1917,32 @@ function canReceiveItem(attachment: Attachment | null, item: string, count: numb
     return false;
   const capacity = (attachment.equipment ?? "").split(",").includes("backpack") ? MAX_INVENTORY_ITEMS : 4;
   return count < capacity;
+}
+
+function strictVector(value: unknown, length: number, limit: number): number[] | null {
+  if (!Array.isArray(value) || value.length < length) return null;
+  const result: number[] = [];
+  for (let i = 0; i < length; i++) {
+    const component = value[i];
+    if (typeof component !== "number" || !Number.isFinite(component) || Math.abs(component) > limit) return null;
+    result.push(Math.round(component * 1000) / 1000);
+  }
+  return result;
+}
+
+function strictQuaternion(value: unknown): number[] | null {
+  const q = strictVector(value, 4, 1.001);
+  if (!q) return null;
+  const magnitude = Math.hypot(q[0], q[1], q[2], q[3]);
+  if (!Number.isFinite(magnitude) || magnitude < 0.0001) return null;
+  return q.map((component) => Math.round((component / magnitude) * 1000) / 1000);
+}
+
+function distanceSquared(a: number[], b: number[]): number {
+  const dx = a[0] - b[0];
+  const dy = a[1] - b[1];
+  const dz = a[2] - b[2];
+  return dx * dx + dy * dy + dz * dz;
 }
 
 function num(value: unknown): number {

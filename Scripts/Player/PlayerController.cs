@@ -492,7 +492,10 @@ public partial class PlayerController : CharacterBody3D
         Vector3 from = aimCamera.GlobalPosition;
         if (!from.IsFinite() || !aimCamera.GlobalTransform.Basis.Z.IsFinite())
             return null;
-        Vector3 to = from - aimCamera.GlobalTransform.Basis.Z * InteractReach;
+        // A câmera em terceira pessoa fica atrás do personagem; compensa a distância
+        // para manter o alcance útil de interação semelhante ao da primeira pessoa.
+        float rayReach = aimCamera == _comfortCamera ? InteractReach + ComfortCameraDistance : InteractReach;
+        Vector3 to = from - aimCamera.GlobalTransform.Basis.Z * rayReach;
 
         PhysicsRayQueryParameters3D query = PhysicsRayQueryParameters3D.Create(from, to, InteractionMask);
         query.CollideWithAreas = true;
