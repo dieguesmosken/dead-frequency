@@ -99,7 +99,8 @@ public readonly record struct WorldBuildingPlan(
     Vector3 Front,
     bool HasStorefront,
     ulong VisualSeed,
-    ulong DecorationSeed);
+    ulong DecorationSeed,
+    int StoreBrandIndex);
 
 /// <summary>Plano determinístico de um quarteirão, com streams aleatórios independentes.</summary>
 public sealed class WorldBlockData
