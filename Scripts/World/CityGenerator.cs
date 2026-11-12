@@ -130,18 +130,30 @@ public partial class CityGenerator : Node3D
         _staticRoot.AddChild(root);
         _chunkRoots[chunk.Coordinate] = root;
 
+        if (!WorldData.TryGetBlock(chunk.Coordinate, out WorldBlockData plan))
+        {
+            root.QueueFree();
+            _chunkRoots.Remove(chunk.Coordinate);
+            return false;
+        }
+
         Node3D previousRoot = _activeChunkRoot;
         WorldChunkCoordinate? previousCoordinate = _activeChunkCoordinate;
+        RandomNumberGenerator previousRng = _rng;
+        RandomNumberGenerator previousDecoRng = _decoRng;
         _activeChunkRoot = root;
         _activeChunkCoordinate = chunk.Coordinate;
+        _rng = new RandomNumberGenerator { Seed = plan.VisualSeed };
+        _decoRng = new RandomNumberGenerator { Seed = plan.DecorationSeed };
 
         try
         {
-            if (chunk.Coordinate.X == 0 && chunk.Coordinate.Z == 0)
+            if (plan.Kind == WorldBlockKind.Depot)
                 BuildDepot(parent: root);
             else
-                BuildBlock(chunk.Coordinate.X, chunk.Coordinate.Z);
+                BuildBlockCore(chunk.Coordinate.X, chunk.Coordinate.Z, plan.Kind);
 
+            BuildChunkDecorations(chunk.Coordinate);
             OptimizeVisibility(root);
             return true;
         }
@@ -161,7 +173,21 @@ public partial class CityGenerator : Node3D
         {
             _activeChunkRoot = previousRoot;
             _activeChunkCoordinate = previousCoordinate;
+            _rng = previousRng;
+            _decoRng = previousDecoRng;
         }
+    }
+
+    private void BuildChunkDecorations(WorldChunkCoordinate coordinate)
+    {
+        int bx = coordinate.X;
+        int bz = coordinate.Z;
+        BuildStreetLampForBlock(bx, bz);
+        BuildStreetSignsForBlock(bx, bz);
+        BuildPhoneBoothsForBlock(bx, bz);
+        BuildHydrantsForBlock(bx, bz);
+        BuildStreetPropsForBlock(bx, bz);
+        BuildCurbMarkingsForBlock(bx, bz);
     }
 
     /// <summary>Descarta apenas a geometria do chunk; os dados lógicos permanecem na memória.</summary>
@@ -180,6 +206,10 @@ public partial class CityGenerator : Node3D
             if (GodotObject.IsInstanceValid(lights))
                 lights.QueueFree();
         }
+
+        // Remove obstáculos visuais deste chunk para evitar referências duplicadas ao recarregá-lo.
+        SidewalkObstacles.RemoveAll(position => WorldData.GetChunkCoordinate(position) == coordinate);
+        _noParking.RemoveAll(entry => WorldData.GetChunkCoordinate(entry.center) == coordinate);
     }
 
     private string GetInitialProfessionForWorld()
