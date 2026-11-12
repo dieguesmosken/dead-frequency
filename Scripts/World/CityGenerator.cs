@@ -837,10 +837,10 @@ public partial class CityGenerator : Node3D
 
     // ------------------------------------------------------------------ depósito
 
-    private void BuildDepot(bool farm = false)
+    private void BuildDepot(bool farm = false, Node3D parent = null)
     {
         var depot = new Node3D { Name = "Depot" };
-        _staticRoot.AddChild(depot);
+        (parent ?? _activeChunkRoot ?? _staticRoot).AddChild(depot);
         float half = BlockSize * 0.5f;
 
         // Galpão ao fundo, virado para +Z: oco, com interior e escritório (CityGenerator.Depot.cs).
