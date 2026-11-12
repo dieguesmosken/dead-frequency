@@ -1,0 +1,111 @@
+# APK de TESTE para Android (v0.10, ver ROADMAP "Dead Frequency no celular").
+# Gera um APK debug (arm64, assinado com uma chave de debug criada na hora) e deixa como artefato da execução.
+# Roda pelo botão "Run workflow" na aba Actions ou a cada push numa branch android/** ou feat/android-*.
+# Ainda não tem controles de toque: serve para ver se o jogo abre, o desempenho e o online no celular.
+# A chave de release (para a Play Store / atualizar por cima) vai ser um segredo do Matheus, nunca no repositório.
+name: Android (APK de teste)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["android/**", "feat/android-*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-test-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.7.2
+  GODOT_STATUS: stable
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            9.0.x
+            10.0.x
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Baixar Godot .NET e templates de exportação
+        run: |
+          set -e
+          TAG="${GODOT_VERSION}-${GODOT_STATUS}"
+          BASE="https://github.com/godotengine/godot/releases/download/${TAG}"
+          ALT="https://github.com/godotengine/godot-builds/releases/download/${TAG}"
+          EDITOR="Godot_v${TAG}_mono_linux_x86_64.zip"
+          TPZ="Godot_v${TAG}_mono_export_templates.tpz"
+          curl -fsSL --retry 6 --retry-delay 15 --retry-all-errors -o editor.zip "$BASE/$EDITOR" || curl -fsSL --retry 6 --retry-delay 15 --retry-all-errors -o editor.zip "$ALT/$EDITOR"
+          curl -fsSL --retry 6 --retry-delay 15 --retry-all-errors -o templates.tpz "$BASE/$TPZ" || curl -fsSL --retry 6 --retry-delay 15 --retry-all-errors -o templates.tpz "$ALT/$TPZ"
+          unzip -q editor.zip -d godot
+          GODOT_BIN=$(find godot -type f -name "Godot_v*_mono_linux.x86_64" | head -1)
+          chmod +x "$GODOT_BIN"
+          echo "GODOT=$PWD/$GODOT_BIN" >> "$GITHUB_ENV"
+          DEST="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_STATUS}.mono"
+          mkdir -p "$DEST"
+          unzip -q templates.tpz -d tpl
+          mv tpl/templates/* "$DEST/"
+          ls "$DEST" | grep -i android
+
+      - name: Android SDK e chave de debug
+        run: |
+          set -e
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          echo "SDK: $SDK"; ls "$SDK/build-tools" | tail -3
+          # Godot lê o caminho do SDK e do Java das configurações do editor.
+          mkdir -p "$HOME/.config/godot"
+          for f in editor_settings-4.tres editor_settings-4.7.tres; do
+            printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/android/android_sdk_path = "%s"\nexport/android/java_sdk_path = "%s"\n' "$SDK" "$JAVA_HOME" > "$HOME/.config/godot/$f"
+          done
+          keytool -genkeypair -v -keystore "$RUNNER_TEMP/debug.keystore" -storepass android -alias androiddebugkey \
+            -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$RUNNER_TEMP/debug.keystore" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android" >> "$GITHUB_ENV"
+
+      - name: Versão no APK
+        id: ver
+        run: |
+          VER=$(grep -oP 'Current = "\K[0-9.]+' Scripts/Core/GameVersion.cs)
+          SHORT=$(git rev-parse --short HEAD)
+          echo "name=$VER-android.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          sed -i "s|^version/code=.*|version/code=${{ github.run_number }}|; s|^version/name=.*|version/name=\"$VER-teste.${{ github.run_number }} ($SHORT)\"|" export_presets.cfg
+
+      - name: Importar assets e compilar o C#
+        run: |
+          "$GODOT" --headless --import --path . || true
+          dotnet build DeadFrequency.csproj
+          # O APK compila em net9.0 (o template Android da Godot 4.7 não aceita net10.0).
+          dotnet build DeadFrequency.csproj -p:GodotTargetPlatform=android
+
+      - name: Exportar APK (debug)
+        run: |
+          set -e
+          mkdir -p build/android
+          "$GODOT" --headless --path . --export-debug "Android" build/android/DeadFrequency.apk 2>&1 | tee export.log
+          test -s build/android/DeadFrequency.apk
+          mv build/android/DeadFrequency.apk "build/android/DeadFrequency-${{ steps.ver.outputs.name }}.apk"
+          ls -lh build/android
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DeadFrequency-${{ steps.ver.outputs.name }}-apk
+          path: build/android/*.apk
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: android-export-log
+          path: export.log
