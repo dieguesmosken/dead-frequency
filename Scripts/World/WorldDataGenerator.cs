@@ -33,6 +33,7 @@ public static class WorldDataGenerator
         WorldBiome biome,
         int cityRadius,
         float blockSize,
+        float sidewalkWidth,
         float roadWidth,
         float farmExtent,
         float curbHeight,
@@ -84,7 +85,7 @@ public static class WorldDataGenerator
             }
 
             BuildCityBlockPlans(
-                seed, cityRadius, blockSize, sidewalkWidth: 3f, curbHeight, parkChance, parkingLotChance,
+                seed, cityRadius, blockSize, sidewalkWidth, roadWidth, curbHeight, parkChance, parkingLotChance,
                 storefrontChance, storeBrandCount, blocks,
                 fireStationBlock, policeStationBlock, radioStationBlock, marketBlock,
                 shoppingMallBlock, apartmentBlock, dealerBlock, waterTowerBlock, carWashBlock,
@@ -139,6 +140,7 @@ public static class WorldDataGenerator
         int radius,
         float blockSize,
         float sidewalkWidth,
+        float roadWidth,
         float curbHeight,
         float parkChance,
         float parkingLotChance,
@@ -212,7 +214,7 @@ public static class WorldDataGenerator
 
                 List<WorldBuildingPlan> buildings = kind == WorldBlockKind.Buildings
                     ? BuildCityBuildingPlans(
-                        worldSeed, coordinate, radius, blockSize, sidewalkWidth, curbHeight,
+                        worldSeed, coordinate, radius, blockSize, sidewalkWidth, roadWidth, curbHeight,
                         storefrontChance, safeBrandCount, brandQueue, brandRng)
                     : new List<WorldBuildingPlan>();
 
@@ -235,6 +237,7 @@ public static class WorldDataGenerator
         int radius,
         float blockSize,
         float sidewalkWidth,
+        float roadWidth,
         float curbHeight,
         float storefrontChance,
         int storeBrandCount,
@@ -243,7 +246,7 @@ public static class WorldDataGenerator
     {
         float inner = blockSize - sidewalkWidth * 2f;
         float half = inner * 0.5f;
-        Vector3 center = new(coordinate.X * (blockSize + 12f), 0f, coordinate.Z * (blockSize + 12f));
+        Vector3 center = new(coordinate.X * (blockSize + roadWidth), 0f, coordinate.Z * (blockSize + roadWidth));
 
         var layoutRng = new RandomNumberGenerator
         {
