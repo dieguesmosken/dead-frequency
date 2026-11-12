@@ -137,43 +137,82 @@ public partial class NetClient : Node
         Status = ConnectionStatus.Connecting;
         StatusMessage?.Invoke($"Entrando na sala {RoomCode}...");
 
-        if (protocol is 7 or 8)
-            ConnectToRoom(protocol);
-        else
-            ProbeRoomProtocol();
+        ProbeRoomProtocol(protocol);
     }
 
-    private void ProbeRoomProtocol()
+    // Consulta a sala antes do WebSocket para identificar códigos que existem
+    // na outra namespace de protocolo e evitar uma falha genérica de handshake.
+    private void ProbeRoomProtocol(int requestedProtocol = 0)
     {
+        int first = requestedProtocol is 7 or 8 ? requestedProtocol : PreferredProtocolVersion;
+        int second = first == 8 ? 7 : 8;
+        bool autoDetect = requestedProtocol == 0;
+
         var probe = new HttpRequest { Timeout = 2 };
         AddChild(probe);
         probe.RequestCompleted += (result, responseCode, headers, body) =>
         {
             probe.QueueFree();
-            int protocol = ProtocolVersion;
             if (result == (long)HttpRequest.Result.Success && responseCode == 200)
             {
+                int detected = first;
                 try
                 {
                     using JsonDocument doc = JsonDocument.Parse(body);
                     if (doc.RootElement.TryGetProperty("protocol", out JsonElement p)
-                        && p.TryGetInt32(out int detected) && detected is 7 or 8)
-                        protocol = detected;
+                        && p.TryGetInt32(out int value) && value is 7 or 8)
+                        detected = value;
                 }
-                catch (JsonException)
+                catch (JsonException) { }
+
+                if (detected == first || autoDetect)
                 {
-                    // Worker antigo ou servidor local: mantém V7.
+                    ConnectToRoom(detected);
+                    return;
                 }
             }
-            // Se a descoberta não existir (Worker antigo/servidor local), tenta V7.
-            ConnectToRoom(protocol);
+
+            var alternate = new HttpRequest { Timeout = 2 };
+            AddChild(alternate);
+            alternate.RequestCompleted += (altResult, altCode, altHeaders, altBody) =>
+            {
+                alternate.QueueFree();
+                if (altResult == (long)HttpRequest.Result.Success && altCode == 200)
+                {
+                    int foundProtocol = second;
+                    try
+                    {
+                        using JsonDocument doc = JsonDocument.Parse(altBody);
+                        if (doc.RootElement.TryGetProperty("protocol", out JsonElement p)
+                            && p.TryGetInt32(out int value) && value is 7 or 8)
+                            foundProtocol = value;
+                    }
+                    catch (JsonException) { }
+
+                    if (autoDetect)
+                        ConnectToRoom(foundProtocol);
+                    else
+                        Fail($"Esta sala utiliza o protocolo V{foundProtocol}. Seu jogo tentou entrar usando o protocolo V{first}. Atualize o jogo para entrar.");
+                    return;
+                }
+
+                // Código inexistente ou servidor sem descoberta: mantém o fluxo normal.
+                ConnectToRoom(first);
+            };
+
+            Error alternateError = alternate.Request($"{HttpBase(ServerUrl)}/api/rooms/{RoomCode}?protocol={second}");
+            if (alternateError != Error.Ok)
+            {
+                alternate.QueueFree();
+                ConnectToRoom(first);
+            }
         };
 
-        Error err = probe.Request($"{HttpBase(ServerUrl)}/api/rooms/{RoomCode}?protocol={PreferredProtocolVersion}");
+        Error err = probe.Request($"{HttpBase(ServerUrl)}/api/rooms/{RoomCode}?protocol={first}");
         if (err != Error.Ok)
         {
             probe.QueueFree();
-            ConnectToRoom(ProtocolVersion);
+            ConnectToRoom(first);
         }
     }
 
