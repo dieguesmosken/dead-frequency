@@ -90,6 +90,17 @@ public enum WorldBlockKind
     Buildings,
 }
 
+/// <summary>Layout lógico de um prédio comum, calculado antes da criação dos Nodes.</summary>
+public readonly record struct WorldBuildingPlan(
+    Vector3 BaseCenter,
+    float Width,
+    float Depth,
+    float Height,
+    Vector3 Front,
+    bool HasStorefront,
+    ulong VisualSeed,
+    ulong DecorationSeed);
+
 /// <summary>Plano determinístico de um quarteirão, com streams aleatórios independentes.</summary>
 public sealed class WorldBlockData
 {
@@ -97,13 +108,20 @@ public sealed class WorldBlockData
     public WorldBlockKind Kind { get; }
     public ulong VisualSeed { get; }
     public ulong DecorationSeed { get; }
+    public IReadOnlyList<WorldBuildingPlan> Buildings { get; }
 
-    internal WorldBlockData(WorldChunkCoordinate coordinate, WorldBlockKind kind, ulong visualSeed, ulong decorationSeed)
+    internal WorldBlockData(
+        WorldChunkCoordinate coordinate,
+        WorldBlockKind kind,
+        ulong visualSeed,
+        ulong decorationSeed,
+        List<WorldBuildingPlan> buildings = null)
     {
         Coordinate = coordinate;
         Kind = kind;
         VisualSeed = visualSeed;
         DecorationSeed = decorationSeed;
+        Buildings = Array.AsReadOnly((buildings ?? new List<WorldBuildingPlan>()).ToArray());
     }
 }
 
