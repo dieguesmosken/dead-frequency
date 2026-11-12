@@ -110,12 +110,40 @@ public partial class DeliveryManager : Node3D
                 TotalDelivered = save.TotalDelivered;
             }
         }
-        // As profissões (v0.9) entram junto com a fase.
+        // As profissões aguardam o preparo dos destinos e pontos de serviço da fase.
+        if (City != null && City.WorldData == null)
+            City.WorldDataReady += OnWorldDataReady;
+        else
+            QueueProfessionManager();
+    }
+
+    private bool _professionManagerQueued;
+
+    private void OnWorldDataReady()
+    {
+        if (City != null)
+            City.WorldDataReady -= OnWorldDataReady;
+        QueueProfessionManager();
+    }
+
+    private void QueueProfessionManager()
+    {
+        if (_professionManagerQueued || !IsInsideTree())
+            return;
+
+        _professionManagerQueued = true;
         Callable.From(() =>
         {
+            _professionManagerQueued = false;
             if (IsInsideTree() && ProfessionManager.Instance == null)
                 GetParent().AddChild(new ProfessionManager { Name = "Professions", City = City, Player = Player, Delivery = this });
         }).CallDeferred();
+    }
+
+    public override void _ExitTree()
+    {
+        if (City != null)
+            City.WorldDataReady -= OnWorldDataReady;
     }
 
     /// <summary>
