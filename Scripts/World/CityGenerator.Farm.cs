@@ -201,6 +201,9 @@ public partial class CityGenerator
             BuildFarmGrassForChunk(chunk);
             FlushBatches(root);
             OptimizeVisibility(root);
+            if (_chunkLightRoots.TryGetValue(chunk.Coordinate, out Node3D chunkLights) &&
+                GodotObject.IsInstanceValid(chunkLights))
+                OptimizeVisibility(chunkLights);
             ChunkVisualized?.Invoke(chunk.Coordinate);
             return true;
         }
