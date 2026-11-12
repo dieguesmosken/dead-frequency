@@ -277,7 +277,9 @@ public partial class CityGenerator
             size,
             1.25f,
             new Color(0.95f, 0.9f, 0.7f),
-            point => Mathf.Max(Mathf.Abs(point.X), Mathf.Abs(point.Y)) > 20f
+            point => point.X >= chunk.Min.X && point.X < chunk.Max.X
+                && point.Y >= chunk.Min.Z && point.Y < chunk.Max.Z
+                && Mathf.Max(Mathf.Abs(point.X), Mathf.Abs(point.Y)) > 20f
                 && DistanceToRoads(point) > 1.2f
                 && IsFree(point, 0.3f));
     }
