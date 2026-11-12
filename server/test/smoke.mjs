@@ -100,7 +100,7 @@ mismatch.on("message", (data) => mismatchInbox.push(JSON.parse(data.toString()))
 await new Promise((resolve, reject) => { mismatch.once("open", resolve); mismatch.once("error", reject); });
 mismatch.send(JSON.stringify({ t: "hello", version: 7, prof: "entregador" }));
 await sleep(150);
-assert(mismatchInbox.some((m) => m.t === "error"), "hello V7 não entra em sala V8");
+assert(mismatchInbox.some((m) => m.t === "error" && m.msg.includes("protocolo V8") && m.msg.includes("protocolo V7")), "hello V7 recebe mensagem clara ao tentar entrar em sala V8");
 mismatch.close();
 v8Client.ws.close();
 
