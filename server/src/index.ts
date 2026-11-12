@@ -136,6 +136,8 @@ const SHOP_PRICES: Record<string, number> = {
   prego: 10,
   // v0.9.9 — Lã de Aço 1001 Utilidades
   palha_aco: 8,
+  // v0.9.9 — Conserta-Tudo do Primo
+  lanterna_forte: 120,
   // v0.9.7 — Auto Center Dois Mil
   car_gou: 2000,
   car_fusca: 2000,
