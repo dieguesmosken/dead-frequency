@@ -46,6 +46,7 @@ public partial class CityGenerator : Node3D
     public bool UsesChunkStreaming => _useLogicalBlockPlans && (Biome == WorldBiome.City || Biome == WorldBiome.Farm);
     public int StoreBrandCount => _brands.Count;
     public event Action<WorldGenerationProgress> WorldDataProgress;
+    public event Action WorldDataReady;
     public event Action<WorldChunkCoordinate> ChunkVisualized;
     public event Action<WorldChunkCoordinate> ChunkUnloaded;
 
@@ -541,6 +542,9 @@ public partial class CityGenerator : Node3D
             foreach (WorldDeliveryPointData point in WorldData.DeliveryPoints)
                 _deliveryPoints.Add(new DeliveryPoint { Position = point.Position, Address = point.Address });
         }
+
+        // Sistemas de missão só podem iniciar depois que endereços e pontos de profissão existem.
+        WorldDataReady?.Invoke();
 
         _rng = new RandomNumberGenerator { Seed = (ulong)Seed };
         _decoRng = new RandomNumberGenerator { Seed = (ulong)Seed * 7919UL + 13UL };
