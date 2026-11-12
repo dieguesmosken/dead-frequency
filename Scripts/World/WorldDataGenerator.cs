@@ -891,6 +891,12 @@ public static class WorldDataGenerator
             (new Vector2(36f, 146f), 14f),
         };
 
+        // Mantém a ordem de destinos do mundo antigo: pesqueiro primeiro, depois os sítios.
+        Vector3 lakeCenter = new(-95f, 0f, -120f);
+        Vector3 fishingPoint = lakeCenter + new Vector3(-36f, 0f, 0f);
+        deliveryPoints.Add(new WorldDeliveryPointData(-1, 0, fishingPoint,
+            "Pesqueiro Lambari Feliz · Trilha do Pesqueiro"));
+
         int placed = 0;
         for (int roadIndex = 0; roadIndex < roads.Count; roadIndex++)
         {
@@ -948,11 +954,6 @@ public static class WorldDataGenerator
             }
         }
 
-        // O pesqueiro também é um destino de entrega e precisa existir antes do lago visual.
-        Vector3 lakeCenter = new(-95f, 0f, -120f);
-        Vector3 fishingPoint = lakeCenter + new Vector3(-36f, 0f, 0f);
-        deliveryPoints.Add(new WorldDeliveryPointData(-1, 0, fishingPoint,
-            "Pesqueiro Lambari Feliz · Trilha do Pesqueiro"));
     }
 
     private static string[] CopyNames(IReadOnlyList<string> names)
