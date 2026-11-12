@@ -40,6 +40,7 @@ public partial class CityGenerator : Node3D
 
     /// <summary>Plano lógico calculado antes da criação de qualquer geometria do mundo.</summary>
     public WorldGenerationData WorldData { get; private set; }
+    public bool UsesChunkStreaming => _useLogicalBlockPlans && Biome == WorldBiome.City;
     public event Action<WorldGenerationProgress> WorldDataProgress;
 
     private static readonly string[] StreetNamesX =
