@@ -342,21 +342,27 @@ public partial class CityGenerator : Node3D
             ? gridWidth * gridWidth
             : farmChunkWidth * farmChunkWidth;
         int logicalBlockCount = Biome == WorldBiome.City ? logicalChunkCount : 0;
+        int logicalNoParkingCount = Biome == WorldBiome.City ? 1 : 0;
         int logicalServiceCount = Biome == WorldBiome.City ? logicalChunkCount - 1 : 0;
         int logicalDeliveryCount = Biome == WorldBiome.City && _useLogicalWorldData ? logicalChunkCount - 1 : 0;
         int logicalTotal = Mathf.Max(1,
-            logicalChunkCount + logicalBlockCount + logicalServiceCount + logicalDeliveryCount + 1);
+            logicalChunkCount + logicalBlockCount + logicalNoParkingCount +
+            logicalServiceCount + logicalDeliveryCount + 1);
 
         var logicalOffsets = new Dictionary<string, int>();
         if (Biome == WorldBiome.City)
         {
             logicalOffsets["Indexando chunks da cidade"] = 0;
             logicalOffsets["Planejando quarteirões e prédios"] = logicalChunkCount;
-            logicalOffsets["Calculando locais de serviço"] = logicalChunkCount + logicalBlockCount;
+            logicalOffsets["Calculando regras de estacionamento"] =
+                logicalChunkCount + logicalBlockCount;
+            logicalOffsets["Calculando locais de serviço"] =
+                logicalChunkCount + logicalBlockCount + logicalNoParkingCount;
             logicalOffsets["Calculando endereços e entregas"] =
-                logicalChunkCount + logicalBlockCount + logicalServiceCount;
+                logicalChunkCount + logicalBlockCount + logicalNoParkingCount + logicalServiceCount;
             logicalOffsets["Preparando pontos de início"] =
-                logicalChunkCount + logicalBlockCount + logicalServiceCount + logicalDeliveryCount;
+                logicalChunkCount + logicalBlockCount + logicalNoParkingCount +
+                logicalServiceCount + logicalDeliveryCount;
         }
         else
         {
