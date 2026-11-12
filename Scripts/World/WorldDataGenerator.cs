@@ -252,7 +252,7 @@ public static class WorldDataGenerator
                     continue;
 
                 Vector3 center = new(bx * period, curbHeight, bz * period);
-                int hash = StableAssetHash(center, 11);
+                int hash = AssetProps.Hash(center, 11);
                 if (hash / 100 % 100 < 40)
                 {
                     Vector3 dumpster = center + new Vector3(-edge - 0.1f, 0f, -blockSize * 0.3f);
@@ -288,7 +288,7 @@ public static class WorldDataGenerator
                     {
                         foreach (float y in shelfY)
                         {
-                            Vector3 position = marketPosition + new Vector3(x + side * 0.275f, y, z);
+                            Vector3 position = marketPosition + new Vector3(x + side * 0.5f, y, z);
                             shelfSlots.Add(new WorldMarketShelfSlotData(position, Mathf.Pi * 0.5f));
                         }
                     }
@@ -305,17 +305,6 @@ public static class WorldDataGenerator
 
         return new WorldServiceData(
             dumpsters, gasSpots, shelfSlots, marketStockPoint, marketEntrance, radioConsolePoint);
-    }
-
-    private static int StableAssetHash(Vector3 position, int salt)
-    {
-        unchecked
-        {
-            int hash = Mathf.RoundToInt(position.X * 10f) * 73856093
-                ^ Mathf.RoundToInt(position.Z * 10f) * 19349663
-                ^ salt * 83492791;
-            return hash & 0x7fffffff;
-        }
     }
 
     private static void BuildCityDeliveryPoints(
