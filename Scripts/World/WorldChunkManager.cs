@@ -74,11 +74,11 @@ public partial class WorldChunkManager : Node
             Target == null || !GodotObject.IsInstanceValid(Target))
             return;
 
-        RefreshTrackedObjectPins();
+        bool pinsChanged = RefreshTrackedObjectPins();
 
         Vector3 targetPosition = GetTargetPosition();
         WorldChunkCoordinate center = City.WorldData.GetChunkCoordinate(targetPosition);
-        if (!_hasCenter || center != _lastCenter)
+        if (!_hasCenter || center != _lastCenter || pinsChanged)
             RebuildQueues();
 
         ProcessQueues();
@@ -88,8 +88,9 @@ public partial class WorldChunkManager : Node
     /// Mantém o chão sob veículos, cargas e itens largados mesmo quando o jogador se afasta.
     /// A reserva acompanha o objeto entre chunks e é liberada quando ele é removido.
     /// </summary>
-    private void RefreshTrackedObjectPins()
+    private bool RefreshTrackedObjectPins()
     {
+        bool changed = false;
         var activeIds = new HashSet<ulong>();
         TrackGroup(VanController.GroupName, activeIds);
         TrackGroup(CargoItem.GroupName, activeIds);
@@ -101,8 +102,9 @@ public partial class WorldChunkManager : Node
             if (activeIds.Contains(instanceId))
                 continue;
 
-            City.UnpinChunkForPosition(_trackedObjectPins[instanceId]);
+            City.UnpinChunkForPosition(_trackedObjectPins[instanceId], refresh: false);
             _trackedObjectPins.Remove(instanceId);
+            changed = true;
         }
     }
 
@@ -124,13 +126,19 @@ public partial class WorldChunkManager : Node
                 if (previous == next)
                     continue;
 
-                City.UnpinChunkForPosition(previousPosition);
+                City.UnpinChunkForPosition(previousPosition, refresh: false);
                 _trackedObjectPins.Remove(instanceId);
+                changed = true;
             }
 
-            if (City.PinChunkForPosition(position))
+            if (City.PinChunkForPosition(position, refresh: false))
+            {
                 _trackedObjectPins[instanceId] = position;
+                changed = true;
+            }
         }
+
+        return changed;
     }
 
     private Vector3 GetTargetPosition()
