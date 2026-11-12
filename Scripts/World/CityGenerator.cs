@@ -42,6 +42,8 @@ public partial class CityGenerator : Node3D
     public WorldGenerationData WorldData { get; private set; }
     public bool UsesChunkStreaming => _useLogicalBlockPlans && Biome == WorldBiome.City;
     public event Action<WorldGenerationProgress> WorldDataProgress;
+    public event Action<WorldChunkCoordinate> ChunkVisualized;
+    public event Action<WorldChunkCoordinate> ChunkUnloaded;
 
     private static readonly string[] StreetNamesX =
         { "Rua das Antenas", "Rua Estática", "Rua do Chiado", "Rua Ruído Branco", "Rua da Interferência", "Rua Onda Curta", "Rua do Sintonizador", "Rua Válvula", "Rua do Eco" };
@@ -205,6 +207,7 @@ public partial class CityGenerator : Node3D
             if (_chunkLightRoots.TryGetValue(chunk.Coordinate, out Node3D chunkLights) &&
                 GodotObject.IsInstanceValid(chunkLights))
                 OptimizeVisibility(chunkLights);
+            ChunkVisualized?.Invoke(chunk.Coordinate);
             return true;
         }
         catch (Exception ex)
@@ -247,6 +250,7 @@ public partial class CityGenerator : Node3D
     /// <summary>Descarta apenas a geometria do chunk; os dados lógicos permanecem na memória.</summary>
     public void UnloadChunkVisuals(WorldChunkCoordinate coordinate)
     {
+        ChunkUnloaded?.Invoke(coordinate);
         Node3D unloadedRoot = null;
         if (_chunkRoots.TryGetValue(coordinate, out Node3D root))
         {
