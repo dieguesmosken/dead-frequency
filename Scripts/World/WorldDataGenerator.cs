@@ -23,6 +23,7 @@ public static class WorldDataGenerator
     private const uint ParkLayoutStream = 0x5041524B;
     private const uint ParkingLayoutStream = 0x5041524C;
     private const uint ParkingCarStream = 0x50434152;
+    private const uint FarmSiteStream = 0x4641524D;
     private const uint StoreBrandStream = 0x53544252;
     private const uint BlockVisualStream = 0x56495355;
     private const uint BlockDecorationStream = 0x4445434F;
@@ -54,6 +55,7 @@ public static class WorldDataGenerator
         IReadOnlyList<(Vector2I Block, string Id)> gasStations,
         int storeBrandCount,
         float storefrontChance,
+        IReadOnlyList<string> farmNames,
         bool prepareLogicalCityData,
         Action<WorldGenerationProgress> progress = null)
     {
@@ -62,6 +64,7 @@ public static class WorldDataGenerator
         var chunks = new List<WorldChunkData>();
         var blocks = new List<WorldBlockData>();
         var deliveryPoints = new List<WorldDeliveryPointData>();
+        var farmSites = new List<WorldFarmSitePlan>();
         WorldServiceData services = WorldServiceData.Empty();
         var spawnPoints = new Dictionary<string, WorldSpawnPoint>(StringComparer.Ordinal);
 
@@ -134,12 +137,16 @@ public static class WorldDataGenerator
                 }
             }
 
+            progress?.Invoke(new WorldGenerationProgress("Calculando sítios e destinos do rancho", 0, 1));
+            BuildFarmSitePlans(seed, farmExtent, farmNames, farmSites, deliveryPoints);
+            progress?.Invoke(new WorldGenerationProgress("Calculando sítios e destinos do rancho", 1, 1));
             BuildFarmSpawnPoints(spawnPoints, blockSize);
         }
 
         progress?.Invoke(new WorldGenerationProgress("Preparando pontos de início", 1, 1));
         return new WorldGenerationData(
-            seed, CurrentGeneratorVersion, biome, chunkSize, centeredGrid, chunks, blocks, deliveryPoints, services, spawnPoints);
+            seed, CurrentGeneratorVersion, biome, chunkSize, centeredGrid,
+            chunks, blocks, deliveryPoints, farmSites, services, spawnPoints);
     }
 
     private static void BuildCityBlockPlans(
@@ -819,6 +826,177 @@ public static class WorldDataGenerator
         Vector3 gasSpot = gasStation + new Vector3(0f, 0f, 5f);
         Vector3 frentistaSpawn = gasSpot + new Vector3(2.2f, 0.1f, 1.5f);
         spawns[Professions.Frentista] = new WorldSpawnPoint(Professions.Frentista, frentistaSpawn, Mathf.Pi);
+    }
+
+    private readonly struct FarmRoadPlan
+    {
+        public readonly string Name;
+        public readonly Vector2 A;
+        public readonly Vector2 B;
+        public readonly float Width;
+
+        public FarmRoadPlan(string name, Vector2 a, Vector2 b, float width)
+        {
+            Name = name;
+            A = a;
+            B = b;
+            Width = width;
+        }
+    }
+
+    private static void BuildFarmSitePlans(
+        int worldSeed,
+        float farmExtent,
+        IReadOnlyList<string> farmNames,
+        List<WorldFarmSitePlan> sites,
+        List<WorldDeliveryPointData> deliveryPoints)
+    {
+        var roads = new List<FarmRoadPlan>
+        {
+            new("Estrada do Rancho", new Vector2(0f, 14f), new Vector2(0f, 300f), 8f),
+            new("Estrada da Cooperativa", new Vector2(14f, 0f), new Vector2(300f, 0f), 8f),
+            new("Estrada Velha", new Vector2(-300f, 130f), new Vector2(300f, 130f), 8f),
+            new("Estrada do Açude", new Vector2(-185f, -265f), new Vector2(-185f, 130f), 8f),
+            new("Estrada da Serra", new Vector2(-185f, -265f), new Vector2(225f, -265f), 8f),
+            new("Estrada da Serra", new Vector2(225f, -265f), new Vector2(225f, 0f), 8f),
+            new("Estrada do Pequi", new Vector2(150f, 130f), new Vector2(150f, 300f), 8f),
+            new("Trilha do Pesqueiro", new Vector2(-185f, -120f), new Vector2(-125f, -120f), 5f),
+        };
+
+        string[] fallbackNames = farmNames is { Count: > 0 }
+            ? CopyNames(farmNames)
+            : new[] { "Fazenda Rancho Fundo" };
+        var names = new List<string>(fallbackNames);
+        var rng = new RandomNumberGenerator
+        {
+            Seed = DeriveChunkSeed(worldSeed, new WorldChunkCoordinate(0, 0), FarmSiteStream),
+        };
+
+        for (int i = names.Count - 1; i > 0; i--)
+        {
+            int j = rng.RandiRange(0, i);
+            (names[i], names[j]) = (names[j], names[i]);
+        }
+
+        const float width = 46f;
+        const float depth = 56f;
+        float occupiedRadius = Mathf.Sqrt(width * width + depth * depth) * 0.5f;
+        var occupied = new List<(Vector2 Center, float Radius)>
+        {
+            (Vector2.Zero, 34f),
+            (new Vector2(-95f, -120f), 42f),
+            (new Vector2(17f, 146f), 18f),
+            (new Vector2(-14f, 140f), 10f),
+            (new Vector2(-10f, 26f), 8f),
+            (new Vector2(36f, 146f), 14f),
+        };
+
+        int placed = 0;
+        for (int roadIndex = 0; roadIndex < roads.Count; roadIndex++)
+        {
+            FarmRoadPlan road = roads[roadIndex];
+            if (road.Width < 6f)
+                continue;
+
+            Vector2 direction = (road.B - road.A).Normalized();
+            Vector2 normal = new(-direction.Y, direction.X);
+            float length = road.A.DistanceTo(road.B);
+            for (float along = 40f; along < length - 30f; along += rng.RandfRange(62f, 84f))
+            {
+                float side = rng.Randf() < 0.5f ? 1f : -1f;
+                for (int attempt = 0; attempt < 2; attempt++, side = -side)
+                {
+                    Vector2 onRoad = road.A + direction * along;
+                    Vector2 gate = onRoad + normal * side * (road.Width * 0.5f + 3f);
+                    Vector2 center = gate + normal * side * (depth * 0.5f);
+                    if (!IsFarmSiteFree(center, occupiedRadius, farmExtent, occupied) ||
+                        DistanceToFarmRoads(center, roads, roadIndex) < occupiedRadius + 2f)
+                        continue;
+
+                    occupied.Add((center, occupiedRadius));
+                    string name = placed < names.Count
+                        ? names[placed]
+                        : names[placed % names.Count] + " II";
+                    float km = (onRoad.Length() / 1000f) * 10f;
+                    string address = $"{name} · {road.Name}, km {km:0.0}";
+                    Vector3 gatePosition = new(gate.X, 0f, gate.Y);
+                    Vector3 towardRoad = new(-normal.X * side, 0f, -normal.Y * side);
+                    float yaw = Mathf.Atan2(towardRoad.X, towardRoad.Z);
+                    Transform3D transform = new(new Basis(Vector3.Up, yaw), gatePosition);
+                    Vector3 deliveryPosition = transform * new Vector3(0f, 0f, -2.5f);
+
+                    WorldChunkCoordinate siteCoordinate = new(roadIndex, placed);
+                    ulong siteSeed = DeriveChunkSeed(worldSeed, siteCoordinate, FarmSiteStream + 1u);
+                    sites.Add(new WorldFarmSitePlan(
+                        gatePosition,
+                        towardRoad,
+                        new Vector3(center.X, 0f, center.Y),
+                        width,
+                        depth,
+                        occupiedRadius,
+                        name,
+                        address,
+                        siteSeed));
+                    deliveryPoints.Add(new WorldDeliveryPointData(
+                        siteCoordinate.X,
+                        siteCoordinate.Z,
+                        deliveryPosition,
+                        address));
+                    placed++;
+                    break;
+                }
+            }
+        }
+
+        // O pesqueiro também é um destino de entrega e precisa existir antes do lago visual.
+        Vector3 lakeCenter = new(-95f, 0f, -120f);
+        Vector3 fishingPoint = lakeCenter + new Vector3(-36f, 0f, 0f);
+        deliveryPoints.Add(new WorldDeliveryPointData(-1, 0, fishingPoint,
+            "Pesqueiro Lambari Feliz · Trilha do Pesqueiro"));
+    }
+
+    private static string[] CopyNames(IReadOnlyList<string> names)
+    {
+        var copy = new string[names.Count];
+        for (int i = 0; i < names.Count; i++)
+            copy[i] = names[i];
+        return copy;
+    }
+
+    private static bool IsFarmSiteFree(
+        Vector2 position,
+        float radius,
+        float farmExtent,
+        List<(Vector2 Center, float Radius)> occupied)
+    {
+        foreach ((Vector2 center, float occupiedRadius) in occupied)
+        {
+            if (position.DistanceTo(center) < occupiedRadius + radius)
+                return false;
+        }
+
+        return Mathf.Abs(position.X) < farmExtent - radius &&
+               Mathf.Abs(position.Y) < farmExtent - radius;
+    }
+
+    private static float DistanceToFarmRoads(Vector2 point, List<FarmRoadPlan> roads, int skip = -1)
+    {
+        float best = float.MaxValue;
+        for (int i = 0; i < roads.Count; i++)
+        {
+            if (i == skip)
+                continue;
+
+            FarmRoadPlan road = roads[i];
+            Vector2 segment = road.B - road.A;
+            float t = Mathf.Clamp(
+                (point - road.A).Dot(segment) / Mathf.Max(segment.LengthSquared(), 0.0001f),
+                0f,
+                1f);
+            float distance = point.DistanceTo(road.A + segment * t) - road.Width * 0.5f;
+            best = Mathf.Min(best, distance);
+        }
+        return best;
     }
 
     private static void BuildFarmSpawnPoints(Dictionary<string, WorldSpawnPoint> spawns, float blockSize)
