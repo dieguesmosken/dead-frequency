@@ -420,6 +420,16 @@ public static class WorldDataGenerator
         Vector2I radioStationBlock,
         IReadOnlyList<(Vector2I Block, string Id)> gasStations)
     {
+        // Entregador: posição inicial original da cena, dentro da área do depósito.
+        Vector3 deliverySpawn = new(-3f, 0f, 8f);
+        spawns[Professions.Entregador] =
+            new WorldSpawnPoint(Professions.Entregador, deliverySpawn, 0f);
+
+        // Taxista: calçada junto ao portão do depósito, pronto para sair para a rua.
+        Vector3 taxiSpawn = new(0f, curbHeight + 0.1f, blockSize * 0.5f - 1.2f);
+        spawns[Professions.Taxista] =
+            new WorldSpawnPoint(Professions.Taxista, taxiSpawn, 0f);
+
         Vector3 garbageSpawn = new(
             blockSize * 0.5f - 4f,
             curbHeight + 0.1f,
@@ -473,6 +483,13 @@ public static class WorldDataGenerator
 
     private static void BuildFarmSpawnPoints(Dictionary<string, WorldSpawnPoint> spawns, float blockSize)
     {
+        // O rancho também preserva a posição inicial original do entregador.
+        Vector3 deliverySpawn = new(-3f, 0f, 8f);
+        spawns[Professions.Entregador] =
+            new WorldSpawnPoint(Professions.Entregador, deliverySpawn, 0f);
+        spawns[Professions.Taxista] =
+            new WorldSpawnPoint(Professions.Taxista, deliverySpawn, 0f);
+
         Vector3 garbageSpawn = new(
             blockSize * 0.5f - 4f,
             0.1f,
