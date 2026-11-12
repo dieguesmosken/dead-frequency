@@ -349,6 +349,7 @@ public partial class CityGenerator : Node3D
         int logicalFarmSiteCount = Biome == WorldBiome.Farm ? 1 : 0;
         int logicalFarmVegetationCount = Biome == WorldBiome.Farm ? 1 : 0;
         int logicalNoParkingCount = Biome == WorldBiome.City ? 1 : 0;
+        int logicalRoadCarCount = Biome == WorldBiome.City ? 1 : 0;
         int logicalServiceCount = Biome == WorldBiome.City ? logicalChunkCount - 1 : 0;
         int logicalDeliveryCount = Biome == WorldBiome.City && _useLogicalWorldData ? logicalChunkCount - 1 : 0;
         int logicalTotal = Mathf.Max(1,
