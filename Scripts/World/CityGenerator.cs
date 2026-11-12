@@ -130,7 +130,7 @@ public partial class CityGenerator : Node3D
         new List<WorldChunkCoordinate>(_chunkRoots.Keys);
 
     /// <summary>Impede o descarregamento do chunk que contém uma missão/objeto ativo.</summary>
-    public bool PinChunkForPosition(Vector3 position)
+    public bool PinChunkForPosition(Vector3 position, bool refresh = true)
     {
         if (WorldData == null || Biome != WorldBiome.City)
             return false;
@@ -141,12 +141,13 @@ public partial class CityGenerator : Node3D
 
         _pinnedChunkCounts.TryGetValue(coordinate, out int count);
         _pinnedChunkCounts[coordinate] = count + 1;
-        _chunkManager?.RequestRefresh();
+        if (refresh)
+            _chunkManager?.RequestRefresh();
         return true;
     }
 
     /// <summary>Libera uma reserva feita por PinChunkForPosition.</summary>
-    public void UnpinChunkForPosition(Vector3 position)
+    public void UnpinChunkForPosition(Vector3 position, bool refresh = true)
     {
         if (WorldData == null || Biome != WorldBiome.City)
             return;
@@ -160,7 +161,8 @@ public partial class CityGenerator : Node3D
         else
             _pinnedChunkCounts[coordinate] = count - 1;
 
-        _chunkManager?.RequestRefresh();
+        if (refresh)
+            _chunkManager?.RequestRefresh();
     }
 
     public bool IsChunkPinned(WorldChunkCoordinate coordinate) =>
