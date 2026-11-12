@@ -94,6 +94,10 @@ jobs:
           for f in export_presets.cfg launcher/app/export_presets.cfg; do
             sed -i "s|^application/file_version=.*|application/file_version=\"$VER.${{ steps.ver.outputs.build }}\"|; s|^application/product_version=.*|application/product_version=\"$VER.${{ steps.ver.outputs.build }}\"|" "$f"
           done
+          # Build exato dentro do jogo (GameVersion.Build): o atualizador do celular compara com ele.
+          BUILD_TAG="${{ steps.ver.outputs.tag }}"
+          sed -i "/^config\/version=/d; s|^config/name=.*|&\nconfig/version=\"${BUILD_TAG#v}\"|" project.godot
+          grep -n "^config/version" project.godot
 
       - name: Importar assets e compilar o C#
         if: steps.ver.outputs.exists == 'false'

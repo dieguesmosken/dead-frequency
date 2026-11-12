@@ -81,6 +81,7 @@ jobs:
           SHORT=$(git rev-parse --short HEAD)
           echo "name=$VER-android.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
           sed -i "s|^version/code=.*|version/code=${{ github.run_number }}|; s|^version/name=.*|version/name=\"$VER-teste.${{ github.run_number }} ($SHORT)\"|" export_presets.cfg
+          sed -i "/^config\/version=/d; s|^config/name=.*|&\nconfig/version=\"$VER-teste.${{ github.run_number }}\"|" project.godot
 
       - name: Importar assets e compilar o C#
         run: |

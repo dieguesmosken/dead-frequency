@@ -307,6 +307,47 @@ public static class GameVersion
     }
 
     /// <summary>Compara "0.5.0" com "0.4.2". Versões vazias contam como mais antigas.</summary>
+    /// <summary>
+    /// Build exato instalado: o CI grava em application/config/version (ex.: "0.9.9.8-pre" na Internal,
+    /// "0.9.9" no público). Rodando pelo editor fica vazio e vale Current.
+    /// </summary>
+    public static string Build
+    {
+        get
+        {
+            string v = Godot.ProjectSettings.GetSetting("application/config/version", "").AsString();
+            return string.IsNullOrWhiteSpace(v) ? Current : v.Trim();
+        }
+    }
+
+    /// <summary>Build de teste (Internal / APK de teste): recebe os pré-releases no atualizador.</summary>
+    public static bool IsInternalBuild => Build.Contains('-');
+
+    /// <summary>
+    /// Compara builds com número da Internal: "0.9.9.8-pre" &lt; "0.9.9.9-pre" &lt; "0.9.9" (o público fecha a versão)
+    /// &lt; "0.9.10.1-pre". Build sem número (ex.: editor) conta como o começo da versão.
+    /// </summary>
+    public static int CompareBuild(string a, string b)
+    {
+        static int[] Parse(string v)
+        {
+            v ??= "";
+            bool pre = v.Contains('-');
+            string[] p = v.Split('-')[0].Split('.');
+            int[] r = new int[4];
+            for (int i = 0; i < 4; i++)
+                r[i] = i < p.Length && int.TryParse(p[i], out int x) ? x : 0;
+            if (!pre)
+                r[3] = int.MaxValue; // público: depois de todos os -pre da mesma versão
+            return r;
+        }
+        int[] x = Parse(a), y = Parse(b);
+        for (int i = 0; i < 4; i++)
+            if (x[i] != y[i])
+                return x[i].CompareTo(y[i]);
+        return 0;
+    }
+
     public static int Compare(string a, string b)
     {
         string[] pa = (a ?? "").Split('.'), pb = (b ?? "").Split('.');
