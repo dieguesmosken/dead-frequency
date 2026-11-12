@@ -109,6 +109,7 @@ public readonly record struct WorldBuildingPlan(
 public readonly record struct WorldParkTreePlan(Vector3 Position, float Scale, string Model, float RotationY);
 public readonly record struct WorldParkBenchPlan(Vector3 Position, float RotationY);
 public readonly record struct WorldParkingCarPlan(Vector3 Position, float RotationY, ulong VisualSeed);
+public readonly record struct WorldRoadCarPlan(Vector3 Position, float RotationY, float CurbOffset, bool HasCurb, ulong VisualSeed);
 
 /// <summary>Plano lógico de um sítio rural, incluindo destino de entrega e seed visual própria.</summary>
 public readonly record struct WorldFarmTreePlan(
@@ -153,6 +154,7 @@ public sealed class WorldBlockData
     public IReadOnlyList<WorldParkTreePlan> ParkTrees { get; }
     public IReadOnlyList<WorldParkBenchPlan> ParkBenches { get; }
     public IReadOnlyList<WorldParkingCarPlan> ParkingCars { get; }
+    public IReadOnlyList<WorldRoadCarPlan> RoadCars { get; }
 
     internal WorldBlockData(
         WorldChunkCoordinate coordinate,
@@ -162,7 +164,8 @@ public sealed class WorldBlockData
         List<WorldBuildingPlan> buildings = null,
         List<WorldParkTreePlan> parkTrees = null,
         List<WorldParkBenchPlan> parkBenches = null,
-        List<WorldParkingCarPlan> parkingCars = null)
+        List<WorldParkingCarPlan> parkingCars = null,
+        List<WorldRoadCarPlan> roadCars = null)
     {
         Coordinate = coordinate;
         Kind = kind;
@@ -172,6 +175,7 @@ public sealed class WorldBlockData
         ParkTrees = Array.AsReadOnly((parkTrees ?? new List<WorldParkTreePlan>()).ToArray());
         ParkBenches = Array.AsReadOnly((parkBenches ?? new List<WorldParkBenchPlan>()).ToArray());
         ParkingCars = Array.AsReadOnly((parkingCars ?? new List<WorldParkingCarPlan>()).ToArray());
+        RoadCars = Array.AsReadOnly((roadCars ?? new List<WorldRoadCarPlan>()).ToArray());
     }
 }
 
