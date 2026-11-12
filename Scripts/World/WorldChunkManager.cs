@@ -99,10 +99,10 @@ public partial class WorldChunkManager : Node
     {
         bool changed = false;
         var activeIds = new HashSet<ulong>();
-        TrackGroup(VanController.GroupName, activeIds);
-        TrackGroup(CargoItem.GroupName, activeIds);
-        TrackGroup(WorldItem.GroupName, activeIds);
-        TrackGroup(TrackedObjectGroup, activeIds);
+        changed |= TrackGroup(VanController.GroupName, activeIds);
+        changed |= TrackGroup(CargoItem.GroupName, activeIds);
+        changed |= TrackGroup(WorldItem.GroupName, activeIds);
+        changed |= TrackGroup(TrackedObjectGroup, activeIds);
 
         foreach (ulong instanceId in new List<ulong>(_trackedObjectPins.Keys))
         {
@@ -113,9 +113,11 @@ public partial class WorldChunkManager : Node
             _trackedObjectPins.Remove(instanceId);
             changed = true;
         }
+
+        return changed;
     }
 
-    private void TrackGroup(string groupName, HashSet<ulong> activeIds)
+    private bool TrackGroup(string groupName, HashSet<ulong> activeIds)
     {
         foreach (Node node in GetTree().GetNodesInGroup(groupName))
         {
