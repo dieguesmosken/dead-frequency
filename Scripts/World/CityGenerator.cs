@@ -186,6 +186,8 @@ public partial class CityGenerator : Node3D
         int bz = coordinate.Z;
         BuildStreetLampForBlock(bx, bz);
         BuildBikeLanesForBlock(bx, bz);
+        BuildStreetDrainageForBlock(bx, bz);
+        BuildParkedCarsForBlock(bx, bz);
         BuildStreetSignsForBlock(bx, bz);
         BuildPhoneBoothsForBlock(bx, bz);
         BuildHydrantsForBlock(bx, bz);
@@ -210,9 +212,20 @@ public partial class CityGenerator : Node3D
                 lights.QueueFree();
         }
 
-        // Remove obstáculos visuais deste chunk para evitar referências duplicadas ao recarregá-lo.
+        // Remove referências mantidas fora da árvore junto com os visuais do chunk.
         SidewalkObstacles.RemoveAll(position => WorldData.GetChunkCoordinate(position) == coordinate);
         _noParking.RemoveAll(entry => WorldData.GetChunkCoordinate(entry.center) == coordinate);
+        for (int i = _parkedCars.Count - 1; i >= 0; i--)
+        {
+            Node3D car = _parkedCars[i];
+            if (!GodotObject.IsInstanceValid(car))
+            {
+                _parkedCars.RemoveAt(i);
+                continue;
+            }
+            if (WorldData.GetChunkCoordinate(car.GlobalPosition) == coordinate)
+                _parkedCars.RemoveAt(i);
+        }
     }
 
     private string GetInitialProfessionForWorld()
@@ -1006,6 +1019,9 @@ public partial class CityGenerator : Node3D
 
     private void BuildParkedCars()
     {
+        if (_useLogicalBlockPlans)
+            return; // Carros estacionados são gerados junto do chunk proprietário.
+
         float laneOffset = RoadWidth * 0.5f - 1.4f;
         float reach = BlockSize * 0.5f - 4f;
         for (int k = -Radius - 1; k <= Radius; k++)
@@ -1033,6 +1049,72 @@ public partial class CityGenerator : Node3D
                     }
                 }
             }
+        }
+    }
+
+    private void BuildParkedCarsForBlock(int bx, int bz)
+    {
+        if (bx < -Radius || bx > Radius || bz < -Radius || bz > Radius)
+            return;
+
+        // Cada vaga tem seu próprio stream: a ordem de carregamento não altera os carros.
+        for (int road = -Radius - 1; road <= Radius; road++)
+        {
+            foreach (int side in new[] { -1, 1 })
+            {
+                int owner = side < 0 ? road : road + 1;
+                if (owner == bx)
+                    BuildParkedCarCandidate(road, bz, side, vertical: true);
+                if (owner == bz)
+                    BuildParkedCarCandidate(road, bx, side, vertical: false);
+            }
+        }
+    }
+
+    private void BuildParkedCarCandidate(int road, int segment, int side, bool vertical)
+    {
+        float laneOffset = RoadWidth * 0.5f - 1.4f;
+        float reach = BlockSize * 0.5f - 4f;
+        bool hasCurb = side < 0
+            ? road >= -Radius && road <= Radius
+            : road + 1 >= -Radius && road + 1 <= Radius;
+
+        int seedX = vertical ? road : segment;
+        int seedZ = vertical ? segment : road;
+        uint stream = unchecked(0x43415200u
+            + (uint)(road + Radius + 1) * 4u
+            + (side > 0 ? 2u : 0u)
+            + (vertical ? 0u : 1u));
+
+        RandomNumberGenerator previousRng = _rng;
+        _rng = new RandomNumberGenerator
+        {
+            Seed = WorldDataGenerator.DeriveChunkSeed(
+                Seed, new WorldChunkCoordinate(seedX, seedZ), stream),
+        };
+
+        try
+        {
+            if (_rng.Randf() >= ParkedCarChance)
+                return;
+
+            float roadPos = road * Period + Period * 0.5f;
+            float along = segment * Period;
+            float offset = _rng.RandfRange(-reach, reach);
+            Vector3 groundPosition = vertical
+                ? new Vector3(roadPos + side * laneOffset, 0f, along + offset)
+                : new Vector3(along + offset, 0f, roadPos + side * laneOffset);
+
+            BuildCar(
+                _activeChunkRoot ?? _staticRoot,
+                groundPosition,
+                vertical ? 0f : Mathf.Pi * 0.5f,
+                offset,
+                hasCurb);
+        }
+        finally
+        {
+            _rng = previousRng;
         }
     }
 
