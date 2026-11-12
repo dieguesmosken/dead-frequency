@@ -35,7 +35,8 @@ public partial class CityGenerator
                 if (h / 100 % 100 < 40)
                 {
                     Vector3 p = c + new Vector3(-edge - 0.1f, 0f, -BlockSize * 0.3f);
-                    DumpsterSpots.Add(p + new Vector3(0.9f, 0f, 0f));
+                    if (!_useLogicalWorldData)
+                        DumpsterSpots.Add(p + new Vector3(0.9f, 0f, 0f));
                     RegisterObstacle(p + new Vector3(0f, 0f, -0.5f));
                     RegisterObstacle(p + new Vector3(0f, 0f, 0.5f));
                     AssetProps.Spawn(root, AssetProps.City + "dumpster.gltf", p, Mathf.Pi * 0.5f, 3.2f, new Vector3(1.8f, 1.05f, 1.15f));
