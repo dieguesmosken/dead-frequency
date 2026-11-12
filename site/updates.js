@@ -50,10 +50,14 @@ document.querySelectorAll(".update-tab").forEach(tab=>tab.addEventListener("clic
  if(selected==="roadmap"&&!$("#roadmap-content").dataset.loaded){$("#roadmap-content").dataset.loaded="1";loadRoadmap();}
  render();if(location.hash!=="#"+selected)history.replaceState(null,"","#"+selected);
 }));
+// Topo: última versão publicada (site.json primeiro; depois a última release que não é pré-release).
+function setBrand(v){if(v)document.querySelectorAll(".brand-version").forEach(e=>e.textContent="v"+String(v).replace(/^v/,""));}
+fetch("data/site.json",{cache:"no-cache"}).then(r=>r.json()).then(d=>setBrand(d.version)).catch(()=>{});
 async function init(){
  try{
   const res=await fetch(API+"/releases?per_page=100",{headers:{"Accept":"application/vnd.github+json"},cache:"no-cache"});if(!res.ok)throw new Error("A API do GitHub está indisponível ou atingiu o limite de consultas.");
   releases=(await res.json()).filter(r=>!r.draft).sort((a,b)=>new Date(b.published_at||b.created_at)-new Date(a.published_at||a.created_at));
+  const stable=releases.find(r=>!r.prerelease);if(stable)setBrand(stable.tag_name);
   if(location.hash==="#internal")selected="internal";if(location.hash==="#roadmap"){selected="roadmap";$("#roadmap-content").dataset.loaded="1";loadRoadmap();}
   const tab=document.querySelector('.update-tab[data-tab="'+selected+'"]');if(tab)document.querySelectorAll(".update-tab").forEach(t=>{const active=t===tab;t.classList.toggle("active",active);t.setAttribute("aria-selected",String(active));});
   render();
