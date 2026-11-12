@@ -30,6 +30,7 @@ public partial class NetSync : Node
     private int _nextSaleId = 1;
 
     private readonly Dictionary<int, RemotePlayer> _remotes = new();
+    private readonly Dictionary<int, Vector3> _remoteChunkPins = new();
     private readonly Dictionary<string, int> _owners = new();
     private readonly Dictionary<string, WorldItem> _worldItems = new();
     private readonly Dictionary<int, bool> _remoteDriving = new();
@@ -109,6 +110,7 @@ public partial class NetSync : Node
 
     public override void _ExitTree()
     {
+        ReleaseAllRemoteChunkPins();
         if (Instance == this)
             Instance = null;
         if (_active && Net != null)
@@ -197,6 +199,7 @@ public partial class NetSync : Node
                 int id = m.GetProperty("id").GetInt32();
                 if (_remotes.Remove(id, out RemotePlayer remote))
                     remote.QueueFree();
+                ReleaseRemoteChunkPin(id);
                 _remoteDriving.Remove(id);
                 RefreshRemoteDriver();
                 break;
@@ -301,14 +304,67 @@ public partial class NetSync : Node
         Delivery.ApplyNetShift(m.GetProperty("shift").GetInt32(), jobs, m.GetProperty("money").GetInt32());
     }
 
-    private static void ApplyPlayerState(RemotePlayer remote, JsonElement s)
+    private void ApplyPlayerState(RemotePlayer remote, JsonElement s)
     {
         string equipment = s.TryGetProperty("eq", out JsonElement eq) && eq.ValueKind == JsonValueKind.String ? eq.GetString() : "";
         string look = s.TryGetProperty("lk", out JsonElement lk) && lk.ValueKind == JsonValueKind.String ? lk.GetString() : "";
         string held = s.TryGetProperty("held", out JsonElement heldElement) && heldElement.ValueKind == JsonValueKind.String
             ? heldElement.GetString()
             : "";
-        remote.ApplyState(ReadVector(s.GetProperty("p")), s.GetProperty("ry").GetSingle(), s.GetProperty("hp").GetSingle(), s.GetProperty("st").GetInt32(), equipment, look, held);
+        Vector3 position = ReadVector(s.GetProperty("p"));
+        remote.ApplyState(position, s.GetProperty("ry").GetSingle(), s.GetProperty("hp").GetSingle(), s.GetProperty("st").GetInt32(), equipment, look, held);
+        UpdateRemoteChunkPin(remote.PlayerId, position);
+    }
+
+    private CityGenerator StreamingCity
+    {
+        get
+        {
+            CityGenerator city = Delivery?.City;
+            return city != null && IsInstanceValid(city) && city.UsesChunkStreaming ? city : null;
+        }
+    }
+
+    private void UpdateRemoteChunkPin(int playerId, Vector3 position)
+    {
+        CityGenerator city = StreamingCity;
+        if (city == null || city.WorldData == null)
+            return;
+
+        WorldChunkCoordinate next = city.WorldData.GetChunkCoordinate(position);
+        if (_remoteChunkPins.TryGetValue(playerId, out Vector3 previousPosition))
+        {
+            WorldChunkCoordinate previous = city.WorldData.GetChunkCoordinate(previousPosition);
+            if (previous == next)
+                return;
+
+            city.UnpinChunkForPosition(previousPosition);
+            _remoteChunkPins.Remove(playerId);
+        }
+
+        if (city.PinChunkForPosition(position))
+            _remoteChunkPins[playerId] = position;
+    }
+
+    private void ReleaseRemoteChunkPin(int playerId)
+    {
+        if (!_remoteChunkPins.Remove(playerId, out Vector3 position))
+            return;
+
+        CityGenerator city = Delivery?.City;
+        if (city != null && IsInstanceValid(city))
+            city.UnpinChunkForPosition(position);
+    }
+
+    private void ReleaseAllRemoteChunkPins()
+    {
+        foreach (Vector3 position in _remoteChunkPins.Values)
+        {
+            CityGenerator city = Delivery?.City;
+            if (city != null && IsInstanceValid(city))
+                city.UnpinChunkForPosition(position);
+        }
+        _remoteChunkPins.Clear();
     }
 
     /// <summary>Compra online: o servidor confere o preço e desconta do dinheiro do grupo.</summary>
