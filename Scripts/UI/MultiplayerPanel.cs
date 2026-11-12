@@ -34,6 +34,7 @@ public partial class MultiplayerPanel : VBoxContainer
     private LineEdit _server;
     private LineEdit _code;
     private LineEdit _roomPassword;
+    private int _inviteProtocol;
     private Label _status;
     private Label _modeHint;
     private Control _serverRow;
@@ -136,6 +137,7 @@ public partial class MultiplayerPanel : VBoxContainer
         _code.AddThemeFontSizeOverride("font_size", 24);
         _code.TextChanged += text =>
         {
+            _inviteProtocol = 0;
             int caret = _code.CaretColumn;
             _code.Text = text.ToUpperInvariant();
             _code.CaretColumn = caret;
@@ -293,15 +295,19 @@ public partial class MultiplayerPanel : VBoxContainer
                 string roomName = string.IsNullOrEmpty(r.Name) ? GameLevels.Get(r.Level).Name : r.Name;
                 string permanent = r.Permanent ? " · permanente" : "";
                 string password = r.HasPassword ? " · senha" : "";
-                Label l = UiStyle.MakeLabel($"{r.Code}  {roomName}  {r.Players}/{r.Max}{host}{auto}{permanent}{password}", 15, HorizontalAlignment.Left);
+                Label l = UiStyle.MakeLabel($"{r.Code}  V{r.Protocol}  {roomName}  {r.Players}/{r.Max}{host}{auto}{permanent}{password}", 15, HorizontalAlignment.Left);
                 l.SizeFlagsHorizontal = SizeFlags.ExpandFill;
                 l.ClipText = true;
                 line.AddChild(l);
                 string code = r.Code;
+                int protocol = r.Protocol;
                 Button enter = UiStyle.MakeButton(r.Players >= r.Max ? "Cheia" : "Entrar", () =>
                 {
+                    if (NetClient.Instance == null || !SaveFields())
+                        return;
                     _code.Text = code;
-                    OnJoinPressed();
+                    SetBusy(true);
+                    NetClient.Instance.JoinRoom(CurrentServer(), code, PlayerName(), _roomPassword.Text, protocol);
                 }, 120, UiSound.Start);
                 enter.Disabled = r.Players >= r.Max;
                 line.AddChild(enter);
@@ -472,7 +478,7 @@ public partial class MultiplayerPanel : VBoxContainer
         string address = tunnel?.State == TunnelService.TunnelState.Ready
             ? tunnel.PublicUrl
             : $"http://{(lan.Count > 0 ? lan[0] : "127.0.0.1")}:{server?.Port ?? LocalServer.DefaultPort}";
-        return $"Bora entregar comigo no Dead Frequency! Código da sala: {server?.Code}\nServidor: {address}";
+        return $"Bora entregar comigo no Dead Frequency! Código da sala: {server?.Code}\nProtocolo: V{NetClient.ProtocolVersion}\nServidor: {address}";
     }
 
     private void CopyHostInvite()
@@ -487,7 +493,7 @@ public partial class MultiplayerPanel : VBoxContainer
         if (server == null || !server.Running || NetClient.Instance == null)
             return;
         SetBusy(true);
-        NetClient.Instance.JoinRoom($"http://127.0.0.1:{server.Port}", server.Code, PlayerName());
+        NetClient.Instance.JoinRoom($"http://127.0.0.1:{server.Port}", server.Code, PlayerName(), protocol: NetClient.ProtocolVersion);
         // O convite do menu de pausa usa o link público, não o 127.0.0.1.
         TunnelService tunnel = TunnelService.Instance;
         NetClient.Instance.PublicServerUrl = tunnel?.State == TunnelService.TunnelState.Ready ? tunnel.PublicUrl : "";
@@ -569,7 +575,7 @@ public partial class MultiplayerPanel : VBoxContainer
             return;
         }
         SetBusy(true);
-        NetClient.Instance.JoinRoom(CurrentServer(), code, PlayerName(), _roomPassword.Text);
+        NetClient.Instance.JoinRoom(CurrentServer(), code, PlayerName(), _roomPassword.Text, _inviteProtocol);
     }
 
     /// <summary>Cola o convite: pega o código e, se tiver endereço de servidor, troca para "Meu servidor".</summary>
@@ -577,6 +583,8 @@ public partial class MultiplayerPanel : VBoxContainer
     {
         string text = DisplayServer.ClipboardGet() ?? "";
         _code.Text = ExtractCode(text);
+        Match protocol = Regex.Match(text, @"\bprotocolo\s*:\s*v?(7|8)\b", RegexOptions.IgnoreCase);
+        _inviteProtocol = protocol.Success ? int.Parse(protocol.Groups[1].Value) : 0;
         Match url = UrlInText.Match(text);
         if (url.Success && NetClient.NormalizeServer(url.Value) != NetClient.NormalizeServer(NetClient.OfficialServer))
         {
