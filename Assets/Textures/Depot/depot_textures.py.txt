@@ -1,0 +1,265 @@
+# Gera as texturas do depósito, do muro da central, das etiquetas das caixas e do baú da moto (v0.10).
+# Rodar dentro de Assets/Textures/Depot:  python3 depot_textures.py.txt
+# Tudo desenhado em código (PIL), estilo PS1: imagens pequenas, usadas sem filtro.
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
+
+R = np.random.RandomState(966)
+BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+COND = "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf"
+
+def font(size, path=BOLD):
+    return ImageFont.truetype(path, size)
+
+def noisy(w, h, color, amount=10, seed=None):
+    rs = np.random.RandomState(seed) if seed is not None else R
+    a = np.zeros((h, w, 3), np.float32) + np.array(color, np.float32)
+    a += rs.randint(-amount, amount + 1, (h, w, 1))
+    return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8))
+
+def text_center(d, box, text, f, fill, spacing=2):
+    x0, y0, x1, y1 = box
+    l, t, r, b = d.multiline_textbbox((0, 0), text, font=f, spacing=spacing, align="center")
+    d.multiline_text(((x0 + x1 - (r - l)) / 2 - l, (y0 + y1 - (b - t)) / 2 - t), text, font=f, fill=fill, spacing=spacing, align="center")
+
+def fit(d, box, text, fill, max_size=40, path=BOLD, spacing=2):
+    w, h = box[2] - box[0], box[3] - box[1]
+    for s in range(max_size, 5, -1):
+        f = font(s, path)
+        l, t, r, b = d.multiline_textbbox((0, 0), text, font=f, spacing=spacing, align="center")
+        if r - l <= w and b - t <= h:
+            break
+    text_center(d, box, text, f, fill, spacing)
+
+# ---------------------------------------------------------------- muro da central (4 m x 2 m, repete na horizontal)
+def muro():
+    W, H = 256, 128
+    img = noisy(W, H, (205, 198, 176), 7)
+    px = img.load()
+    # Manchas de chuva escorrendo do topo.
+    for _ in range(26):
+        x = R.randint(0, W); ln = R.randint(12, 60); wd = R.randint(1, 4)
+        for y in range(ln):
+            for k in range(wd):
+                xx = (x + k) % W
+                r, g, b = px[xx, y]
+                f = 1 - 0.16 * (1 - y / ln)
+                px[xx, y] = (int(r * f), int(g * f), int(b * f))
+    # Reboco caído mostrando o tijolo.
+    brick = Image.new("RGB", (W, H), (120, 62, 44))
+    bd = ImageDraw.Draw(brick)
+    for row in range(0, H, 8):
+        bd.line([(0, row), (W, row)], fill=(170, 160, 140))
+        for x in range((row // 8 % 2) * 8, W, 16):
+            bd.line([(x, row), (x, row + 8)], fill=(170, 160, 140))
+    bp = brick.load()
+    for _ in range(5):
+        cx, cy, rad = R.randint(0, W), R.randint(12, 70), R.randint(6, 14)
+        for y in range(cy - rad, cy + rad):
+            for x in range(cx - rad * 2, cx + rad * 2):
+                dx, dy = (x - cx) / (rad * 1.6), (y - cy) / rad
+                if dx * dx + dy * dy + R.rand() * 0.35 < 1 and 0 <= y < H:
+                    px[x % W, y] = bp[x % W, y]
+    d = ImageDraw.Draw(img)
+    # Rachaduras.
+    for _ in range(7):
+        x, y = R.randint(0, W), R.randint(0, 50)
+        for _ in range(R.randint(15, 45)):
+            nx, ny = x + R.randint(-2, 3), y + R.randint(0, 3)
+            d.line([(x % W, y), (nx % W, ny)] if abs((x % W) - (nx % W)) < 5 else [(nx % W, ny), (nx % W, ny)], fill=(96, 90, 78))
+            x, y = nx, ny
+            if y > 78: break
+    # Barrado verde da empresa embaixo, com friso claro e respingos de barro.
+    band = noisy(W, 48, (34, 92, 58), 8)
+    img.paste(band, (0, 80))
+    d.rectangle([0, 78, W, 80], fill=(235, 230, 205))
+    for _ in range(420):
+        x, y = R.randint(0, W), 128 - int(abs(R.normal(0, 9)))
+        if 82 <= y < 128:
+            px[x, y] = (88, 78, 60)
+    for _ in range(30):
+        x, y = R.randint(0, W), R.randint(84, 124)
+        d.line([(x, y), (x + R.randint(2, 7), y)], fill=(24, 70, 44))
+    # Capa de cimento em cima.
+    d.rectangle([0, 0, W, 3], fill=(128, 126, 118))
+    d.line([(0, 4), (W, 4)], fill=(96, 94, 88))
+    img.save("muro.png")
+
+# ---------------------------------------------------------------- telha metálica do galpão (1 m)
+def galpao():
+    W = 64
+    a = np.zeros((W, W, 3), np.float32)
+    x = np.arange(W)
+    rib = 0.82 + 0.18 * np.cos(x / 16 * 2 * np.pi)
+    a[:] = np.array((78, 92, 100), np.float32) * rib[None, :, None]
+    a += R.randint(-4, 5, (W, W, 1))
+    img = Image.fromarray(np.clip(a, 0, 255).astype(np.uint8))
+    d = ImageDraw.Draw(img)
+    d.line([(0, 0), (W, 0)], fill=(48, 56, 62)); d.line([(0, 1), (W, 1)], fill=(104, 118, 126))
+    px = img.load()
+    for xx in range(8, W, 16):
+        px[xx, 3] = (40, 44, 48); px[xx, 4] = (130, 140, 146)
+    for _ in range(5):
+        xx, ln = R.randint(0, W), R.randint(6, 26)
+        for y in range(2, 2 + ln):
+            r, g, b = px[xx, y]; px[xx, y] = (min(255, r + 26), g + 4, max(0, b - 14))
+    img.save("galpao.png")
+
+# ---------------------------------------------------------------- caixas (BoxMesh: atlas 3x2, a mesma face nas 6)
+def caixa(name, base, tape, ink, stripe=None, brand=None):
+    F = 64
+    face = noisy(F, F, base, 6)
+    d = ImageDraw.Draw(face)
+    dark = tuple(int(c * 0.72) for c in base)
+    d.rectangle([0, 0, F - 1, F - 1], outline=dark)
+    if stripe:
+        d.rectangle([1, 40, F - 2, 52], fill=stripe)
+    d.rectangle([27, 1, 36, F - 2], fill=tape)                      # fita no meio
+    d.line([(27, 1), (27, F - 2)], fill=tuple(int(c * 0.85) for c in tape))
+    # Setas "este lado para cima" e taça de frágil, impressas no canto.
+    for ox in (6, 14):
+        d.line([(ox, 58), (ox, 49)], fill=ink); d.polygon([(ox - 3, 51), (ox + 3, 51), (ox, 46)], fill=ink)
+    d.line([(4, 59), (17, 59)], fill=ink)
+    d.polygon([(46, 46), (56, 46), (53, 52), (49, 52)], outline=ink); d.line([(51, 52), (51, 58)], fill=ink); d.line([(47, 58), (55, 58)], fill=ink)
+    if brand:
+        fit(d, (40, 6, 62, 22), brand, ink, 12, COND)
+    atlas = Image.new("RGB", (F * 3, F * 2))
+    for i in range(6):
+        atlas.paste(face, ((i % 3) * F, (i // 3) * F))
+    atlas.save(f"caixa_{name}.png")
+
+# ---------------------------------------------------------------- etiquetas (adesivos 2:1)
+def etiqueta(name, text, bg, fg, border=None, icon=None, stripes=None):
+    W, H = 128, 64
+    img = noisy(W, H, bg, 3)
+    d = ImageDraw.Draw(img)
+    if stripes:
+        for x in range(-H, W + H, 16):
+            d.polygon([(x, 0), (x + 8, 0), (x + 8 - 10, 10), (x - 10, 10)], fill=stripes)
+            d.polygon([(x, H - 10), (x + 8, H - 10), (x + 8 - 10, H), (x - 10, H)], fill=stripes)
+    d.rectangle([0, 0, W - 1, H - 1], outline=border or fg)
+    d.rectangle([1, 1, W - 2, H - 2], outline=border or fg)
+    box = [6, 12 if stripes else 5, W - 6, H - (12 if stripes else 5)]
+    if icon == "taca":
+        d.polygon([(10, 20), (30, 20), (25, 34), (15, 34)], outline=fg, width=2); d.line([(20, 34), (20, 46)], fill=fg, width=2); d.line([(12, 46), (28, 46)], fill=fg, width=2)
+        d.line([(22, 20), (18, 27), (23, 29), (20, 34)], fill=fg)
+        box[0] = 34
+    elif icon == "setas":
+        for ox in (14, 28):
+            d.line([(ox, 48), (ox, 26)], fill=fg, width=3); d.polygon([(ox - 6, 28), (ox + 6, 28), (ox, 16)], fill=fg)
+        d.line([(8, 50), (34, 50)], fill=fg, width=2)
+        box[0] = 40
+    elif icon == "cruz":
+        d.rectangle([10, 18, 34, 46], fill=(255, 255, 255), outline=fg); d.rectangle([19, 22, 25, 42], fill=fg); d.rectangle([13, 29, 31, 35], fill=fg)
+        box[0] = 40
+    elif icon == "raio":
+        d.polygon([(24, 14), (12, 34), (20, 34), (16, 50), (30, 28), (22, 28)], fill=fg)
+        box[0] = 36
+    elif icon == "volta":
+        d.arc([8, 18, 34, 46], 40, 320, fill=fg, width=3); d.polygon([(28, 16), (36, 24), (26, 28)], fill=fg)
+        box[0] = 40
+    fit(d, tuple(box), text, fg, 30, COND)
+    img.save(f"etq_{name}.png")
+
+# ---------------------------------------------------------------- quadros do escritório
+def quadro_avisos():
+    W, H = 300, 200
+    img = noisy(W, H, (176, 132, 84), 12)
+    d = ImageDraw.Draw(img)
+    d.rectangle([0, 0, W - 1, H - 1], outline=(92, 60, 34), width=7)
+    d.rectangle([40, 12, W - 40, 36], fill=(34, 92, 58)); fit(d, (44, 13, W - 44, 35), "QUADRO DE AVISOS", (240, 235, 210), 18)
+    notes = [((18, 48, 142, 112), (250, 244, 200), "Neblina na serra:\nfarol baixo e calma", (200, 40, 40)),
+             ((158, 46, 284, 106), (255, 255, 255), "Não esquecer\no radar!", (40, 60, 180)),
+             ((24, 122, 132, 186), (200, 230, 255), "META DO MÊS:\n0 caixas\nquebradas", (240, 180, 30)),
+             ((148, 116, 282, 188), (255, 222, 228), "Sexta: Show da\nFrequência na 96.6\nLeve a família", (40, 150, 70))]
+    for box, paper, txt, pin in notes:
+        d.rectangle([box[0] + 3, box[1] + 3, box[2] + 3, box[3] + 3], fill=(120, 88, 54))
+        d.rectangle(box, fill=paper)
+        fit(d, (box[0] + 6, box[1] + 12, box[2] - 6, box[3] - 5), txt, (40, 36, 30), 14, COND)
+        cx = (box[0] + box[2]) // 2
+        d.ellipse([cx - 4, box[1] + 1, cx + 4, box[1] + 9], fill=pin, outline=(30, 30, 30))
+    img.save("quadro_avisos.png")
+
+def funcionario_mes():
+    W, H = 210, 150
+    img = noisy(W, H, (246, 242, 228), 3)
+    d = ImageDraw.Draw(img)
+    d.rectangle([0, 0, W - 1, H - 1], outline=(176, 134, 44), width=6)
+    d.rectangle([8, 8, W - 9, H - 9], outline=(110, 80, 22))
+    fit(d, (14, 12, W - 14, 40), "FUNCIONÁRIO DO MÊS", (34, 92, 58), 18)
+    d.rectangle([20, 48, 96, 136], fill=(150, 170, 186), outline=(60, 60, 60), width=2)
+    d.ellipse([42, 58, 74, 90], fill=(72, 84, 96)); d.pieslice([30, 92, 86, 170], 180, 360, fill=(72, 84, 96))
+    fit(d, (46, 60, 70, 88), "?", (240, 240, 240), 24)
+    fit(d, (104, 52, W - 16, 92), "(você?)", (60, 56, 50), 22, COND)
+    fit(d, (104, 98, W - 16, 134), "Nenhuma caixa\nquebrada no mês", (120, 110, 96), 12, COND)
+    img.save("funcionario_mes.png")
+
+def quadro_vale():
+    W, H = 96, 128
+    img = Image.new("RGB", (W, H))
+    d = ImageDraw.Draw(img)
+    for y in range(H):
+        t = y / H
+        d.line([(0, y), (W, y)], fill=(int(250 - 90 * t), int(170 - 60 * t + 40 * (1 - t)), int(110 + 60 * t)))
+    d.ellipse([56, 44, 80, 68], fill=(255, 236, 170))
+    d.polygon([(0, 80), (22, 52), (40, 74), (60, 48), (96, 84), (96, 128), (0, 128)], fill=(74, 62, 96))
+    d.polygon([(0, 96), (30, 78), (58, 92), (96, 76), (96, 128), (0, 128)], fill=(40, 84, 60))
+    d.polygon([(0, 110), (40, 100), (96, 112), (96, 128), (0, 128)], fill=(30, 62, 44))
+    d.line([(26, 78), (26, 40)], fill=(40, 30, 30), width=2); d.line([(20, 78), (26, 46), (32, 78)], fill=(40, 30, 30))
+    for r in (5, 9, 13):
+        d.arc([26 - r, 40 - r, 26 + r, 40 + r], 200, 340, fill=(255, 250, 230))
+    d.ellipse([24, 37, 28, 41], fill=(230, 40, 30))
+    img.save("quadro_vale.png")
+
+# ---------------------------------------------------------------- logo e baú da moto (DF Entregas)
+def logo_df(size=128):
+    img = Image.new("RGB", (size, size), (200, 28, 24))
+    d = ImageDraw.Draw(img)
+    s = size / 128
+    d.rounded_rectangle([6 * s, 6 * s, size - 6 * s, size - 6 * s], radius=int(22 * s), fill=(214, 34, 28), outline=(255, 255, 255), width=max(1, int(3 * s)))
+    # Caixa com "asas" de ondas de rádio: entrega + frequência.
+    bx = [44 * s, 34 * s, 84 * s, 70 * s]
+    d.rectangle(bx, fill=(255, 255, 255)); d.rectangle([60 * s, 34 * s, 68 * s, 70 * s], fill=(245, 190, 40))
+    for r in (10, 18, 26):
+        d.arc([84 * s - r * s + 4 * s, 52 * s - r * s, 84 * s + r * s + 4 * s, 52 * s + r * s], -50, 50, fill=(255, 255, 255), width=max(1, int(3 * s)))
+        d.arc([44 * s - r * s - 4 * s, 52 * s - r * s, 44 * s + r * s - 4 * s, 52 * s + r * s], 130, 230, fill=(255, 255, 255), width=max(1, int(3 * s)))
+    fit(d, (12 * s, 74 * s, size - 12 * s, 100 * s), "DF ENTREGAS", (255, 255, 255), int(22 * s))
+    fit(d, (14 * s, 100 * s, size - 14 * s, 116 * s), "chega inteiro", (255, 226, 150), int(13 * s), COND)
+    return img
+
+def bau():
+    logo_df(128).save("logo_df.png")
+    # Lateral do baú térmico: vermelho com costura, faixa refletiva e o logo.
+    W, H = 192, 128
+    img = noisy(W, H, (196, 30, 26), 5)
+    d = ImageDraw.Draw(img)
+    d.rectangle([0, 0, W - 1, H - 1], outline=(110, 14, 12), width=3)
+    for x in range(6, W - 6, 6):
+        d.line([(x, 6), (x + 3, 6)], fill=(250, 220, 210)); d.line([(x, H - 7), (x + 3, H - 7)], fill=(250, 220, 210))
+    d.rectangle([3, H - 26, W - 4, H - 14], fill=(210, 214, 220))
+    for x in range(3, W - 4, 12):
+        d.polygon([(x, H - 14), (x + 6, H - 26), (x + 10, H - 26), (x + 4, H - 14)], fill=(245, 190, 40))
+    img.paste(logo_df(84), ((W - 84) // 2, 12))
+    img.save("bau_lado.png")
+
+muro(); galpao()
+caixa("papelao", (158, 120, 76), (196, 168, 120), (84, 58, 34))
+caixa("papelao_escuro", (124, 90, 54), (170, 140, 96), (60, 40, 22))
+caixa("branca", (232, 230, 222), (200, 198, 190), (60, 70, 110), stripe=(40, 74, 150), brand="CB")
+caixa("azul", (36, 66, 140), (214, 208, 190), (230, 232, 240), stripe=(240, 240, 240), brand="LM")
+caixa("vermelha", (190, 30, 26), (224, 214, 190), (255, 236, 150), stripe=(245, 200, 40), brand="ML")
+etiqueta("fragil", "FRÁGIL", (252, 250, 244), (200, 24, 20), icon="taca", stripes=(200, 24, 20))
+etiqueta("lado_cima", "ESTE LADO\nPARA CIMA", (252, 250, 244), (30, 30, 30), icon="setas")
+etiqueta("correrios", "CORRERIOS\nSEDEX 10 (um dia)", (250, 214, 40), (20, 50, 130))
+etiqueta("casas_baixa", "CASAS BAIXA\ndedicação total a você", (240, 240, 240), (30, 60, 160))
+etiqueta("marcianas", "LOJAS\nMARCIANAS", (200, 24, 30), (255, 255, 255), border=(255, 255, 255))
+etiqueta("devolucao", "DEVOLUÇÃO", (255, 150, 30), (30, 30, 30), icon="volta", stripes=(30, 30, 30))
+etiqueta("luzia", "MAGAZINE\nLUZIA", (30, 110, 220), (255, 255, 255), border=(255, 210, 40))
+etiqueta("fitas", "FITAS MAGNÉTICAS\nVHS · K7", (252, 250, 244), (40, 30, 20), stripes=(60, 50, 120))
+etiqueta("suprimentos", "SUPRIMENTOS\nMÉDICOS", (252, 250, 244), (190, 20, 20), icon="cruz")
+etiqueta("pecas_radio", "PEÇAS DE RÁDIO\n96.6 FM", (240, 226, 190), (40, 30, 20), icon="raio")
+etiqueta("valvulas", "VÁLVULAS\nFRÁGIL", (252, 250, 244), (200, 24, 20), icon="taca", stripes=(200, 24, 20))
+etiqueta("confidencial", "CONFIDENCIAL", (250, 246, 232), (190, 20, 20), border=(190, 20, 20))
+etiqueta("racao", "AGRO-TUDÃO\nRAÇÃO 25 kg", (28, 110, 44), (255, 240, 120), border=(255, 240, 120))
+quadro_avisos(); funcionario_mes(); quadro_vale(); bau()
+print("ok")

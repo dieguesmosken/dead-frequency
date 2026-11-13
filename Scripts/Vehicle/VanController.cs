@@ -49,6 +49,9 @@ public partial class VanController : VehicleBody3D
     [Export] public string NetId { get; set; } = "van";
     /// <summary>"van" monta o acabamento da van (VanDetails); "moto"/"truck" usam o modelo próprio.</summary>
     [Export] public string Kind { get; set; } = "van";
+    /// <summary>Ajuste da altura dos olhos em primeira pessoa, sentado (a cabeça do jogador fica 1,6 m acima do banco;
+    /// nos carros baixos isso passava do teto). Definido pela VehicleFactory.</summary>
+    public float EyeOffsetY { get; set; }
     [Export] public string DisplayName { get; set; } = "van";
 
     public const string GroupName = "vehicles";

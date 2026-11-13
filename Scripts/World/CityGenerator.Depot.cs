@@ -19,6 +19,41 @@ public partial class CityGenerator
     private StandardMaterial3D _rackOrange, _rackBlue, _wood, _cardboard, _cardboardDark, _wrap, _floorPaint,
         _safetyYellow, _forkYellow, _officeWall, _officeFloor, _deskWood, _chairFabric, _tube, _metalGrey;
     private RandomNumberGenerator _depotRng;
+    /// <summary>Texturas do depósito (v0.10, Assets/Textures/Depot/depot_textures.py.txt): caixas, etiquetas, muro e quadros.</summary>
+    private const string DepotTex = "res://Assets/Textures/Depot/";
+    private StandardMaterial3D[] _boxMats;
+    private StandardMaterial3D _muro;
+    private readonly System.Collections.Generic.Dictionary<string, StandardMaterial3D> _depotTexMats = new();
+
+    /// <summary>Material com textura do depósito, sem filtro (estilo PS1). Nulo se o arquivo não existir.</summary>
+    private StandardMaterial3D DepotMaterial(string file, float roughness = 0.85f)
+    {
+        if (_depotTexMats.TryGetValue(file, out StandardMaterial3D mat))
+            return mat;
+        string path = DepotTex + file;
+        mat = ResourceLoader.Exists(path)
+            ? new StandardMaterial3D { AlbedoTexture = GD.Load<Texture2D>(path), Roughness = roughness, TextureFilter = BaseMaterial3D.TextureFilterEnum.NearestWithMipmaps }
+            : null;
+        _depotTexMats[file] = mat;
+        return mat;
+    }
+
+    /// <summary>Adesivo/quadro: um retângulo com imagem, virado para +Z antes de girar rotY. Sem a imagem, não faz nada.</summary>
+    private bool DepotQuad(Node3D parent, string file, Vector3 pos, Vector2 size, float rotY = 0f)
+    {
+        StandardMaterial3D mat = DepotMaterial(file);
+        if (mat == null)
+            return false;
+        parent.AddChild(new MeshInstance3D
+        {
+            Mesh = new QuadMesh { Size = size },
+            Position = pos,
+            Rotation = new Vector3(0f, rotY, 0f),
+            MaterialOverride = mat,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        });
+        return true;
+    }
 
     private void BuildDepotResources()
     {
@@ -27,6 +62,12 @@ public partial class CityGenerator
         _wood = Flat(new Color(0.55f, 0.4f, 0.24f));
         _cardboard = Flat(new Color(0.62f, 0.47f, 0.3f));
         _cardboardDark = Flat(new Color(0.48f, 0.35f, 0.21f));
+        // Caixas com textura (fita, setas e taça impressas) no lugar das cores lisas.
+        _boxMats = new[]
+        {
+            DepotMaterial("caixa_papelao.png") ?? _cardboard, DepotMaterial("caixa_papelao_escuro.png") ?? _cardboardDark,
+            DepotMaterial("caixa_branca.png") ?? _signWhite, DepotMaterial("caixa_azul.png") ?? _rackBlue, DepotMaterial("caixa_vermelha.png") ?? _stopRed,
+        };
         _wrap = new StandardMaterial3D
         {
             AlbedoColor = new Color(0.9f, 0.92f, 0.95f, 0.28f),
@@ -237,6 +278,7 @@ public partial class CityGenerator
 
         float box = 0.5f;
         float boxH = _depotRng.RandfRange(0.38f, 0.5f);
+        var frontBoxes = new System.Collections.Generic.List<Vector3>();
         layers = Mathf.Min(layers, Mathf.Max(1, (int)((maxHeight - ph) / boxH)));
         float y = ph;
         for (int l = 0; l < layers; l++)
@@ -249,28 +291,25 @@ public partial class CityGenerator
                     Material m = ProductMaterial();
                     var p = basePos + new Vector3((ix - 0.5f) * (box + 0.02f), y + boxH * 0.5f, (iz - 0.5f) * (box - 0.02f));
                     AddBox(parent, p, new Vector3(box, boxH - 0.01f, box - 0.04f), m, false);
+                    if (iz == 1 && l == 0)
+                        frontBoxes.Add(p);
                     // Fita adesiva no topo.
                     AddBox(parent, p + new Vector3(0f, boxH * 0.5f, 0f), new Vector3(0.08f, 0.006f, box - 0.03f), _cardboardDark, false);
                 }
             y += boxH;
         }
 
-        if (layers >= 2 && _depotRng.Randf() < 0.45f)
+        bool wrapped = layers >= 2 && _depotRng.Randf() < 0.45f;
+        if (wrapped)
             AddBox(parent, basePos + new Vector3(0f, ph + (y - ph) * 0.5f, 0f), new Vector3(pw + 0.04f, y - ph + 0.04f, pd + 0.02f), _wrap, false);
 
-        // Etiqueta em algumas pilhas.
-        if (_depotRng.Randf() < 0.35f)
+        // Etiqueta colada numa caixa da frente (adesivo com imagem; por cima do filme, se tiver).
+        if (_depotRng.Randf() < 0.45f && frontBoxes.Count > 0)
         {
-            string[] tags = { "FRÁGIL", "ESTE LADO P/ CIMA", "CASAS BAIXA", "CORRERIOS", "LOJAS MARCIANAS", "DEVOLUÇÃO", "MAGAZINE LUZIA" };
-            parent.AddChild(new Label3D
-            {
-                Text = tags[_depotRng.RandiRange(0, tags.Length - 1)],
-                FontSize = 40,
-                PixelSize = 0.004f,
-                Modulate = new Color(0.12f, 0.1f, 0.08f),
-                OutlineSize = 0,
-                Position = basePos + new Vector3(0f, ph + boxH * 0.5f, pd * 0.5f - 0.005f),
-            });
+            string[] tags = { "fragil", "lado_cima", "casas_baixa", "correrios", "marcianas", "devolucao", "luzia" };
+            Vector3 b = frontBoxes[_depotRng.RandiRange(0, frontBoxes.Count - 1)];
+            float z = wrapped ? basePos.Z + pd * 0.5f + 0.014f : b.Z + (box - 0.04f) * 0.5f + 0.004f;
+            DepotQuad(parent, "etq_" + tags[_depotRng.RandiRange(0, tags.Length - 1)] + ".png", new Vector3(b.X, b.Y, z), new Vector2(0.34f, 0.17f));
         }
 
         if (collide)
@@ -284,15 +323,7 @@ public partial class CityGenerator
     private Material ProductMaterial()
     {
         float r = _depotRng.Randf();
-        if (r < 0.55f)
-            return _cardboard;
-        if (r < 0.72f)
-            return _cardboardDark;
-        if (r < 0.82f)
-            return _signWhite;
-        if (r < 0.9f)
-            return _rackBlue;
-        return _stopRed;
+        return _boxMats[r < 0.55f ? 0 : r < 0.72f ? 1 : r < 0.82f ? 2 : r < 0.9f ? 3 : 4];
     }
 
     // ------------------------------------------------------------------ máquinas
@@ -339,6 +370,17 @@ public partial class CityGenerator
     {
         var jack = new Node3D { Position = pos, Rotation = new Vector3(0f, rotY, 0f) };
         depot.AddChild(jack);
+        // v0.10: paleteira do Meshy (garfos para -Z, como a antiga); sem o modelo, fica a de caixas.
+        if (MeshyVehicles.HasProp("paleteira"))
+        {
+            var holder = new Node3D { Position = new Vector3(0f, 0f, -0.25f) };
+            jack.AddChild(holder);
+            MeshyVehicles.BuildProp(holder, "paleteira", new Vector3(0.62f, 1.22f, 1.55f), -1);
+            var body = new StaticBody3D { CollisionLayer = 1, CollisionMask = 0, Position = new Vector3(0f, 0.3f, -0.25f) };
+            body.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(0.6f, 0.6f, 1.5f) } });
+            jack.AddChild(body);
+            return;
+        }
         foreach (float x in new[] { -0.25f, 0.25f })
             AddBox(jack, new Vector3(x, 0.06f, -0.6f), new Vector3(0.16f, 0.07f, 1.15f), _stopRed, false);
         AddBox(jack, new Vector3(0f, 0.18f, 0.05f), new Vector3(0.6f, 0.3f, 0.2f), _stopRed, false);
@@ -429,34 +471,13 @@ public partial class CityGenerator
         BuildRadioProp(depot, new Vector3(x1 - 0.32f, 1.4f, z0 + 0.45f), -Mathf.Pi * 0.5f, true, -7f);
         AddBox(depot, new Vector3(x0 + 0.4f, 0.5f, z0 + 0.4f), new Vector3(0.35f, 1.0f, 0.35f), _signWhite);
         AddCylinder(depot, new Vector3(x0 + 0.4f, 1.2f, z0 + 0.4f), 0.15f, 0.4f, _rackBlue).Transparency = 0.3f;
-        AddBox(depot, new Vector3(x1 - 0.02f, 1.7f, -9.0f), new Vector3(0.02f, 0.8f, 1.2f), _cardboard, false);
-        depot.AddChild(new Label3D
-        {
-            Text = "QUADRO DE AVISOS\n· turno da noite: cuidado\n  com a frequência 96.6\n· não esquecer o radar\n· meta: 0 caixas quebradas",
-            FontSize = 32,
-            PixelSize = 0.0028f,
-            Modulate = new Color(0.12f, 0.1f, 0.08f),
-            OutlineSize = 0,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            // Label3D só usa a largura com quebra de linha ligada; sem isso o texto alinhado à esquerda
-            // começa no centro do quadro e sai para a direita.
-            Width = 1.1f / 0.0028f,
-            AutowrapMode = TextServer.AutowrapMode.WordSmart,
-            Position = new Vector3(x1 - 0.04f, 1.72f, -9.0f),
-            Rotation = new Vector3(0f, -Mathf.Pi * 0.5f, 0f),
-        });
-        // Placa "funcionário do mês" na parede da frente (vista de dentro).
-        AddBox(depot, new Vector3(9.8f, 1.8f, z1 - 0.02f), new Vector3(0.7f, 0.5f, 0.02f), _signWhite, false);
-        depot.AddChild(new Label3D
-        {
-            Text = "FUNCIONÁRIO\nDO MÊS\n(você?)",
-            FontSize = 32,
-            PixelSize = 0.003f,
-            Modulate = new Color(0.1f, 0.1f, 0.1f),
-            OutlineSize = 0,
-            Position = new Vector3(9.8f, 1.8f, z1 - 0.04f),
-            Rotation = new Vector3(0f, Mathf.Pi, 0f),
-        });
+        // Quadro de avisos, "funcionário do mês" e a paisagem do vale: imagens (antes eram textos soltos que saíam do quadro).
+        if (!DepotQuad(depot, "quadro_avisos.png", new Vector3(x1 - 0.015f, 1.7f, -9.0f), new Vector2(1.2f, 0.8f), -Mathf.Pi * 0.5f))
+            AddBox(depot, new Vector3(x1 - 0.02f, 1.7f, -9.0f), new Vector3(0.02f, 0.8f, 1.2f), _cardboard, false);
+        if (!DepotQuad(depot, "funcionario_mes.png", new Vector3(9.8f, 1.8f, z1 - 0.015f), new Vector2(0.7f, 0.5f), Mathf.Pi))
+            AddBox(depot, new Vector3(9.8f, 1.8f, z1 - 0.02f), new Vector3(0.7f, 0.5f, 0.02f), _signWhite, false);
+        if (DepotQuad(depot, "quadro_vale.png", new Vector3(10.45f, 1.9f, z0 + 0.095f), new Vector2(0.42f, 0.56f)))
+            AddBox(depot, new Vector3(10.45f, 1.9f, z0 + 0.075f), new Vector3(0.48f, 0.62f, 0.03f), _deskWood, false); // moldura
     }
 
     // ------------------------------------------------------------------ frota (Kenney, CC0)
