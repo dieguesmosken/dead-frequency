@@ -66,6 +66,6 @@ public readonly record struct CharacterLook(bool Woman, int Skin, int Hair, int 
     public CharacterModel Build(Color? vest = null)
     {
         CharacterLook l = Clamped();
-        return CharacterModel.Create(Shirts[l.Shirt], PantsColors[l.Pants], Skins[l.Skin], vest, l.Hair * 2 + (l.Woman ? 1 : 0));
+        return CharacterModel.Create(Shirts[l.Shirt], PantsColors[l.Pants], Skins[l.Skin], vest, l.Hair * 2 + (l.Woman ? 1 : 0), player: true);
     }
 }

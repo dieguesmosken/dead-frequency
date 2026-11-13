@@ -13,6 +13,13 @@ public partial class CharacterModel : Node3D
 {
     public const string ManPath = "res://Assets/Quaternius/Characters/man.fbx";
     public const string WomanPath = "res://Assets/Quaternius/Characters/woman.fbx";
+    /// <summary>Jogadores (v0.10): modelos do Meshy com esqueleto e 6 animações, recoloridos por máscara.</summary>
+    public const string MeshyManPath = "res://Assets/Meshy/Characters/entregador.glb";
+    public const string MeshyWomanPath = "res://Assets/Meshy/Characters/entregadora.glb";
+    private static Shader _recolorShader;
+    /// <summary>Brilho médio (linear) de camiseta, calça, pele e cabelo na textura de cada modelo.</summary>
+    private static readonly Vector4 MeshyManRef = new(0.2048f, 0.092f, 0.3466f, 0.0236f);
+    private static readonly Vector4 MeshyWomanRef = new(0.1703f, 0.0615f, 0.4567f, 0.0165f);
     /// <summary>Os modelos vêm com ~5,2 unidades de altura; 0,34 deixa com ~1,77 m.</summary>
     private const float ModelScale = 0.34f;
 
@@ -42,7 +49,15 @@ public partial class CharacterModel : Node3D
     // Modelo animado
     private Skeleton3D _skeleton;
     private AnimationPlayer _anim;
-    private string _idle, _walk, _run, _work;
+    private string _idle, _walk, _run, _work, _jump, _carry;
+    /// <summary>Modelo do Meshy (jogador): já vem na altura certa e de tênis.</summary>
+    private bool _meshy;
+    /// <summary>Jogador (CharacterLook.Build): usa o modelo do Meshy quando ele existe.</summary>
+    private bool _player;
+    /// <summary>Segurando uma caixa: andar vira "carregando peso" (só no modelo do Meshy).</summary>
+    public bool Carrying { get; set; }
+    /// <summary>No ar (pulo/queda): pose de pulo no modelo do Meshy.</summary>
+    public bool Airborne { get; set; }
     private string _current = "";
     private int _boneHead = -1, _boneHandL = -1, _boneHandR = -1, _boneForearmL = -1, _boneSpine = -1, _boneFootL = -1, _boneFootR = -1;
 
@@ -63,9 +78,9 @@ public partial class CharacterModel : Node3D
 
     /// <summary>Cria um boneco. variant escolhe homem/mulher e cabelo; -1 = pelas cores.</summary>
     /// <param name="variant">Escolhe homem/mulher e cabelo. -1 = sorteado pelas cores (sempre o mesmo para as mesmas cores).</param>
-    public static CharacterModel Create(Color shirt, Color pants, Color skin, Color? vest = null, int variant = -1)
+    public static CharacterModel Create(Color shirt, Color pants, Color skin, Color? vest = null, int variant = -1, bool player = false)
     {
-        var model = new CharacterModel { Name = "CharacterModel" };
+        var model = new CharacterModel { Name = "CharacterModel", _player = player };
         model.Setup(shirt, pants, skin, vest ?? Colors.Transparent, variant);
         return model;
     }
@@ -100,15 +115,20 @@ public partial class CharacterModel : Node3D
         _equipmentRoot = new Node3D { Name = "Equipment" };
         AddChild(_equipmentRoot);
 
-        if (LoadScene(IsWoman ? WomanPath : ManPath)?.Instantiate() is Node3D body)
+        string meshyPath = IsWoman ? MeshyWomanPath : MeshyManPath;
+        _meshy = _player && ResourceLoader.Exists(meshyPath);
+        if (LoadScene(_meshy ? meshyPath : IsWoman ? WomanPath : ManPath)?.Instantiate() is Node3D body)
         {
             body.Name = "Body";
-            body.Scale = Vector3.One * ModelScale;
+            body.Scale = Vector3.One * (_meshy ? 1f : ModelScale);
             body.Rotation = new Vector3(0f, Mathf.Pi, 0f); // o modelo olha para +Z; o nosso "frente" é -Z
             AddChild(body);
             _skeleton = body.FindChild("Skeleton3D", true, false) as Skeleton3D;
             _anim = body.FindChild("AnimationPlayer", true, false) as AnimationPlayer;
-            ApplyPalette(body);
+            if (_meshy)
+                ApplyRecolor(body);
+            else
+                ApplyPalette(body);
             SetupAnimations();
             if (_skeleton != null)
             {
@@ -116,7 +136,7 @@ public partial class CharacterModel : Node3D
                 _boneHandL = _skeleton.FindBone("LeftHand");
                 _boneHandR = _skeleton.FindBone("RightHand");
                 _boneForearmL = _skeleton.FindBone("LeftForeArm");
-                _boneSpine = _skeleton.FindBone("Spine2");
+                _boneSpine = _skeleton.FindBone(_meshy ? "Spine" : "Spine2");
                 _boneFootL = _skeleton.FindBone("LeftFoot");
                 _boneFootR = _skeleton.FindBone("RightFoot");
             }
@@ -131,7 +151,7 @@ public partial class CharacterModel : Node3D
         _leftForearm = Mount("ForearmL");
         _back = Mount("Back");
         // O modelo masculino é descalço na textura: um par de tênis segue os pés.
-        if (!_boxModel && !IsWoman && _boneFootL >= 0)
+        if (!_boxModel && !_meshy && !IsWoman && _boneFootL >= 0)
         {
             _leftFoot = Mount("FootL");
             _rightFoot = Mount("FootR");
@@ -157,6 +177,23 @@ public partial class CharacterModel : Node3D
     }
 
     // ---------------- Paleta (roupa) ----------------
+
+    /// <summary>Modelo do Meshy: textura original + máscara; o shader pinta com as cores escolhidas.</summary>
+    private void ApplyRecolor(Node3D body)
+    {
+        string name = IsWoman ? "entregadora" : "entregador";
+        _recolorShader ??= GD.Load<Shader>("res://Shaders/Characters/meshy_recolor.gdshader");
+        var mat = new ShaderMaterial { Shader = _recolorShader };
+        mat.SetShaderParameter("base_tex", GD.Load<Texture2D>($"res://Assets/Meshy/Characters/{name}_cor.png"));
+        mat.SetShaderParameter("mask_tex", GD.Load<Texture2D>($"res://Assets/Meshy/Characters/{name}_mascara.png"));
+        mat.SetShaderParameter("shirt_color", Vest ?? Shirt);
+        mat.SetShaderParameter("pants_color", Pants);
+        mat.SetShaderParameter("skin_color", Skin);
+        mat.SetShaderParameter("hair_color", Hair);
+        mat.SetShaderParameter("ref_lum", IsWoman ? MeshyWomanRef : MeshyManRef);
+        foreach (Node n in body.FindChildren("*", "MeshInstance3D", true, false))
+            ((MeshInstance3D)n).MaterialOverride = mat;
+    }
 
     private void ApplyPalette(Node3D body)
     {
@@ -202,6 +239,14 @@ public partial class CharacterModel : Node3D
                 case "Run" or "Running": _run = a; break;
                 case "Working" or "PickUp": _work = a; break;
                 case "SitIdle" or "SittingIdle" or "Sit" or "Sitting" or "Sit_Idle": _sit = a; break;
+                // Meshy (v0.10)
+                case "Casual_Walk": _walk = a; break;
+                case "Run_02": _run = a; break;
+                case "Chair_Sit_Idle_M" or "Chair_Sit_Idle_F": _sit = a; break;
+                case "Carry_Heavy_Object_Walk": _carry = a; break;
+                case "Regular_Jump":
+                    _jump = a;
+                    continue; // pulo não repete
                 default: continue;
             }
             _anim.GetAnimation(a).LoopMode = Animation.LoopModeEnum.Linear;
@@ -257,6 +302,18 @@ public partial class CharacterModel : Node3D
             return;
         if (_seated)
             return;
+        if (Airborne && _jump != null)
+        {
+            Play(_jump, 0.15f);
+            _anim.SpeedScale = 1f;
+            return;
+        }
+        if (Carrying && _carry != null && speed >= 0.25f)
+        {
+            Play(_carry, 0.2f);
+            _anim.SpeedScale = Mathf.Clamp(speed / 1.2f, 0.6f, 2f);
+            return;
+        }
         if (speed < 0.25f)
         {
             if (_current != _work)
