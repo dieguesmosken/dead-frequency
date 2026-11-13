@@ -52,6 +52,22 @@ public partial class VanController : VehicleBody3D
     /// <summary>Ajuste da altura dos olhos em primeira pessoa, sentado (a cabeça do jogador fica 1,6 m acima do banco;
     /// nos carros baixos isso passava do teto). Definido pela VehicleFactory.</summary>
     public float EyeOffsetY { get; set; }
+
+    /// <summary>Piloto automático (Modo História, ChapterTransitionZone): segue reto mantendo a velocidade.</summary>
+    public bool AutoDrive { get; private set; }
+    private float _autoDriveSpeed;
+
+    /// <summary>Liga/desliga o piloto automático. speedMs = velocidade alvo em m/s; o volante fica reto.</summary>
+    public void SetAutoDrive(bool on, float speedMs)
+    {
+        AutoDrive = on;
+        _autoDriveSpeed = Mathf.Max(0f, speedMs);
+        if (on)
+            Sleeping = false;
+        // A viagem não pode morrer no meio: se o motor estiver desligado, dá a partida.
+        if (on && Engine != null && !Engine.Running && !Engine.Cranking)
+            Engine.Start(false);
+    }
     [Export] public string DisplayName { get; set; } = "van";
 
     public const string GroupName = "vehicles";
@@ -484,15 +500,20 @@ public partial class VanController : VehicleBody3D
         float steerInput = 0f;
         bool handbrake = false;
 
-        if (HasDriver && Driver.InputEnabled)
+        // Velocidade no eixo da van: positiva indo para frente.
+        float forwardSpeed = LinearVelocity.Dot(GlobalBasis.Z);
+
+        if (AutoDrive && HasDriver)
+        {
+            // Acelera até a velocidade alvo e mantém; acima dela, solta (o freio-motor segura).
+            throttle = Mathf.Clamp((_autoDriveSpeed - forwardSpeed) * 0.4f, -0.6f, 0.8f);
+        }
+        else if (HasDriver && Driver.InputEnabled)
         {
             throttle = Input.GetAxis("move_back", "move_forward");
             steerInput = Input.GetAxis("move_right", "move_left"); // esterço positivo = esquerda
             handbrake = Input.IsActionPressed("jump");
         }
-
-        // Velocidade no eixo da van: positiva indo para frente.
-        float forwardSpeed = LinearVelocity.Dot(GlobalBasis.Z);
 
         float engine = 0f;
         float brake;

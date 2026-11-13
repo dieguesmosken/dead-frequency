@@ -26,6 +26,8 @@ public class SaveData
     /// <summary>Tanque e bateria da caminhonete da empresa (0 a 1; -1 = save antigo, usa o padrão).</summary>
     public float VanFuel { get; set; } = -1f;
     public float VanBattery { get; set; } = -1f;
+    /// <summary>Progresso do Modo História (save antigo sem o campo = capítulo 1).</summary>
+    public StorySave Story { get; set; } = new();
 }
 
 public static class SaveManager
@@ -107,16 +109,31 @@ public static class SaveManager
             data.EarnedByJob[job] = v + amount;
         }
         PendingEarned.Clear();
+        if (StoryManager.Instance != null)
+            data.Story = StoryManager.Instance.ToSave();
 
+        return Write(data) ? data : null;
+    }
+
+    /// <summary>Grava só o progresso do Modo História (sem mexer no resto do save).</summary>
+    public static void SaveStory(StorySave story)
+    {
+        SaveData data = Load() ?? new SaveData();
+        data.Story = story ?? new StorySave();
+        Write(data);
+    }
+
+    private static bool Write(SaveData data)
+    {
         using FileAccess f = FileAccess.Open(FilePath, FileAccess.ModeFlags.Write);
         if (f == null)
         {
             GD.PushWarning($"SaveManager: não foi possível gravar ({FileAccess.GetOpenError()}).");
-            return null;
+            return false;
         }
         f.StoreString(JsonSerializer.Serialize(data, Options));
         _cache = data;
-        return data;
+        return true;
     }
 
     /// <summary>Resumo de uma linha para o menu ("Turno 4 · 12 entregas · salvo em ...").</summary>

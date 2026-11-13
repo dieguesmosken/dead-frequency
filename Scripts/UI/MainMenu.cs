@@ -127,7 +127,7 @@ public partial class MainMenu : Control
         _multiplayer = new MultiplayerPanel();
         _multiplayerPanel.AddChild(_multiplayer);
         _multiplayer.BackRequested += ShowMenu;
-        _multiplayer.JoinedRoom += () => GetTree().ChangeSceneToFile(GameLevels.Get(NetClient.Instance?.Level ?? "city").Scene);
+        _multiplayer.JoinedRoom += () => { StoryManager.Instance?.End(); GetTree().ChangeSceneToFile(GameLevels.Get(NetClient.Instance?.Level ?? "city").Scene); };
         stack.AddChild(_multiplayerPanel);
 
         // Escolha de fase (solo).
@@ -142,6 +142,16 @@ public partial class MainMenu : Control
             _levelPanel.AddChild(b);
             _levelPanel.AddChild(UiStyle.MakeLabel(level.Subtitle, 15, color: UiStyle.PhosphorDim));
         }
+        // Modo História (offline): continua do capítulo salvo. O turno livre de cima não muda.
+        _levelPanel.AddChild(new Control { CustomMinimumSize = new Vector2(0, 8) });
+        _storyButton = UiStyle.MakeButton("Modo História (prévia)", StartStory, 420, UiSound.Start);
+        _storyButton.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+        _levelPanel.AddChild(_storyButton);
+        _storyInfo = UiStyle.MakeLabel("", 15, color: UiStyle.PhosphorDim);
+        _levelPanel.AddChild(_storyInfo);
+        _storyRestart = UiStyle.MakeButton("Recomeçar a história do capítulo I", () => { StoryManager.Instance?.Restart(); RefreshStory(); }, 420, UiSound.Back);
+        _storyRestart.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+        _levelPanel.AddChild(_storyRestart);
         Button levelBack = UiStyle.MakeButton("Voltar", ShowMenu, sound: UiSound.Back);
         levelBack.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
         _levelPanel.AddChild(levelBack);
@@ -301,8 +311,37 @@ public partial class MainMenu : Control
         _glitchTimer = glitch ? 0.06 : 0.25 + GD.Randf() * 0.6;
     }
 
+    private Button _storyButton, _storyRestart;
+    private Label _storyInfo;
+
+    private void RefreshStory()
+    {
+        StoryManager sm = StoryManager.Instance;
+        if (sm == null || _storyButton == null)
+            return;
+        StoryChapters.Chapter c = sm.Chapter;
+        bool started = sm.CurrentChapter > 1 || sm.GoalProgress > 0 || sm.CanAdvance;
+        _storyButton.Text = started ? $"Modo História: continuar ({c.Roman})" : "Modo História (prévia)";
+        _storyInfo.Text = (string.IsNullOrEmpty(c.Title) ? c.Roman : $"{c.Roman} — {c.Title}") + " · " + GameLevels.Get(c.Level).Name + " · só offline";
+        _storyRestart.Visible = started;
+    }
+
+    private void StartStory()
+    {
+        StoryManager sm = StoryManager.Instance;
+        if (sm == null)
+            return;
+        string scene = sm.Begin();
+        StoryChapters.Chapter c = sm.Chapter;
+        Professions.CurrentLevel = c.Level;
+        if (c.Job != null)
+            Professions.Current = c.Job;
+        StartGame(scene, story: true);
+    }
+
     private void ShowLevels()
     {
+        RefreshStory();
         _menu.Visible = false;
         _profPanel.Visible = false;
         _levelPanel.Visible = true;
@@ -353,8 +392,10 @@ public partial class MainMenu : Control
         first?.GrabFocus();
     }
 
-    private void StartGame(string scene)
+    private void StartGame(string scene, bool story = false)
     {
+        if (!story)
+            StoryManager.Instance?.End(); // turno livre
         // Pequena pausa para o som de início tocar antes de trocar de cena.
         _levelPanel.Visible = false;
         _profPanel.Visible = false;
