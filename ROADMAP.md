@@ -13,9 +13,9 @@ rádio 96.6 e ajuda a cidade a funcionar. Ordem sugerida: de cima para baixo; ca
 | **Moradia** | Edifício Sintonia: um apartamento por jogador (elevador no saguão), cama que salva o jogo, TV com canais, rádio. |
 | **Lugares com interior** | Depósito e escritório, Supermercado Atacadinho (corredores, seções, caixas), rádio, saguão e apartamentos. |
 | **Cidade** | Bancos, lotéricas, padarias, mercados, postos, lava-jato, caixa d'água, bombeiros, delegacia, ônibus 966, pedestres que desviam, outdoors iluminados, orelhões. Fase 2: rancho. |
-| **Online** | Servidor oficial (Cloudflare), servidor próprio ou hospedar no PC com link público, lista de salas públicas. Protocolo 5. |
+| **Online** | Servidor oficial (Cloudflare), servidor próprio ou hospedar no PC com link público, lista de salas públicas. |
 | **Gente e bichos** | Personagens animados (Quaternius) para jogadores e NPCs, bichos no sítio, caramelos. |
-| **Distribuição** | Release automático no GitHub (Windows e Linux) com SHA256SUMS e atestado de build, launcher que atualiza sozinho, site em www.teuzin.com.br/dead-frequency. |
+| **Distribuição** | Release automático no GitHub (Windows e Linux) com SHA256SUMS e atestado de build, launcher que atualiza sozinho, site em www.teuzin.com.br/dead-frequency. Builds da Internal (`vX.Y.Z.N-pre`) também trazem o APK do Android. |
 
 ---
 
@@ -64,7 +64,7 @@ Já feito nesta build (feedback de 08/11):
 - ✅ Otimização: peças pequenas somem na neblina, luz de poste apaga longe.
 - ✅ Auto Center Dois Mil (ao lado do depósito): Gou, Fuska e Opalinha a $ 2000; online o carro é da sala.
 - ✅ Menu inicial: manter o menu atual; o redesign foi retirado desta versão.
-- ⏭ Sons do Pixabay com créditos adiados para uma versão futura.
+- ⏭ Sons novos (passos e ambiente) adiados; fontes CC0 definidas em `docs/ASSETS_E_SONS.md` (Pixabay descartado).
 
 | Ideia | Como funciona no jogo |
 |---|---|
@@ -90,22 +90,43 @@ Ideias para depois (pesquisa de 12/11 sobre as regras do CTB):
 - **Multas do Art. 181 do CTB** (quando a carreira tiver economia): estacionar a menos de 5 m da esquina, em frente a guia rebaixada, sobre a calçada/faixa/ciclovia, em frente a hidrante ou no ponto de ônibus, ou a mais de 50 cm da guia.
 - **Meio-fio e calçada com mais detalhe**: rachaduras com normal map e vaga azul de idoso/PCD pintada no asfalto.
 
-### v0.9.9 — Lojas de verdade
+### v0.9.9 — Lojas de verdade ✅
 | Ideia | Como funciona no jogo |
 |---|---|
-| **Prédios do tamanho da loja** | Mercados, lojas e postos deixam de ser "térreo de prédio": cada um ganha o próprio prédio, com o tamanho da loja. |
-| **Shopping** | Shopping com várias lojas, dois andares e escada (a primeira construção com andar de cima andável). |
-| **Táxi amarelo** | O taxista ganha o próprio carro: táxi amarelo com placa luminosa "TÁXI" no teto e o nome de uma cooperativa fictícia. |
-| **Agro-Tudão (casa de rações)** | Na estrada de terra entre a cidade e o sítio: entregas de sacos de ração para os cercados. |
-| **Conserta-Tudo do Primo** | O gari junta sucata nas calçadas e vende aqui, ou troca por melhorias (lanterna de longo alcance, pilhas para a visão noturna). |
-| **Lã de Aço 1001 Utilidades** | Carga leve do repositor; no apartamento, melhora a imagem chiada da TV. |
+| ✅ **Prédios do tamanho da loja** | Fachadas comerciais aleatórias agora são lojas térreas independentes; o Atacadinho e os postos já ocupam quarteirões próprios. |
+| ✅ **Shopping** | Shopping Marconi com oito balcões interativos, dois pisos e escada com rampa física walkable. |
+| ✅ **Táxi amarelo** | O taxista ganha o próprio carro (modelo PSX da GGBot, CC0) no pátio da central, com o nome da cooperativa fictícia "Rádio Táxi Sintonia" e o adesivo do app paródia "66". Passageiro só embarca no táxi. |
+| ✅ **Van de viagem** | Van anos 80 "Fórdi Viajante" (creme e marrom com faixas, janela bolha e bagageiro), estacionada no pátio da central: a van do Modo História. |
+| ✅ **Menus novos por código** | Opções > Interface > Menu inicial: ORBITA966, CINEMA966 e TERMINAL966 ligam os menus novos (fundo com a própria cidade), VISUAL966 libera os três para escolher e CLASSICO966 volta ao menu clássico. |
+| ✅ **Central e rádio** | Portão novo do lado esquerdo da central (feedback dos testes), grade de metal em cima dos muros da central e da rádio, e portãozinho de pedestre na lateral da rádio. |
+| ✅ **Céu novo** | Céu 100% procedural (nuvens, sol, lua com relevo e estrelas) ligado ao ciclo de dia e noite. |
+| ✅ **Agro-Tudão (casa de rações)** | Galpão na Estrada do Rancho, logo depois da cooperativa (Fase 2), com placa verde, pilhas de ração e o balcão do Seu Tonho. Carga nova **Saco de Ração 25 kg** (só no sítio, pesa 3x no sorteio): nasce na frente do galpão e vai para os sítios. A loja vende o **Repelente Espanta-Muriçoca** (5 min sem pernilongo), luva e conserto. Sorteio de carga por fase: `CargoRules.Pool` = `cargoPool()` no servidor. |
+| ✅ **Conserta-Tudo do Primo** | Barraca em frente ao depósito. O gari acha sucata na rua (rádio velho, cano, roda) e vende ao Primo pelo mesmo valor do saco; o Primo vende a lanterna de longo alcance (dobro do alcance, basta estar na mochila), kit de reparo, fita e prego. Pilhas para a visão noturna ficaram de fora: ela não gasta bateria hoje. |
+| ✅ **Lã de Aço 1001 Utilidades** | Balcão no Shopping Marconi (no lugar das Lojas Marcianas) com palha de aço Brilhaço, fita e prego. Na TV do apartamento, a palha de aço na antena acaba com o chuvisco. O repositor às vezes repõe fardos de palha de aço (carga leve). |
 
-### v0.10 — Carreira
+### v0.10 — Dead Frequency no celular (Android)
+Planejado em 12/11/2026 (antes a v0.10 era a Carreira, que passou para a v0.11). Objetivo: jogar e testar no
+celular, nos dois aparelhos do Matheus e em outros. Depende da otimização para PC fraco (`hotfix/pc-fraco`,
+streaming por chunks) estar na Internal.
+
+| Ideia | Como funciona no jogo |
+|---|---|
+| 🚧 **Exportar para Android** | Preset "Android" no `export_presets.cfg` (C#/.NET, arm64, sem gradle) e workflow `android-test.yml`, que gera um APK debug como artefato (botão Run workflow ou push em `android/**` / `feat/android-*`). No celular o renderizador é o Compatibility, com texturas ETC2/ASTC. Falta: chave de release (segredo do Matheus), APK no prerelease da Internal e testar nos aparelhos. |
+| ✅ **Controles de toque** | `Scripts/UI/TouchControls.cs` (autoload, desenhado em código): joystick que nasce onde o dedo encosta, arrastar à direita mexe a câmera, botões USAR, PULAR/FREIO, ITEM/JOGAR, SOLTAR, CORRER e, no canto de cima, PAUSA, MOCHILA, LUZ, VISÃO e RÁDIO/ESTAÇÃO na van. Com tela aberta só aparece o VOLTAR. Tudo vira ação do Input Map. Opções > Controles > Toque: automático/sempre/nunca e tamanho dos botões. |
+| 🚧 **Modo gráfico leve** | Primeira vez no celular (`GameSettings.ApplyMobileDefaults`): qualidade Baixa (sem sombras nem brilho), resolução 3D 70%, sem antisserrilhado, 30 fps; câmera enxerga até 160 m e a neblina fica 2,2x mais densa para esconder o corte. Começa em primeira pessoa. Falta medir nos aparelhos e ajustar o raio dos pedaços da cidade. |
+| ✅ **Menus e HUD para tela pequena** | Tela cheia sempre (modo imersivo, sem barra de notificação nem de gestos). Interface 1,6x; menu inicial com layout próprio (`MainMenu.Mobile.cs`: botões grandes em duas colunas, telas que rolam com o dedo); HUD do jogo encolhido para ~1,1x; dicas de teclado escondidas; botão CÂMERA nos controles de toque. Para testar no PC: rodar com `-- --mobile`. |
+| ✅ **Personagem do jogador novo** | Entregador e entregadora feitos no Meshy (low-poly ~4 mil triângulos, textura 512 px sem filtro) com esqueleto e 6 animações: parado, andar, correr, sentado (dirigir/carona), pulo e carregando caixa. As cores do menu Personagem continuam valendo: um shader pinta camiseta, calça, pele e cabelo por máscara, mantendo as sombras. Vale para você, para os outros jogadores no online, para o menu e para a mochila; NPCs e vendedores ganham modelos novos depois. |
+| ✅ **Caminhonete e Fuska novos** | Modelos do Meshy (~5–6 mil triângulos, textura 512 px sem filtro). Caminhonete de entregas com calotas: só a carroceria muda, interior, volante animado, rádio e colisões da caçamba continuam. Fuska pintado por máscara (cada um com a sua cor: estacionados, concessionária e o comprado). **Placas** cinzas dos anos 90 ("SINTONIA · SP" + ABC-1234) diferentes em cada carro (`Plates`, pelo NetId ou pela ordem de geração); a da empresa é DFQ-1996. |
+| ✅ **Moradores, barracas e viaturas novos** | Seis moradores do Meshy (senhor, rapaz, homem de escritório, moça, dona e senhora) com parado, andar, sentado e conversar gesticulando, pintados por máscara com as cores de cada pedestre (dá dezenas de combinações). Barracas dos vendedores com o toldo na cor de cada um, churrasquinho do Duvidoso completo (guarda-sol, churrasqueira, isopor) com brasa e fumaça, caminhão dos bombeiros e viatura da polícia novos. O caramelo agora é caramelo de verdade (pelagem caramelo e creme, orelha caída). |
+| **Online entre PC e celular** | Mesmo servidor e protocolo (WebSocket): sem mudança no `server/`. Testar sala com PC e celular juntos. |
+| 🚧 **Distribuição** | O prerelease da Internal (`vX.Y.Z.N-pre`) traz o `DeadFrequency-…-android.apk`. **Atualizador no próprio jogo** (`AppUpdater`): no celular o menu confere o GitHub, mostra "Nova versão", baixa o APK com progresso e abre o instalador do Android (se não abrir, usa o navegador). Quem tem build da Internal recebe os `-pre`; quem tem o público, só os públicos. O CI grava o build exato em `application/config/version` (`GameVersion.Build`). Instalar por cima precisa da chave do Matheus (segredos `ANDROID_KEYSTORE_*`); com chave de debug, desinstale antes. Link no site e Play Store ficam para depois. |
+
+### v0.11 — Carreira
 | Ideia | Como funciona no jogo |
 |---|---|
 | **Níveis de profissão** | Cada tarefa dá experiência na profissão. A cada nível: bônus em dinheiro por tarefa e itens de presente (ex.: luvas no nível 3 de entregador, café grátis para o taxista da madrugada). Salvo no save e conferido pelo servidor no online. |
 
-### v0.10.x — Trânsito de verdade
+### v0.11.x — Trânsito de verdade
 | Ideia | Como funciona no jogo |
 |---|---|
 | **Trânsito procedural** | Carros andando pelas ruas, parando no semáforo e no PARE. |
@@ -138,10 +159,23 @@ Ideias para depois (pesquisa de 12/11 sobre as regras do CTB):
 - **Ranking semanal** por profissão (Cloudflare D1).
 
 ## Fase 3 — Painel da caminhonete (Módulo 3 do plano original)
-- Combustível e bateria com ponteiros; abastecer nos postos (a vaga do frentista já existe).
-- Fusíveis físicos: carga com interferência (`EmInterference`) queima fusíveis e apaga faróis e rádio.
+
+✅ **Primeira versão pronta (painel diegético):**
+
+- **Mostradores no lugar do HUD:** velocímetro, conta-giros, gasolina, temperatura e luzes-espia (bateria, temperatura, reserva, fusível, farol) atrás do volante. Em primeira pessoa na caminhonete o "km/h" do HUD some; na câmera de trás ele continua.
+- **Monitor CRT verde** (`DashMonitor` + `Shaders/Vehicle/crt_monitor.gdshader`) com três telas trocadas no botão TELA: entregas do turno (distância e integridade), sistema (bateria, tanque, motor, fusíveis, interferência) e rádio.
+- **Botões físicos** (`DashboardButton`, mire e aperte E sentado): CHAVE, FAROL, LUZ (cabine), RÁDIO e TELA. A tecla da lanterna (e o botão LUZ do celular) vira o farol quando você está dirigindo.
+- **Motor** (`EngineSystem`): partida, tanque de 50 L, temperatura (pé no fundo em alta ferve e perde força até esfriar). Sem gasolina dá para ir devagar "no cheiro"; **galão de gasolina** nas bombas dos postos e no Agro-Tudão (meio tanque).
+- **Elétrica** (`ElectricalSystem`): bateria que arria se esquecer o farol ligado com o motor desligado (aí pega no tranco), alternador, quatro **fusíveis físicos** (faróis, rádio, painel, luz interna) na caixa do lado do carona, com 2 reservas; fusível avulso no Conserta-Tudo, Lã de Aço, Agro-Tudão e postos. Sem fusível, vale gambiarra com palha de aço (até dar curto).
+- **Interferência da carga** (`EmInterference`): gerador, peças de rádio e fitas na caçamba fazem o rádio chiar, os ponteiros tremerem e o monitor chuviscar; com o rádio ligado podem queimar o fusível dele. Batida forte também queima fusível.
+- Tanque e bateria da caminhonete da empresa ficam no save (`user://save.tzn`). No online cada jogador tem o seu estado (o servidor só conhece os preços: `fusivel`, `galao`).
+
+**Falta:**
+
 - **Rádio com dial:** sintonizar a 96.6 e estações piratas com chiado; a 96.6 interrompe para notícias da cidade (entregas feitas, apagões, eventos).
-- Velocímetro e alertas no painel em vez do HUD (UI diegética).
+- Abastecer direto na bomba com a mangueira (hoje é galão) e levar o painel para os outros veículos (moto, caminhões, carros).
+- Sincronizar tanque, bateria e fusíveis da caminhonete no online.
+- Esconder também o painel de entregas do HUD quando o monitor estiver ligado (opção nas Opções).
 
 ## Fase 4 — Mais profissões e tarefas
 | Profissão | Tarefa |
@@ -165,7 +199,10 @@ Cada profissão nova = um `JobBase` em `Scripts/Jobs/` + a regra em `PROFESSIONS
 - Decoração do apartamento comprada nas lojas (sofá, pôster, planta).
 
 ## Fase 6 — Visual PS1 (Módulo 5 do plano original)
-- Shader com vertex jitter, dithering e cores reduzidas; renderizar em 640×360 com nearest-neighbor.
+- ✅ **Filtro de tela PS1** (`Shaders/ps1_screen.gdshader`, numa camada abaixo da interface): pixels em múltiplo inteiro (360 ou 480 linhas), cores de 15 bits e dithering ordenado 4×4. HUD e menus continuam nítidos.
+- ✅ **Tremor de vértices** (`Shaders/ps1_common.gdshaderinc`, global `ps1_jitter`) nos modelos do Meshy: jogador, moradores, caminhonete, Fuska, barracas e viaturas.
+- ✅ **Opções > Gráficos > Visual PS1:** Desligado, Leve (padrão no PC) ou Completo. No celular começa desligado.
+- Falta: tremor também nos prédios e no chão (precisa trocar os materiais padrão por shaders próprios sem abrir frestas) e textura "afim" (sem correção de perspectiva).
 - Monitor CRT verde dentro da caminhonete mostrando o radar e a música da 96.6.
 
 ## Fase 7 — Lançamento
@@ -178,7 +215,7 @@ Cada profissão nova = um `JobBase` em `Scripts/Jobs/` + a regra em `PROFESSIONS
 
 As fases abaixo são propostas de planejamento; a ordem pode mudar conforme testes, dependências e escopo das builds.
 
-### v0.11 — Bairros e infraestrutura urbana
+### v0.12 — Bairros e infraestrutura urbana
 - **Área residencial simplificada:** bairro de casas térreas, sem prédios altos, inspirado em conjuntos habitacionais como CDHU ou em um condomínio simples. Avaliar como uma área separada/mapa para manter a cidade principal mais leve.
 - **Praça e parque:** área de convivência com bancos, árvores, iluminação e eventos comunitários.
 - **Playground:** parquinho próximo ao bairro residencial.
@@ -192,13 +229,13 @@ As fases abaixo são propostas de planejamento; a ordem pode mudar conforme test
 - **Infraestrutura de internet:** cabos ADSL antigos abandonados e fibra óptica chegando às casas.
 - **Antenas e parabólicas:** modelos de 60 cm convencionais; antenas clandestinas de TV a cabo ("gato Net") com identidade visual fictícia; marcas fictícias inspiradas em operadoras populares (Céu, Escuro, Antena da Tchau e Antena da Morto); parabólica amarela Centauro de 150 cm; modelos rurais de tela/grade Centauro de 200 e 340 cm.
 
-### v0.12 — Zona rural, água e pesca
+### v0.13 — Zona rural, água e pesca
 - **Rios e lagos rurais:** corpos d'água distribuídos pelo mapa rural, com margens e vegetação próprias.
 - **Pontos de pesca:** locais acessíveis nas margens, com áreas apropriadas para pescar.
 - **Sistema de pesca:** varas, iscas, espera/ fisgada e diferentes espécies de peixes, com raridades e valores distintos.
 - **Agricultura:** plantações e áreas cultivadas, ampliando as atividades do sítio e as entregas rurais.
 
-### v0.13 — Comércio, indústria e energia
+### v0.14 — Comércio, indústria e energia
 - **Rodoviária/terminal de ônibus:** terminal como origem e ponto de organização das linhas intermunicipais/urbanas.
 - **Restaurantes:** estabelecimentos com identidade própria, salão, balcão e refeições.
 - **Área industrial:** galpões, pátios de carga e circulação de veículos de serviço.
@@ -222,6 +259,35 @@ A rádio deve anunciar os próprios estabelecimentos e acontecimentos do mundo d
 - Mais restaurantes e serviços de bairro, evitando concentrar todo o comércio em prédios genéricos.
 - Revisar a malha viária e a sinalização sempre que novos bairros, obras ou rotas forem adicionados.
 
+
+---
+
+## Modo História e novas fases (planejado em 12/11/2026)
+
+Documentação completa em [`docs/README_PARA_IAS.md`](docs/README_PARA_IAS.md). Tom: cotidiano e aventura leve, **sem terror**.
+
+### Em andamento — Mundo e polimento (foco atual)
+- [ ] **Fase 1 · Cidade (ambientação Brazilcore):** lombadas com física de suspensão, asfalto remendado/bueiros, postes com fios e cartazes, orelhões, lixeiras de grade, calçadas irregulares e árvores com a base pintada de branco.
+- [ ] **Fase 2 · Rancho (reconstrução):** estradas de terra vermelha em circuito, sítios, *packing house* de banana/palmito, lago com pesqueiro e sinalização rústica.
+
+### Próximas — Imersão e novos cenários (cenas isoladas)
+- [ ] **IK nos personagens:** `TwoBoneIK3D` para mãos na caixa/saco/volante e `LookAtModifier3D` para NPCs olharem o jogador.
+- [ ] **Otimização de renderização:** `MultiMeshInstance3D` para vegetação/postes e *occlusion culling*.
+- [ ] **Fase 3 · O Bananal (`Bananal.tscn`):** navegação pelo sinal da 96.6 (radar sonoro).
+- [ ] **Fase 4 · Gruta da Estática (`Gruta.tscn`):** caverna de calcário com salas modulares, lanterna e visão noturna.
+- [ ] **Fase 5 · Estrada da Serra (`Serra.tscn`):** subida sinuosa com neblina e teste de integridade da carga.
+
+### Modo História (offline)
+- [ ] Progressão desacoplada (`StoryManager` + `JobEvents`), salva no `save.tzn`.
+- [ ] Piloto automático na `VanController` + `ChapterTransitionZone` (loading disfarçado na estrada, rádio ligado e banner retrô).
+- [ ] Campanha em 7 capítulos ligando Cidade, Rancho, Bananal, Gruta, Serra e Rádio 96.6 (capítulos a definir).
+
+### Backlog opcional — vida urbana
+- [ ] Praça da Matriz à noite com barracas de pastel/lanche e carro de som anunciando eventos.
+- [ ] Festivais sazonais na praça (Festa da Colheita, Bon Odori) e travessia de balsa.
+
+### Pós-v1.0
+- [ ] Testar servidor dedicado com Colyseus (Oracle Cloud Free Tier), cliente via NuGet `Colyseus` + `schema-codegen`.
 
 ---
 

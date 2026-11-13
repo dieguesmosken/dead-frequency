@@ -41,6 +41,7 @@ public static class CargoVisuals
             "aquario" => Aquarium(root),
             "parabolica" => Dish(root),
             "tomates" => Kay(root, "crate_tomatoes.gltf", 0.27f, new Vector3(0.54f, 0.26f, 0.54f)),
+            "racao" => FeedSack(root),
             "feijoada" => Kay(root, "pot_A_stew.gltf", 0.36f, new Vector3(0.5f, 0.2f, 0.36f)),
             _ => null,
         };
@@ -80,6 +81,20 @@ public static class CargoVisuals
     }
 
     // ---------------- Modelos ----------------
+
+    /// <summary>Saco de ráfia de ração do Agro-Tudão (v0.9.9): branco, faixa verde, boca costurada.</summary>
+    private static Vector3 FeedSack(Node3D r)
+    {
+        var raffia = M(new Color(0.88f, 0.86f, 0.78f), 0.95f);
+        var green = M(new Color(0.12f, 0.48f, 0.18f), 0.8f);
+        Box(r, new Vector3(0f, -0.02f, 0f), new Vector3(0.48f, 0.26f, 0.72f), raffia);
+        Box(r, new Vector3(0f, 0.12f, 0f), new Vector3(0.44f, 0.04f, 0.66f), raffia); // barriga cheia
+        Box(r, new Vector3(0f, -0.02f, 0.37f), new Vector3(0.4f, 0.2f, 0.04f), raffia); // boca costurada
+        Box(r, new Vector3(0f, 0.145f, -0.08f), new Vector3(0.445f, 0.006f, 0.24f), green);
+        Text(r, "AGRO-TUDÃO\nRAÇÃO 25 kg", new Vector3(0f, 0.15f, -0.08f), 0f, Colors.White, 0.0014f);
+        r.GetChild<Label3D>(r.GetChildCount() - 1).Rotation = new Vector3(-Mathf.Pi * 0.5f, 0f, 0f);
+        return new Vector3(0.48f, 0.3f, 0.74f);
+    }
 
     private static Vector3 Fitas(Node3D r)
     {

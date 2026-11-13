@@ -1,7 +1,8 @@
 // Scripts/Vehicle/VehicleFactory.cs
 // Veículos extras do pátio do depósito (v0.9.3), montados em código com o mesmo VanController da van:
 //   • moto de entrega (com baú: leva uma caixa de até 20 kg; dá para fazer entregas com ela);
-//   • caminhões emprestados (amarelo e vermelho) para ir para casa ou passear.
+//   • caminhões emprestados (amarelo e vermelho) para ir para casa ou passear;
+//   • táxi amarelo da cooperativa (modelo PSX da GGBot, CC0) e van de viagem anos 80 (CarModels), v0.9.9.
 // Os modelos são da Kenney (CC0). Frente = +Z, como a van. Cada um tem um NetId próprio no online.
 using Godot;
 
@@ -29,33 +30,104 @@ public static class VehicleFactory
             2600f, 4200f, 70f, 80f, new Vector3(0.5f, 0.85f, 1.2f), new Vector3(2.0f, 0f, 1.2f), new Vector3(0f, 1.1f, 2.35f), "[E] Pegar o caminhão emprestado"),
     };
 
+    /// <summary>NetId do táxi da cooperativa (= VEHICLES no servidor).</summary>
+    public const string TaxiNetId = "taxi";
+    /// <summary>NetId da van de viagem do Modo História (= VEHICLES no servidor).</summary>
+    public const string TravelVanNetId = "van_viagem";
+
+    /// <summary>Nome fictício da cooperativa e do aplicativo (paródia) pintados no táxi.</summary>
+    public const string TaxiCooperative = "RÁDIO TÁXI SINTONIA", TaxiApp = "66\nAPP";
+
     /// <summary>Carro da concessionária (v0.9.7), com o mesmo modelo dos carros da rua (CarModels).
     /// netId = id do item (car_gou...), que também é o id do veículo no servidor.</summary>
-    public static VanController BuildCar(CarGarage.Model model)
+    public static VanController BuildCar(CarGarage.Model model) =>
+        BuildCar(model.Id, ItemCatalog.Get(model.Id)?.Name ?? "carro", model.Type, model.Color,
+            model.Type == CarType.Fusca ? 110f : model.Type == CarType.Sedan ? 140f : 125f);
+
+    /// <summary>Táxi amarelo da cooperativa (v0.9.9): "Car 05" do pacote PSX Style Cars (GGBot, CC0),
+    /// com o nome fictício da cooperativa e o adesivo do aplicativo "66". Só ele faz corridas.</summary>
+    public static VanController BuildTaxi() =>
+        BuildCar(TaxiNetId, "táxi", CarType.Sedan, new Color(0.98f, 0.78f, 0.08f), 135f, customModel: TaxiModel);
+
+    private const string TaxiObj = "res://Assets/GGBot/Cars/Car5_Taxi.obj", TaxiTexture = "res://Assets/GGBot/Cars/car5_taxi.png";
+
+    /// <summary>Monta o táxi PSX (frente = +Z, como o VanController). Sem o modelo, devolve Vector3.Zero (usa o Opalinha amarelo).</summary>
+    private static Vector3 TaxiModel(Node3D body)
     {
+        if (!ResourceLoader.Exists(TaxiObj) || GD.Load<Mesh>(TaxiObj) is not Mesh mesh)
+            return Vector3.Zero;
+        const float scale = 0.64f; // o OBJ vem com 7,3 m de comprimento
+        var mat = new StandardMaterial3D
+        {
+            AlbedoTexture = GD.Load<Texture2D>(TaxiTexture),
+            TextureFilter = BaseMaterial3D.TextureFilterEnum.Nearest,
+            Roughness = 0.6f,
+        };
+        body.AddChild(new MeshInstance3D { Name = "TaxiMesh", Mesh = mesh, MaterialOverride = mat, Scale = Vector3.One * scale });
+        Vector3 size = mesh.GetAabb().Size * scale;
+
+        // Nome da cooperativa e número nas portas, dos dois lados.
+        foreach (float side in new[] { -1f, 1f })
+        {
+            var rot = new Vector3(0f, side * Mathf.Pi * 0.5f, 0f);
+            float x = side * (size.X * 0.5f - 0.02f);
+            body.AddChild(Decal(TaxiCooperative, 30, 0.0024f, new Vector3(x, 0.5f, 0.05f), rot));
+            body.AddChild(Decal("Nº 096", 30, 0.0026f, new Vector3(x, 0.62f, -1.55f), rot));
+        }
+        // Adesivo do aplicativo na tampa do porta-malas (lado do passageiro), tipo adesivo de para-choque.
+        body.AddChild(Decal(TaxiApp, 28, 0.0024f, new Vector3(-0.42f, 0.74f, -2.27f), new Vector3(0f, Mathf.Pi, 0f), new Color(0.98f, 0.82f, 0.1f)));
+        return size;
+    }
+
+    private static Label3D Decal(string text, int fontSize, float pixel, Vector3 pos, Vector3 rot, Color? color = null) => new()
+    {
+        Text = text,
+        FontSize = fontSize,
+        PixelSize = pixel,
+        Modulate = color ?? new Color(0.1f, 0.1f, 0.12f),
+        OutlineSize = color.HasValue ? 6 : 0,
+        OutlineModulate = new Color(0.08f, 0.08f, 0.08f),
+        Position = pos,
+        Rotation = rot,
+    };
+
+    /// <summary>Van de viagem anos 80 (v0.9.9), parada no pátio da central: a van do Modo História.</summary>
+    public static VanController BuildTravelVan() =>
+        BuildCar(TravelVanNetId, "van de viagem", CarType.Van80, new Color(0.5f, 0.28f, 0.14f), 105f);
+
+    /// <param name="customModel">Monta outro modelo (frente = +Z) e devolve o tamanho; Vector3.Zero = usar o CarModels.</param>
+    private static VanController BuildCar(string netId, string displayName, CarType type, Color color, float maxKmh,
+        System.Func<Node3D, Vector3> customModel = null)
+    {
+        bool van = type == CarType.Van80;
         var v = new VanController
         {
-            Name = model.Id,
-            NetId = model.Id,
+            Name = netId,
+            NetId = netId,
             Kind = "car",
-            DisplayName = ItemCatalog.Get(model.Id)?.Name ?? "carro",
-            Mass = 1100f,
+            DisplayName = displayName,
+            Mass = van ? 1500f : 1100f,
             CollisionLayer = 16,
             CollisionMask = 1 | 2 | 8,
             CenterOfMassMode = RigidBody3D.CenterOfMassModeEnum.Custom,
             CenterOfMass = new Vector3(0f, 0.35f, 0f),
-            MaxEngineForce = 2600f,
+            MaxEngineForce = van ? 3200f : 2600f,
             MaxReverseForce = 1200f,
-            BrakeForce = 38f,
-            HandbrakeForce = 76f,
-            ParkedBrake = 27f,
+            BrakeForce = van ? 48f : 38f,
+            HandbrakeForce = van ? 96f : 76f,
+            ParkedBrake = van ? 34f : 27f,
             CoastBrake = 2.6f,
-            MaxSpeedKmh = model.Type == CarType.Fusca ? 110f : model.Type == CarType.Sedan ? 140f : 125f,
-            MaxSteerDegrees = 30f,
+            MaxSpeedKmh = maxKmh,
+            MaxSteerDegrees = van ? 28f : 30f,
         };
-        // O CarModels monta com a frente em -Z; o VanController anda para +Z: gira meia volta.
-        var body = new Node3D { Name = "Model", Rotation = new Vector3(0f, Mathf.Pi, 0f) };
-        Vector3 size = CarModels.Build(body, model.Type, model.Color);
+        var body = new Node3D { Name = "Model" };
+        Vector3 size = customModel?.Invoke(body) ?? Vector3.Zero;
+        if (size == Vector3.Zero)
+        {
+            // O CarModels monta com a frente em -Z; o VanController anda para +Z: gira meia volta.
+            body.Rotation = new Vector3(0f, Mathf.Pi, 0f);
+            size = CarModels.Build(body, type, color, Plates.For(netId));
+        }
         v.AddChild(body);
         v.AddChild(new CollisionShape3D { Name = "BodyShape", Shape = new BoxShape3D { Size = new Vector3(size.X, size.Y - 0.35f, size.Z) }, Position = new Vector3(0f, size.Y * 0.5f + 0.17f, 0f) });
 
@@ -75,7 +147,7 @@ public static class VehicleFactory
                 WheelRollInfluence = 0.1f,
                 SuspensionTravel = 0.2f,
                 SuspensionStiffness = 50f,
-                SuspensionMaxForce = 1100f * 7f,
+                SuspensionMaxForce = v.Mass * 7f,
                 DampingCompression = 1.2f,
                 DampingRelaxation = 1.4f,
                 UseAsSteering = steer,
@@ -85,8 +157,10 @@ public static class VehicleFactory
         }
 
         // Motorista do lado esquerdo (+X olhando para a frente +Z), como no Brasil.
-        var seat = new Marker3D { Name = "SeatMarker", Position = new Vector3(0.36f, 0.32f, -0.15f), Rotation = new Vector3(0f, Mathf.Pi, 0f) };
-        var exit = new Marker3D { Name = "ExitMarker", Position = new Vector3(size.X * 0.5f + 0.8f, 0f, -0.15f), Rotation = new Vector3(0f, Mathf.Pi * 0.5f, 0f) };
+        // Na van a cabine fica lá na frente (o baú é atrás) e o banco é mais alto.
+        var seatPos = van ? new Vector3(0.42f, 0.62f, 0.95f) : new Vector3(0.36f, 0.32f, -0.15f);
+        var seat = new Marker3D { Name = "SeatMarker", Position = seatPos, Rotation = new Vector3(0f, Mathf.Pi, 0f) };
+        var exit = new Marker3D { Name = "ExitMarker", Position = new Vector3(size.X * 0.5f + 0.8f, 0f, seatPos.Z), Rotation = new Vector3(0f, Mathf.Pi * 0.5f, 0f) };
         v.AddChild(seat);
         v.AddChild(exit);
         var door = new DriverSeatInteractable

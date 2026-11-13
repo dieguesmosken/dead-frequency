@@ -118,19 +118,45 @@ public partial class CityGenerator
         // ---------------- torre de transmissão
         BuildTransmissionTower(st, new Vector3(8f, 0f, -6f), 62f, red, white);
 
-        // Cerca baixa em volta do terreno (com portão na frente).
+        // Muro em volta do terreno com grade de metal em cima (v0.9.9). Portão de carro na frente e,
+        // do lado +X, um portãozinho de pedestre (só passa gente, não carro).
+        const float muroH = 1.0f, gateZ = 6f, gateW = 1.1f;
+        float g0 = gateZ - gateW * 0.5f, g1 = gateZ + gateW * 0.5f;
         foreach ((Vector3 p, Vector3 s) in new[]
         {
-            (new Vector3(0f, 0.6f, -14.5f), new Vector3(29f, 1.2f, 0.08f)),
-            (new Vector3(-14.5f, 0.6f, 0f), new Vector3(0.08f, 1.2f, 29f)),
-            (new Vector3(14.5f, 0.6f, 0f), new Vector3(0.08f, 1.2f, 29f)),
-            (new Vector3(-9f, 0.6f, 14.5f), new Vector3(11f, 1.2f, 0.08f)),
-            (new Vector3(7f, 0.6f, 14.5f), new Vector3(15f, 1.2f, 0.08f)),
+            (new Vector3(0f, muroH * 0.5f, -14.5f), new Vector3(29f, muroH, 0.2f)),
+            (new Vector3(-14.5f, muroH * 0.5f, 0f), new Vector3(0.2f, muroH, 29f)),
+            (new Vector3(14.5f, muroH * 0.5f, (-14.5f + g0) * 0.5f), new Vector3(0.2f, muroH, g0 + 14.5f)),
+            (new Vector3(14.5f, muroH * 0.5f, (g1 + 14.5f) * 0.5f), new Vector3(0.2f, muroH, 14.5f - g1)),
+            (new Vector3(-9f, muroH * 0.5f, 14.5f), new Vector3(11f, muroH, 0.2f)),
+            (new Vector3(7f, muroH * 0.5f, 14.5f), new Vector3(15f, muroH, 0.2f)),
         })
-            AddBox(st, p, s, _darkMetal);
+            WallWithRailing(st, p, s, wall, 1.0f);
+        BuildPedestrianGate(st, new Vector3(14.5f, 0f, gateZ), gateW, muroH + 1.0f);
         RegisterObstacle(st.Position + new Vector3(-6.2f, 0f, 15f));
         Poster(st, new Vector3(-12f, 0.7f, 14.55f), 0f, 0.9f);
         BuildTeuzinBillboard(st);
+    }
+
+    /// <summary>
+    /// Portãozinho de pedestre num muro em x fixo (vão ao longo de Z): pilares, verga com grade e a folha
+    /// de grade aberta para dentro (decorativa, sem colisão: dá para passar a pé).
+    /// </summary>
+    private void BuildPedestrianGate(Node3D parent, Vector3 center, float width, float height)
+    {
+        EnsureRailingResources();
+        float z0 = center.Z - width * 0.5f, z1 = center.Z + width * 0.5f;
+        foreach (float z in new[] { z0 - 0.12f, z1 + 0.12f })
+            AddBox(parent, new Vector3(center.X, height * 0.5f + 0.1f, z), new Vector3(0.3f, height + 0.2f, 0.24f), _concrete);
+        // Verga em arco simples por cima do vão (cara de portão de casa).
+        AddBox(parent, new Vector3(center.X, height + 0.12f, center.Z), new Vector3(0.12f, 0.08f, width + 0.24f), _railMetal, false);
+        // Folha aberta ~75° para dentro, presa no pilar de z0.
+        var leaf = new Node3D { Position = new Vector3(center.X - 0.04f, 0f, z0), Rotation = new Vector3(0f, Mathf.DegToRad(-75f), 0f) };
+        parent.AddChild(leaf);
+        // Na folha local, o vão vai de z = 0 até z = width.
+        BuildRailingVisual(leaf, new Vector3(0f, 0f, 0.02f), new Vector3(0f, 0f, width - 0.04f), 0.05f, height - 0.15f);
+        AddBox(leaf, new Vector3(0f, 0.08f, width * 0.5f), new Vector3(0.05f, 0.05f, width - 0.04f), _railMetal, false);
+        AddBox(leaf, new Vector3(0f, height * 0.45f, width - 0.06f), new Vector3(0.04f, 0.12f, 0.04f), _darkMetal, false); // trinco
     }
 
     private void BuildTransmissionTower(Node3D parent, Vector3 basePos, float height, Material red, Material white)
@@ -183,7 +209,7 @@ public partial class CityGenerator
         {
             AddBox(tower, new Vector3(0f, y, 0f), new Vector3(0.4f, 0.4f, 0.4f), _redBeacon, false);
             var beacon = new OmniLight3D { Position = world + new Vector3(0f, y, 0f), LightColor = new Color(1f, 0.1f, 0.05f), LightEnergy = 3f, OmniRange = 18f };
-            _lightsRoot.AddChild(beacon);
+            ActiveLightsRoot.AddChild(beacon);
             Tween blink = CreateTween().SetLoops();
             blink.TweenProperty(beacon, "light_energy", 0.0, 0.7);
             blink.TweenProperty(beacon, "light_energy", 3.0, 0.1);

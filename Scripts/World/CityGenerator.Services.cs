@@ -31,7 +31,20 @@ public partial class CityGenerator
     /// <summary>Anúncios sorteados nesta partida (outdoors e ônibus usam a mesma lista).</summary>
     private static List<string> _runAds;
 
-    public void RegisterObstacle(Vector3 position) => SidewalkObstacles.Add(position);
+    public void RegisterObstacle(Vector3 position)
+    {
+        SidewalkObstacles.Add(position);
+        if (!_activeChunkCoordinate.HasValue)
+            return;
+
+        WorldChunkCoordinate owner = _activeChunkCoordinate.Value;
+        if (!_chunkObstaclePositions.TryGetValue(owner, out List<Vector3> positions))
+        {
+            positions = new List<Vector3>();
+            _chunkObstaclePositions[owner] = positions;
+        }
+        positions.Add(position);
+    }
 
     // ---- pontos usados pelas profissões (v0.9)
     /// <summary>Caçambas de lixo (gari).</summary>
@@ -112,6 +125,11 @@ public partial class CityGenerator
             BuildSupermarket(block, center);
             return true;
         }
+        if (bx == ShoppingMallBlock.X && bz == ShoppingMallBlock.Y)
+        {
+            BuildShoppingMall(block, center);
+            return true;
+        }
         if (bx == ApartmentBlock.X && bz == ApartmentBlock.Y)
         {
             BuildApartmentBuilding(block, center);
@@ -173,7 +191,7 @@ public partial class CityGenerator
         foreach (float x in new[] { -5f, 5f })
         {
             AddBox(st, new Vector3(x, ch * 0.5f, 5f), new Vector3(0.5f, ch, 0.5f), paint);
-            _lightsRoot.AddChild(new OmniLight3D
+            ActiveLightsRoot.AddChild(new OmniLight3D
             {
                 Position = st.Position + canopyPos + new Vector3(x, -0.8f, 0f),
                 LightColor = new Color(0.95f, 0.98f, 1f),
@@ -183,7 +201,8 @@ public partial class CityGenerator
             });
         }
 
-        GasSpots.Add((st.Position + new Vector3(0f, 0f, 5f), brand));
+        if (!_useLogicalServiceData)
+            GasSpots.Add((st.Position + new Vector3(0f, 0f, 5f), brand));
         // Ilhas de bombas.
         foreach (float x in new[] { -3f, 3f })
         {
@@ -193,6 +212,12 @@ public partial class CityGenerator
                 AddBox(st, new Vector3(x, 1.0f, z), new Vector3(0.7f, 1.6f, 0.45f), paint);
                 AddBox(st, new Vector3(x, 1.45f, z + 0.235f), new Vector3(0.5f, 0.3f, 0.02f), _storeWindow, false);
                 AddBox(st, new Vector3(x + 0.38f, 0.9f, z), new Vector3(0.06f, 0.5f, 0.12f), _darkMetal, false); // mangueira
+                // Fase 3 (painel): a bomba vende galão de gasolina, fusível e o cafezinho da conveniência.
+                string postoName = brand switch { "petrobraz" => "Posto Petrobraz", "ipiranguinha" => "Posto Ipiranguinha", _ => "Posto Shello" };
+                ActionArea.Create(st, new Vector3(x, 1.0f, z), new Vector3(0.9f, 1.7f, 0.7f),
+                    _ => $"[E] {postoName}: galão de gasolina e conveniência",
+                    _ => ShopScreen.Instance?.OpenFor(postoName, ShopStock.Posto),
+                    player => ShopScreen.Instance != null && !player.IsHolding && player.State == PlayerState.Walking);
                 st.AddChild(new Label3D
                 {
                     Text = brand == "petrobraz" ? "0,89" : brand == "ipiranguinha" ? "0,87" : "0,91",
@@ -359,7 +384,7 @@ public partial class CityGenerator
         AddBox(plaza, new Vector3(0f, legH - 0.2f, 0f), new Vector3(tankR * 2f + 1.4f, 0.25f, tankR * 2f + 1.4f), _darkMetal, false); // passarela
         AddBox(plaza, new Vector3(0f, legH + tankH + 2.6f, 0f), new Vector3(0.5f, 0.5f, 0.5f), _redBeacon, false);
         var beacon = new OmniLight3D { Position = plaza.Position + new Vector3(0f, legH + tankH + 3f, 0f), LightColor = new Color(1f, 0.1f, 0.05f), LightEnergy = 2.5f, OmniRange = 14f };
-        _lightsRoot.AddChild(beacon);
+        ActiveLightsRoot.AddChild(beacon);
 
         // Nome pintado em volta do tanque (quatro lados).
         for (int i = 0; i < 4; i++)
@@ -377,7 +402,7 @@ public partial class CityGenerator
                 Rotation = new Vector3(0f, a, 0f),
             });
             // Refletores no chão apontando para o tanque (só à noite).
-            _lightsRoot.AddChild(new SpotLight3D
+            ActiveLightsRoot.AddChild(new SpotLight3D
             {
                 Position = plaza.Position + dir * 9f + new Vector3(0f, 0.4f, 0f),
                 Basis = Basis.LookingAt((new Vector3(0f, legH + 3f, 0f) - (dir * 9f)).Normalized(), Vector3.Up),

@@ -275,6 +275,9 @@ public partial class PlayerInventory : Node
             ItemCatalog.Marmitex => player.EatMarmitex(),
             ItemCatalog.Skewer => player.UseSkewer(),
             ItemCatalog.Nail => FixSlippers(),
+            ItemCatalog.SteelWool => VirtualTV.FixNearest(player),
+            ItemCatalog.Repellent => Mosquitoes.Repel(300f),
+            ItemCatalog.JerryCan => VanController.RefuelNearest(player),
             _ => "",
         };
         if (!string.IsNullOrEmpty(result))
@@ -319,6 +322,17 @@ public partial class PlayerInventory : Node
         public Dictionary<string, string> Equipped { get; set; } = new();
         public int Wallet { get; set; }
         public List<string> Cars { get; set; } = new();
+        /// <summary>v0.9.9: palha de aço na antena da TV do apartamento (imagem sem chuvisco).</summary>
+        public bool TvAntennaFixed { get; set; }
+    }
+
+    /// <summary>A antena da TV do apartamento já tem palha de aço (Lã de Aço 1001 Utilidades).</summary>
+    public bool TvAntennaFixed { get; private set; }
+
+    public void FixTvAntenna()
+    {
+        TvAntennaFixed = true;
+        NotifyAndSave();
     }
 
     private readonly List<string> _cars = new();
@@ -351,6 +365,7 @@ public partial class PlayerInventory : Node
             Equipped = _equipped.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value),
             Wallet = Wallet,
             Cars = new List<string>(_cars),
+            TvAntennaFixed = TvAntennaFixed,
         };
         using FileAccess file = FileAccess.Open(SavePath, FileAccess.ModeFlags.Write);
         file?.StoreString(JsonSerializer.Serialize(data));
@@ -375,6 +390,7 @@ public partial class PlayerInventory : Node
                     _equipped[slot] = id;
             }
             Wallet = Math.Max(0, data.Wallet);
+            TvAntennaFixed = data.TvAntennaFixed;
             _cars.Clear();
             if (data.Cars != null)
                 _cars.AddRange(data.Cars.Where(id => ItemCatalog.Get(id)?.Car == true));

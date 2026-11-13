@@ -94,6 +94,8 @@ async function loadSite() {
 function setVersion(v, date) {
   if (!v) return;
   $("#hero-version").textContent = "v" + v;
+  // Topo do site: a última versão publicada (no lugar do "96.6").
+  document.querySelectorAll(".brand-version").forEach((e) => (e.textContent = "v" + v));
   $("#dl-version").textContent = "v" + v;
   if (date) $("#dl-date").textContent = "· publicada em " + new Date(date).toLocaleDateString("pt-BR");
 }

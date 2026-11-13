@@ -12,6 +12,13 @@ public partial class StreetVendor : Area3D, IInteractable
     [Export] public Color ShirtColor { get; set; } = new(0.55f, 0.35f, 0.15f);
     /// <summary>Churrasquinho do Duvidoso (v0.9.5): chapa com fumaça depois das 18h, gente em volta e só comida.</summary>
     [Export] public bool Churrasco { get; set; }
+    /// <summary>O que a barraca vende (v0.9.9). O Churrasco acima continua valendo para o churrasquinho.</summary>
+    [Export] public ShopStock Stock { get; set; } = ShopStock.Ze;
+
+    /// <summary>Barracas na fase (o gari procura o Conserta-Tudo do Primo para vender sucata).</summary>
+    public static readonly System.Collections.Generic.List<StreetVendor> All = new();
+    public override void _EnterTree() => All.Add(this);
+    public override void _ExitTree() => All.Remove(this);
 
     private CpuParticles3D _smoke;
     private AudioStreamPlayer3D _sizzle;
@@ -25,6 +32,7 @@ public partial class StreetVendor : Area3D, IInteractable
 
     public override void _Ready()
     {
+        AddToGroup(WorldChunkManager.TrackedObjectGroup);
         CollisionLayer = 4; // Interactables
         CollisionMask = 0;
         Monitoring = false;
@@ -44,8 +52,36 @@ public partial class StreetVendor : Area3D, IInteractable
         parent.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = size }, Position = pos, MaterialOverride = mat });
     }
 
+    /// <summary>Conserta-Tudo do Primo: pilha de pneus, TV velha e ferro-velho do lado da barraca.</summary>
+    private void BuildScrapPile(StandardMaterial3D metal)
+    {
+        var rubber = Mat(new Color(0.06f, 0.06f, 0.06f));
+        var rust = Mat(new Color(0.45f, 0.24f, 0.12f), 0.8f);
+        var tvCase = Mat(new Color(0.3f, 0.26f, 0.22f), 0.6f);
+        for (int i = 0; i < 3; i++)
+            AddChild(new MeshInstance3D { Mesh = new TorusMesh { InnerRadius = 0.2f, OuterRadius = 0.36f, Rings = 10, RingSegments = 6 }, MaterialOverride = rubber, Position = new Vector3(1.9f, 0.08f + i * 0.17f, 0.2f) });
+        Box(this, new Vector3(-1.85f, 0.25f, 0.25f), new Vector3(0.55f, 0.45f, 0.45f), tvCase);
+        Box(this, new Vector3(-1.85f, 0.27f, 0.025f), new Vector3(0.42f, 0.32f, 0.01f), Mat(new Color(0.12f, 0.14f, 0.13f), 0.2f));
+        var pipe = new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.05f, BottomRadius = 0.05f, Height = 1.4f }, MaterialOverride = rust, Position = new Vector3(1.6f, 0.06f, 0.75f), Rotation = new Vector3(0f, 0.4f, Mathf.Pi * 0.5f) };
+        AddChild(pipe);
+        Box(this, new Vector3(-1.6f, 0.12f, 0.85f), new Vector3(0.6f, 0.24f, 0.4f), metal);
+        AddChild(new Label3D
+        {
+            Text = "COMPRO SUCATA",
+            FontSize = 40,
+            PixelSize = 0.004f,
+            Modulate = new Color(1f, 0.85f, 0.2f),
+            OutlineSize = 6,
+            Position = new Vector3(1.9f, 0.75f, 0.2f),
+            Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+        });
+    }
+
     private void BuildStall()
     {
+        // Modelos do Meshy (v0.9.9): churrasquinho completo ou barraca com o toldo na cor do vendedor.
+        string prop = Churrasco ? "churrasco" : "barraca";
+        bool meshy = MeshyVehicles.HasProp(prop);
         var wood = Mat(new Color(0.42f, 0.28f, 0.16f));
         var metal = Mat(new Color(0.2f, 0.2f, 0.22f), 0.5f);
         var white = Mat(new Color(0.9f, 0.88f, 0.82f));
@@ -56,12 +92,30 @@ public partial class StreetVendor : Area3D, IInteractable
         body.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(2.4f, 1f, 0.8f) }, Position = new Vector3(0f, 0.5f, 0f) });
         AddChild(body);
 
+        if (meshy)
+        {
+            // Frente (lado do freguês) = -Z, como o balcão antigo; o vendedor fica atrás, em +Z.
+            var holder = new Node3D { Name = "Barraca", Position = Churrasco ? new Vector3(-0.6f, 0f, 0.25f) : new Vector3(0f, 0f, 0.2f) };
+            AddChild(holder);
+            if (Churrasco)
+                MeshyVehicles.BuildProp(holder, prop, new Vector3(2.6f, 2.4f, 2.0f), -1);
+            else
+                MeshyVehicles.BuildProp(holder, prop, new Vector3(2.6f, 2.5f, 2.0f), -1, CanopyColor, 0.1225f);
+            if (Stock == ShopStock.ConsertaTudo)
+                BuildScrapPile(metal);
+        }
+        else
+        {
         // Balcão com mercadorias.
         Box(this, new Vector3(0f, 0.45f, 0f), new Vector3(2.4f, 0.9f, 0.8f), wood);
         Box(this, new Vector3(0f, 0.92f, 0f), new Vector3(2.5f, 0.05f, 0.9f), white);
         string[] goods = Churrasco
             ? new[] { ItemCatalog.Guarana, ItemCatalog.Coffee, ItemCatalog.Marmitex, ItemCatalog.Guarana, ItemCatalog.Marmitex }
+            : Stock == ShopStock.ConsertaTudo
+            ? new[] { ItemCatalog.StrongFlashlight, ItemCatalog.RepairKit, ItemCatalog.DuctTape, ItemCatalog.Nail, ItemCatalog.StrongFlashlight }
             : new[] { ItemCatalog.Radar, ItemCatalog.NightVision, ItemCatalog.Gloves, ItemCatalog.EnergyDrink, ItemCatalog.RepairKit };
+        if (Stock == ShopStock.ConsertaTudo)
+            BuildScrapPile(metal);
         for (int i = 0; i < goods.Length; i++)
         {
             ItemDef def = ItemCatalog.Get(goods[i]);
@@ -83,6 +137,7 @@ public partial class StreetVendor : Area3D, IInteractable
         // Caixotes ao lado.
         Box(this, new Vector3(1.6f, 0.25f, 0.4f), new Vector3(0.5f, 0.5f, 0.5f), wood);
         Box(this, new Vector3(1.6f, 0.7f, 0.45f), new Vector3(0.4f, 0.4f, 0.4f), wood);
+        }
 
         // Placa e luz.
         AddChild(new Label3D
@@ -92,14 +147,15 @@ public partial class StreetVendor : Area3D, IInteractable
             PixelSize = 0.006f,
             Modulate = new Color(1f, 0.9f, 0.5f),
             OutlineSize = 10,
-            Position = new Vector3(0f, 2.3f, -0.62f),
+            Position = new Vector3(0f, meshy ? 2.55f : 2.3f, meshy ? -0.85f : -0.62f),
             RotationDegrees = new Vector3(0f, 180f, 0f),
         });
         var bulb = Mat(new Color(1f, 0.85f, 0.5f));
         bulb.EmissionEnabled = true;
         bulb.Emission = new Color(1f, 0.8f, 0.45f);
         bulb.EmissionEnergyMultiplier = 3f;
-        Box(this, new Vector3(0f, 2.25f, 0.3f), new Vector3(0.12f, 0.12f, 0.12f), bulb);
+        if (!meshy)
+            Box(this, new Vector3(0f, 2.25f, 0.3f), new Vector3(0.12f, 0.12f, 0.12f), bulb);
         AddChild(new OmniLight3D { Position = new Vector3(0f, 2.1f, 0f), LightColor = new Color(1f, 0.8f, 0.5f), LightEnergy = 1.6f, OmniRange = 6f });
 
         // Comerciante atrás do balcão, de frente para a rua.
@@ -111,22 +167,27 @@ public partial class StreetVendor : Area3D, IInteractable
             : new[] { "Chega mais, freguês! Tem de tudo aqui.", "Chinelo Legítimas, o original! Ploc-ploc garantido.", "Prego avulso, dez reais. Não pergunta.", "Guaraná Pinguim trincando de gelado!" };
         AddChild(_vendor);
         if (Churrasco)
-            BuildGrill(metal);
+            BuildGrill(metal, meshy);
     }
 
     /// <summary>Churrasqueira de lata ao lado do balcão, com brasa, fumaça e o crepitar da chapa.</summary>
-    private void BuildGrill(Material metal)
+    private void BuildGrill(Material metal, bool meshy = false)
     {
-        var grill = new Node3D { Name = "Churrasqueira", Position = new Vector3(-1.75f, 0f, 0.1f) };
+        // Com o modelo do Meshy, a churrasqueira já está desenhada: aqui só ficam brasa, luz, fumaça e som.
+        var grill = new Node3D { Name = "Churrasqueira", Position = meshy ? new Vector3(-0.75f, 0.35f, 0.25f) : new Vector3(-1.75f, 0f, 0.1f) };
         AddChild(grill);
-        Box(grill, new Vector3(0f, 0.45f, 0f), new Vector3(0.9f, 0.08f, 0.45f), metal);
-        foreach (float x in new[] { -0.4f, 0.4f })
-            foreach (float z in new[] { -0.18f, 0.18f })
-                Box(grill, new Vector3(x, 0.22f, z), new Vector3(0.04f, 0.45f, 0.04f), metal);
         _coals = Mat(new Color(1f, 0.35f, 0.08f));
         _coals.EmissionEnabled = true;
         _coals.Emission = new Color(1f, 0.3f, 0.05f);
         _coals.EmissionEnergyMultiplier = 0.2f;
+        if (meshy)
+            Box(grill, new Vector3(0f, 0.5f, 0f), new Vector3(0.62f, 0.02f, 0.34f), _coals);
+        else
+        {
+        Box(grill, new Vector3(0f, 0.45f, 0f), new Vector3(0.9f, 0.08f, 0.45f), metal);
+        foreach (float x in new[] { -0.4f, 0.4f })
+            foreach (float z in new[] { -0.18f, 0.18f })
+                Box(grill, new Vector3(x, 0.22f, z), new Vector3(0.04f, 0.45f, 0.04f), metal);
         Box(grill, new Vector3(0f, 0.5f, 0f), new Vector3(0.8f, 0.03f, 0.38f), _coals);
         var meat = Mat(new Color(0.45f, 0.2f, 0.1f));
         var stick = Mat(new Color(0.8f, 0.7f, 0.5f));
@@ -135,6 +196,7 @@ public partial class StreetVendor : Area3D, IInteractable
             float x = -0.3f + i * 0.12f;
             Box(grill, new Vector3(x, 0.55f, 0f), new Vector3(0.015f, 0.015f, 0.5f), stick);
             Box(grill, new Vector3(x, 0.56f, 0.02f), new Vector3(0.06f, 0.05f, 0.22f), meat);
+        }
         }
         _grillLight = new OmniLight3D { Position = new Vector3(0f, 0.8f, 0f), LightColor = new Color(1f, 0.45f, 0.15f), LightEnergy = 0f, OmniRange = 4f };
         grill.AddChild(_grillLight);
@@ -231,5 +293,5 @@ public partial class StreetVendor : Area3D, IInteractable
 
     public bool CanInteract(PlayerController player) => ShopScreen.Instance != null && !player.IsHolding;
 
-    public void Interact(PlayerController player) => ShopScreen.Instance?.OpenFor(VendorName, Churrasco ? ShopStock.Churrasco : ShopStock.Ze);
+    public void Interact(PlayerController player) => ShopScreen.Instance?.OpenFor(VendorName, Churrasco ? ShopStock.Churrasco : Stock);
 }

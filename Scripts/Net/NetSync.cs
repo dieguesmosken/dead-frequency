@@ -30,9 +30,12 @@ public partial class NetSync : Node
     private int _nextSaleId = 1;
 
     private readonly Dictionary<int, RemotePlayer> _remotes = new();
+    private readonly Dictionary<int, Vector3> _remoteChunkPins = new();
     private readonly Dictionary<string, int> _owners = new();
     private readonly Dictionary<string, WorldItem> _worldItems = new();
     private readonly Dictionary<int, bool> _remoteDriving = new();
+    private readonly Queue<Action> _pendingWorldDataActions = new();
+    private bool _worldDataReady;
     private Node3D _remoteRoot;
     /// <summary>Todos os veículos da fase por NetId (van, moto, caminhões).</summary>
     private readonly Dictionary<string, VanController> _vehicles = new();
@@ -103,14 +106,23 @@ public partial class NetSync : Node
         Net.MessageReceived += OnMessage;
         Net.Disconnected += OnDisconnected;
 
+        CityGenerator city = Delivery.City;
+        _worldDataReady = city == null || city.WorldData != null;
+        if (!_worldDataReady)
+            city.WorldDataReady += OnWorldDataReady;
+
         using JsonDocument welcome = JsonDocument.Parse(Net.WelcomeJson);
         ApplyWelcome(welcome.RootElement);
     }
 
     public override void _ExitTree()
     {
+        ReleaseAllRemoteChunkPins();
         if (Instance == this)
             Instance = null;
+        if (Delivery?.City != null)
+            Delivery.City.WorldDataReady -= OnWorldDataReady;
+        _pendingWorldDataActions.Clear();
         if (_active && Net != null)
         {
             if (PlayerInventory.Instance != null)
@@ -152,7 +164,13 @@ public partial class NetSync : Node
                 ApplyPlayerState(remote, state);
         }
 
-        ApplyShift(m);
+        if (_worldDataReady)
+            ApplyShift(m);
+        else
+        {
+            JsonElement pendingWelcome = m.Clone();
+            QueueWorldDataAction(() => ApplyShift(pendingWelcome));
+        }
 
         foreach (JsonProperty owner in m.GetProperty("owners").EnumerateObject())
             SetOwner(owner.Name, owner.Value.ValueKind == JsonValueKind.Number ? owner.Value.GetInt32() : 0);
@@ -162,6 +180,37 @@ public partial class NetSync : Node
         if (m.TryGetProperty("worldItems", out JsonElement worldItems) && worldItems.ValueKind == JsonValueKind.Array)
             foreach (JsonElement item in worldItems.EnumerateArray())
                 AddWorldItem(item);
+    }
+
+    private void QueueWorldDataAction(Action action)
+    {
+        if (_worldDataReady)
+        {
+            action();
+            return;
+        }
+
+        _pendingWorldDataActions.Enqueue(action);
+    }
+
+    private void OnWorldDataReady()
+    {
+        if (Delivery?.City != null)
+            Delivery.City.WorldDataReady -= OnWorldDataReady;
+        _worldDataReady = true;
+
+        while (_pendingWorldDataActions.Count > 0)
+            _pendingWorldDataActions.Dequeue()?.Invoke();
+
+        // Donos e posições recebidos durante o loading são reaplicados depois que as cargas existem.
+        foreach (KeyValuePair<string, int> owner in new List<KeyValuePair<string, int>>(_owners))
+            SetOwner(owner.Key, owner.Value);
+
+        foreach (KeyValuePair<int, RemotePlayer> remote in _remotes)
+        {
+            if (remote.Value != null && GodotObject.IsInstanceValid(remote.Value))
+                UpdateRemoteChunkPin(remote.Key, remote.Value.GlobalPosition);
+        }
     }
 
     /// <summary>
@@ -197,6 +246,7 @@ public partial class NetSync : Node
                 int id = m.GetProperty("id").GetInt32();
                 if (_remotes.Remove(id, out RemotePlayer remote))
                     remote.QueueFree();
+                ReleaseRemoteChunkPin(id);
                 _remoteDriving.Remove(id);
                 RefreshRemoteDriver();
                 break;
@@ -225,25 +275,50 @@ public partial class NetSync : Node
                 OnClaimFailed(m.GetProperty("id").GetString(), m.TryGetProperty("owner", out JsonElement o) && o.ValueKind == JsonValueKind.Number ? o.GetInt32() : 0);
                 break;
             case "shift":
-                ApplyShift(m);
+            {
+                JsonElement pendingShift = m.Clone();
+                QueueWorldDataAction(() => ApplyShift(pendingShift));
                 break;
+            }
             case "delivered":
             {
-                string cargoId = m.GetProperty("cargoId").GetString();
-                _owners.Remove(cargoId);
-                Delivery.ApplyNetDelivered(cargoId, m.GetProperty("payment").GetInt32(), m.GetProperty("money").GetInt32(), m.GetProperty("name").GetString());
+                JsonElement pendingDelivery = m.Clone();
+                QueueWorldDataAction(() =>
+                {
+                    string cargoId = pendingDelivery.GetProperty("cargoId").GetString();
+                    _owners.Remove(cargoId);
+                    Delivery.ApplyNetDelivered(
+                        cargoId,
+                        pendingDelivery.GetProperty("payment").GetInt32(),
+                        pendingDelivery.GetProperty("money").GetInt32(),
+                        pendingDelivery.GetProperty("name").GetString());
+                });
                 break;
             }
             case "lost":
-                Delivery.ApplyNetLost(m.GetProperty("cargoId").GetString());
+            {
+                JsonElement pendingLost = m.Clone();
+                QueueWorldDataAction(() =>
+                    Delivery.ApplyNetLost(pendingLost.GetProperty("cargoId").GetString()));
                 break;
+            }
             case "shiftDone":
-                Delivery.ApplyNetShiftDone(m.GetProperty("shift").GetInt32());
+            {
+                JsonElement pendingShiftDone = m.Clone();
+                QueueWorldDataAction(() =>
+                    Delivery.ApplyNetShiftDone(pendingShiftDone.GetProperty("shift").GetInt32()));
                 break;
+            }
             case "gameOver":
-                Delivery.ApplyNetMoney(m.GetProperty("money").GetInt32());
-                Delivery.ApplyNetGameOver(m.GetProperty("shift").GetInt32());
+            {
+                JsonElement pendingGameOver = m.Clone();
+                QueueWorldDataAction(() =>
+                {
+                    Delivery.ApplyNetMoney(pendingGameOver.GetProperty("money").GetInt32());
+                    Delivery.ApplyNetGameOver(pendingGameOver.GetProperty("shift").GetInt32());
+                });
                 break;
+            }
             case "money":
             {
                 Delivery.ApplyNetMoney(m.GetProperty("money").GetInt32());
@@ -301,14 +376,67 @@ public partial class NetSync : Node
         Delivery.ApplyNetShift(m.GetProperty("shift").GetInt32(), jobs, m.GetProperty("money").GetInt32());
     }
 
-    private static void ApplyPlayerState(RemotePlayer remote, JsonElement s)
+    private void ApplyPlayerState(RemotePlayer remote, JsonElement s)
     {
         string equipment = s.TryGetProperty("eq", out JsonElement eq) && eq.ValueKind == JsonValueKind.String ? eq.GetString() : "";
         string look = s.TryGetProperty("lk", out JsonElement lk) && lk.ValueKind == JsonValueKind.String ? lk.GetString() : "";
         string held = s.TryGetProperty("held", out JsonElement heldElement) && heldElement.ValueKind == JsonValueKind.String
             ? heldElement.GetString()
             : "";
-        remote.ApplyState(ReadVector(s.GetProperty("p")), s.GetProperty("ry").GetSingle(), s.GetProperty("hp").GetSingle(), s.GetProperty("st").GetInt32(), equipment, look, held);
+        Vector3 position = ReadVector(s.GetProperty("p"));
+        remote.ApplyState(position, s.GetProperty("ry").GetSingle(), s.GetProperty("hp").GetSingle(), s.GetProperty("st").GetInt32(), equipment, look, held);
+        UpdateRemoteChunkPin(remote.PlayerId, position);
+    }
+
+    private CityGenerator StreamingCity
+    {
+        get
+        {
+            CityGenerator city = Delivery?.City;
+            return city != null && IsInstanceValid(city) && city.UsesChunkStreaming ? city : null;
+        }
+    }
+
+    private void UpdateRemoteChunkPin(int playerId, Vector3 position)
+    {
+        CityGenerator city = StreamingCity;
+        if (city == null || city.WorldData == null)
+            return;
+
+        WorldChunkCoordinate next = city.WorldData.GetChunkCoordinate(position);
+        if (_remoteChunkPins.TryGetValue(playerId, out Vector3 previousPosition))
+        {
+            WorldChunkCoordinate previous = city.WorldData.GetChunkCoordinate(previousPosition);
+            if (previous == next)
+                return;
+
+            city.UnpinChunkForPosition(previousPosition);
+            _remoteChunkPins.Remove(playerId);
+        }
+
+        if (city.PinChunkForPosition(position))
+            _remoteChunkPins[playerId] = position;
+    }
+
+    private void ReleaseRemoteChunkPin(int playerId)
+    {
+        if (!_remoteChunkPins.Remove(playerId, out Vector3 position))
+            return;
+
+        CityGenerator city = Delivery?.City;
+        if (city != null && IsInstanceValid(city))
+            city.UnpinChunkForPosition(position);
+    }
+
+    private void ReleaseAllRemoteChunkPins()
+    {
+        foreach (Vector3 position in _remoteChunkPins.Values)
+        {
+            CityGenerator city = Delivery?.City;
+            if (city != null && IsInstanceValid(city))
+                city.UnpinChunkForPosition(position);
+        }
+        _remoteChunkPins.Clear();
     }
 
     /// <summary>Compra online: o servidor confere o preço e desconta do dinheiro do grupo.</summary>
@@ -384,6 +512,13 @@ public partial class NetSync : Node
 
     private void ApplyObject(JsonElement o)
     {
+        if (!_worldDataReady)
+        {
+            JsonElement pendingObject = o.Clone();
+            QueueWorldDataAction(() => ApplyObject(pendingObject));
+            return;
+        }
+
         string id = o.GetProperty("id").GetString();
         if (string.IsNullOrEmpty(id) || IsMine(id))
             return;

@@ -1,6 +1,71 @@
 {
- "version": "0.9.8",
+ "version": "0.9.9",
  "changelog": [
+  {
+   "version": "0.9.9",
+   "date": "12/11/2026",
+   "title": "Lojas de verdade",
+   "changes": [
+    "Táxi amarelo da cooperativa Rádio Táxi Sintonia no pátio da central (com o adesivo do app 66): o taxista agora faz as corridas com ele, e o passageiro só embarca no táxi.",
+    "Van de viagem anos 80, a Fórdi Viajante, estacionada no pátio da central: é a van do futuro Modo História e já dá para dirigir.",
+    "Shopping Marconi com oito balcões, dois pisos e escada para subir a pé; as fachadas comerciais viraram lojas térreas do tamanho certo.",
+    "Lã de Aço 1001 Utilidades no shopping: a palha de aço Brilhaço enrolada na antena acaba com o chuvisco da TV do apartamento.",
+    "Conserta-Tudo do Primo em frente à central: o gari acha sucata na rua e vende ao Primo, que também vende a lanterna de longo alcance.",
+    "Agro-Tudão no sítio: casa de rações na Estrada do Rancho, entregas de saco de ração para os sítios e o Repelente Espanta-Muriçoca.",
+    "Central de entregas com portão novo do lado esquerdo e grade de metal em cima do muro; ninguém estaciona mais na frente dos portões. A Rádio 96.6 ganhou muro, grade e um portãozinho.",
+    "Céu novo: nuvens, sol, lua com relevo e estrelas que acompanham o ciclo de dia e noite.",
+    "Menus iniciais novos liberados por código em Opções > Interface: ORBITA966, CINEMA966 e TERMINAL966 (VISUAL966 libera os três).",
+    "Mais leve em PC fraco: a cidade carrega em pedaços em volta do jogador, com tela de carregamento do mundo.",
+    "Prévia para celular nas versões de teste: APK de Android com controles de toque e atualização pelo próprio jogo.",
+    "Online: táxi, van de viagem, sucata, ração e itens novos validados pelo servidor. Atualize o servidor com npm run deploy."
+   ],
+   "shots": [
+    {
+     "src": "assets/shots/v0.9.9/taxi.jpg",
+     "caption": "Táxi da Rádio Táxi Sintonia no pátio da central"
+    },
+    {
+     "src": "assets/shots/v0.9.9/patio.jpg",
+     "caption": "Pátio da central com a van Fórdi Viajante e a grade nova no muro"
+    },
+    {
+     "src": "assets/shots/v0.9.9/radio.jpg",
+     "caption": "Rádio 96.6 com muro, grade e o portãozinho de pedestre"
+    },
+    {
+     "src": "assets/shots/v0.9.9/tv.jpg",
+     "caption": "TV do apartamento com chuvisco: palha de aço da Lã de Aço resolve"
+    },
+    {
+     "src": "assets/shots/v0.9.9/primo.jpg",
+     "caption": "Conserta-Tudo do Primo: compra sucata e vende a lanterna de longo alcance"
+    },
+    {
+     "src": "assets/shots/v0.9.9/agro.jpg",
+     "caption": "Agro-Tudão, a casa de rações na Estrada do Rancho"
+    },
+    {
+     "src": "assets/shots/v0.9.9/agro_noite.jpg",
+     "caption": "Agro-Tudão à noite, com a luz da varanda"
+    },
+    {
+     "src": "assets/shots/v0.9.9/ceu.jpg",
+     "caption": "Céu novo no entardecer, por cima da central"
+    },
+    {
+     "src": "assets/shots/v0.9.9/menu_orbita.jpg",
+     "caption": "Menu Órbita (código ORBITA966)"
+    },
+    {
+     "src": "assets/shots/v0.9.9/menu_terminal.jpg",
+     "caption": "Menu Terminal (código TERMINAL966)"
+    },
+    {
+     "src": "assets/shots/v0.9.9/celular.jpg",
+     "caption": "Prévia do celular: joystick, câmera por arrasto e botões de toque"
+    }
+   ]
+  },
   {
    "version": "0.9.8",
    "date": "10/11/2026",
@@ -567,6 +632,22 @@
    "caption": "Menu principal com as novidades da versão"
   },
   {
+   "src": "assets/shots/v0.9.9/taxi.jpg",
+   "caption": "Táxi da Rádio Táxi Sintonia no pátio da central"
+  },
+  {
+   "src": "assets/shots/v0.9.9/patio.jpg",
+   "caption": "Pátio da central com a van Fórdi Viajante e a grade nova no muro"
+  },
+  {
+   "src": "assets/shots/v0.9.9/radio.jpg",
+   "caption": "Rádio 96.6 com muro, grade e o portãozinho de pedestre"
+  },
+  {
+   "src": "assets/shots/v0.9.9/tv.jpg",
+   "caption": "TV do apartamento com chuvisco: palha de aço da Lã de Aço resolve"
+  },
+  {
    "src": "assets/shots/v0.9.8/meio_fio.jpg",
    "caption": "Meio-fio cinza com faixas brancas intercaladas e tinta gasta"
   },
@@ -613,22 +694,6 @@
   {
    "src": "assets/shots/v0.9.5/inventario.jpg",
    "caption": "Novo slot de pés: Chinelos Legítimas"
-  },
-  {
-   "src": "assets/shots/v0.9.4/personagens.jpg",
-   "caption": "Personagens animados, cada um com roupa, pele e cabelo próprios"
-  },
-  {
-   "src": "assets/shots/v0.9.4/pedestre.jpg",
-   "caption": "Comerciante na barraca da calçada"
-  },
-  {
-   "src": "assets/shots/v0.9.4/noite_pedestre_1.jpg",
-   "caption": "Caixa do mercado à noite"
-  },
-  {
-   "src": "assets/shots/v0.9.4/animal_Cow.jpg",
-   "caption": "Vacas e boi animados no cercado do sítio"
   }
  ],
  "pix": "00020126700014br.gov.bcb.pix0124contato@badwolf3d.com.br0220Apoio Dead Frequency5204000053039865802BR5914DEAD FREQUENCY6006BRASIL62120508DEADFREQ6304D998"

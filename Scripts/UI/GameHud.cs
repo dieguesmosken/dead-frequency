@@ -61,6 +61,16 @@ public partial class GameHud : CanvasLayer
         var root = new Control { Theme = UiStyle.Theme, MouseFilter = Control.MouseFilterEnum.Ignore };
         root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         AddChild(root);
+        if (GameSettings.IsMobile)
+        {
+            // Celular: a interface é 1,6x (menus grandes para o dedo), mas o HUD do jogo tapava a tela.
+            // Ele é desenhado num retângulo maior e encolhido de volta: fica ~1,1x, sem mexer no layout.
+            _mobileRoot = root;
+            root.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
+            root.Scale = new Vector2(MobileHudScale, MobileHudScale);
+            FitMobileRoot();
+            GetViewport().SizeChanged += FitMobileRoot;
+        }
 
         // Leseira da madrugada: bordas da tela escurecendo (v0.9.5).
         _drowsyMat = new ShaderMaterial { Shader = new Shader { Code = "shader_type canvas_item;\nuniform float amount = 0.0;\nvoid fragment() {\n  float d = distance(UV, vec2(0.5));\n  COLOR = vec4(0.0, 0.0, 0.02, smoothstep(0.2, 0.75, d) * amount);\n}" } };
@@ -521,7 +531,7 @@ public partial class GameHud : CanvasLayer
         _fps.Visible = gs?.ShowFps ?? false;
         if (_fps.Visible)
             _fps.Text = $"{Engine.GetFramesPerSecond()} FPS";
-        _status.Visible = gs?.ShowKeyHints ?? true;
+        _status.Visible = (gs?.ShowKeyHints ?? true) && !TouchControls.Active; // dicas de teclado não servem no toque
 
         CargoItem held = Player.HeldItem;
         _cargoPanel.Visible = held != null;
@@ -533,7 +543,8 @@ public partial class GameHud : CanvasLayer
         }
 
         VanController van = Player.CurrentVehicle;
-        _speed.Visible = van != null;
+        // Painel diegético: em primeira pessoa na caminhonete, a velocidade está no velocímetro do painel.
+        _speed.Visible = van != null && (van.Dashboard == null || Player.IsThirdPerson);
         if (van != null)
             _speed.Text = GameSettings.Instance?.SpeedUnit == 1 ? $"{van.SpeedKmh * 0.621371f:000} mph" : $"{van.SpeedKmh:000} km/h";
 
@@ -594,7 +605,7 @@ public partial class GameHud : CanvasLayer
 
         double frameMs = Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000.0;
         double physMs = Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000.0;
-        _debug.Text = $"Dead Frequency {GameVersion.Display}  ·  FPS {Engine.GetFramesPerSecond()}  ({frameMs:0.0} ms lógica · {physMs:0.0} ms física)\n" +
+        _debug.Text = $"Dead Frequency {GameVersion.Build}  ·  FPS {Engine.GetFramesPerSecond()}  ({frameMs:0.0} ms lógica · {physMs:0.0} ms física)\n" +
                       $"Posição X {p.X:0.0}  Y {p.Y:0.0}  Z {p.Z:0.0}  ·  olhando {facing} ({yaw:0}°)\n" +
                       where +
                       _debugStats + "\n" +
@@ -795,6 +806,15 @@ public partial class GameHud : CanvasLayer
     public override void _EnterTree() => AddToGroup(GroupName);
 
     /// <summary>Atalho para qualquer script mostrar um aviso no topo da tela.</summary>
+    private const float MobileHudScale = 0.7f;
+    private Control _mobileRoot;
+
+    private void FitMobileRoot()
+    {
+        if (_mobileRoot != null && IsInstanceValid(_mobileRoot))
+            _mobileRoot.Size = GetViewport().GetVisibleRect().Size / MobileHudScale;
+    }
+
     public static void Toast(Node from, string text, Color? color = null, double seconds = 3.0)
     {
         if (from?.GetTree()?.GetFirstNodeInGroup(GroupName) is GameHud hud)

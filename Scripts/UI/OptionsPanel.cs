@@ -139,8 +139,9 @@ public partial class OptionsPanel : VBoxContainer
     private void BuildVideo(GameSettings s, VBoxContainer p)
     {
         Section(p, "TELA");
-        Choice(p, "Modo de janela", new[] { "Janela", "Tela cheia (sem borda)", "Tela cheia exclusiva", "Janela maximizada" }, s.WindowMode, i => s.WindowMode = i,
-            "Tela cheia exclusiva costuma dar menos atraso; sem borda troca de janela mais rápido (Alt+Tab).");
+        if (!GameSettings.IsMobile) // no celular é sempre tela cheia
+            Choice(p, "Modo de janela", new[] { "Janela", "Tela cheia (sem borda)", "Tela cheia exclusiva", "Janela maximizada" }, s.WindowMode, i => s.WindowMode = i,
+                "Tela cheia exclusiva costuma dar menos atraso; sem borda troca de janela mais rápido (Alt+Tab).");
         Toggle(p, "V-Sync", s.VSync, b => s.VSync = b, "Trava no ritmo do monitor e evita cortes na imagem; desligue para menos atraso.");
         int[] fpsValues = { 0, 30, 60, 90, 120, 144, 165, 240 };
         Choice(p, "Limite de FPS", new[] { "Sem limite", "30", "60", "90", "120", "144", "165", "240" }, Math.Max(0, Array.IndexOf(fpsValues, s.MaxFps)), i => s.MaxFps = fpsValues[i],
@@ -150,6 +151,8 @@ public partial class OptionsPanel : VBoxContainer
 
         Section(p, "GRÁFICOS");
         Choice(p, "Qualidade", new[] { "Baixa", "Média", "Alta" }, s.Quality, i => s.Quality = i, "Baixa tira as sombras e o brilho; Média encurta as sombras.");
+        Choice(p, "Visual PS1", new[] { "Desligado", "Leve", "Completo" }, s.Ps1Mode, i => s.Ps1Mode = i,
+            "Leve: pixels maiores e cores pontilhadas (dithering). Completo: pixels ainda maiores e os modelos tremem de leve, como no PS1.");
         Choice(p, "Antisserrilhado", new[] { "Desligado", "FXAA", "MSAA 2x", "MSAA 4x" }, s.AntiAliasing, i => s.AntiAliasing = i,
             "Suaviza os serrilhados das bordas. MSAA é mais bonito e mais pesado.");
         Slider(p, "Campo de visão", 60, 110, 1, s.Fov, v => s.Fov = (float)v, v => $"{v:0}°", "Quanto do mundo aparece na tela.");
@@ -178,6 +181,11 @@ public partial class OptionsPanel : VBoxContainer
         Toggle(p, "Inverter eixo Y", s.InvertY, b => s.InvertY = b);
         p.AddChild(Hint("Pressione V durante a partida para alternar entre primeira e terceira pessoa. A terceira pessoa é ativada por padrão."));
         Toggle(p, "Balanço da câmera ao andar", s.HeadBob, b => s.HeadBob = b, "Desativado por padrão para reduzir movimentos visuais. Ative apenas se preferir esse efeito.");
+
+        Section(p, "TOQUE (CELULAR)");
+        Choice(p, "Controles de toque", new[] { "Automático", "Sempre", "Nunca" }, s.TouchMode, i => s.TouchMode = i,
+            "Automático: aparecem só no celular (em notebook com toque, escolha Sempre). Joystick à esquerda, arrastar à direita mexe a câmera.");
+        Slider(p, "Tamanho dos botões", 0.7, 1.5, 0.05, s.TouchScale, v => s.TouchScale = (float)v, v => $"{v:0.00}x");
 
         Section(p, "TECLAS");
         p.AddChild(Hint("Clique no botão e aperte a tecla nova (ou um botão do mouse). Esc cancela."));
@@ -215,6 +223,42 @@ public partial class OptionsPanel : VBoxContainer
         Toggle(p, "Linhas de CRT", s.Scanlines, b => s.Scanlines = b, "Efeito de tela de tubo por cima dos menus e do HUD.");
         Choice(p, "Velocímetro", new[] { "km/h", "mph" }, s.SpeedUnit, i => s.SpeedUnit = i);
         Choice(p, "Relógio", new[] { "24 horas", "12 horas (AM/PM)" }, s.Clock24h ? 0 : 1, i => s.Clock24h = i == 0);
+        BuildMenuCodes(s, p);
+    }
+
+    /// <summary>Menu inicial: campo de código secreto (MenuStyles) e, depois do VISUAL966, a escolha do menu.</summary>
+    private void BuildMenuCodes(GameSettings s, VBoxContainer p)
+    {
+        Section(p, "MENU INICIAL");
+        HBoxContainer row = Row(p, "Código");
+        var code = new LineEdit { PlaceholderText = "digite o código", CustomMinimumSize = new Vector2(260, 38), MaxLength = 24 };
+        code.AddThemeFontSizeOverride("font_size", 16);
+        row.AddChild(code);
+        Label result = Hint("Tem um código? Digite e aperte Enter.");
+        p.AddChild(result);
+
+        // Escolha do menu (só aparece com o VISUAL966).
+        var pickerBox = new VBoxContainer { Visible = s.MenuPicker };
+        pickerBox.AddThemeConstantOverride("separation", 6);
+        p.AddChild(pickerBox);
+        Choice(pickerBox, "Menu inicial", MenuStyles.Names, s.MenuStyle, i => s.MenuStyle = i, "Vale ao voltar para a tela inicial.");
+        Node pickerRow = pickerBox.GetChild(0);
+        var picker = pickerRow.GetChild(pickerRow.GetChildCount() - 1) as OptionButton;
+
+        void Submit()
+        {
+            MenuStyles.CodeResult r = MenuStyles.Apply(code.Text);
+            AudioManager.Instance?.PlayUi(r.Ok ? UiSound.Start : UiSound.Back);
+            result.Text = r.Message + (r.Ok && s.MenuStyle != 0 && !s.MenuPicker ? " Vale ao voltar para a tela inicial." : "");
+            result.AddThemeColorOverride("font_color", r.Ok ? UiStyle.Phosphor : UiStyle.Danger);
+            pickerBox.Visible = s.MenuPicker;
+            if (picker != null)
+                picker.Selected = Mathf.Clamp(s.MenuStyle, 0, MenuStyles.Names.Length - 1);
+            if (r.Ok)
+                code.Text = "";
+        }
+        code.TextSubmitted += _ => Submit();
+        row.AddChild(UiStyle.MakeButton("Ativar", Submit, 140));
     }
 
     private void BuildGame(GameSettings s, VBoxContainer p)

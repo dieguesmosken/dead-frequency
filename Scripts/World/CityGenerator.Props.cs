@@ -13,6 +13,9 @@ public partial class CityGenerator
 
     private void BuildStreetProps()
     {
+        if (_useLogicalBlockPlans)
+            return; // Bancos e caçambas acompanham o chunk.
+
         var root = new Node3D { Name = "StreetProps" };
         _staticRoot.AddChild(root);
         float edge = BlockSize * 0.5f - 1.0f;
@@ -35,7 +38,8 @@ public partial class CityGenerator
                 if (h / 100 % 100 < 40)
                 {
                     Vector3 p = c + new Vector3(-edge - 0.1f, 0f, -BlockSize * 0.3f);
-                    DumpsterSpots.Add(p + new Vector3(0.9f, 0f, 0f));
+                    if (!_useLogicalServiceData)
+                        DumpsterSpots.Add(p + new Vector3(0.9f, 0f, 0f));
                     RegisterObstacle(p + new Vector3(0f, 0f, -0.5f));
                     RegisterObstacle(p + new Vector3(0f, 0f, 0.5f));
                     AssetProps.Spawn(root, AssetProps.City + "dumpster.gltf", p, Mathf.Pi * 0.5f, 3.2f, new Vector3(1.8f, 1.05f, 1.15f));
@@ -45,6 +49,40 @@ public partial class CityGenerator
                         AssetProps.Spawn(root, AssetProps.City + "box_B.gltf", p + new Vector3(0.2f, 0f, 2.3f), -0.3f, 4f);
                     }
                 }
+            }
+        }
+    }
+
+    private void BuildStreetPropsForBlock(int bx, int bz)
+    {
+        if (bx == 0 && bz == 0)
+            return;
+
+        var root = new Node3D { Name = $"StreetProps_{bx}_{bz}" };
+        (_activeChunkRoot ?? _staticRoot).AddChild(root);
+        float edge = BlockSize * 0.5f - 1.0f;
+        Vector3 center = BlockCenter(bx, bz) + new Vector3(0f, CurbHeight, 0f);
+        int hash = AssetProps.Hash(center, 11);
+
+        if (hash % 100 < 55)
+        {
+            RegisterObstacle(center + new Vector3(BlockSize * 0.08f - 0.7f, 0f, edge));
+            RegisterObstacle(center + new Vector3(BlockSize * 0.08f + 0.7f, 0f, edge));
+            AssetProps.Spawn(root, AssetProps.City + "bench.gltf",
+                center + new Vector3(BlockSize * 0.08f, 0f, edge), 0f, 5f, new Vector3(2f, 0.5f, 0.7f));
+        }
+
+        if (hash / 100 % 100 < 40)
+        {
+            Vector3 p = center + new Vector3(-edge - 0.1f, 0f, -BlockSize * 0.3f);
+            RegisterObstacle(p + new Vector3(0f, 0f, -0.5f));
+            RegisterObstacle(p + new Vector3(0f, 0f, 0.5f));
+            AssetProps.Spawn(root, AssetProps.City + "dumpster.gltf",
+                p, Mathf.Pi * 0.5f, 3.2f, new Vector3(1.8f, 1.05f, 1.15f));
+            if (hash % 3 == 0)
+            {
+                AssetProps.Spawn(root, AssetProps.City + "box_A.gltf", p + new Vector3(0.1f, 0f, 1.6f), 0.4f, 4f);
+                AssetProps.Spawn(root, AssetProps.City + "box_B.gltf", p + new Vector3(0.2f, 0f, 2.3f), -0.3f, 4f);
             }
         }
     }

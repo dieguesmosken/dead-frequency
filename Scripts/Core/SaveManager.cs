@@ -15,12 +15,17 @@ public class SaveData
     public string SavedAt { get; set; } = "";
     public string Level { get; set; } = "city";
     public string Profession { get; set; } = Professions.Entregador;
+    public int WorldSeed { get; set; } = 1996;
+    public int WorldGeneratorVersion { get; set; }
     public int Shift { get; set; } = 1;
     public int TotalDelivered { get; set; }
     public int Wallet { get; set; }
     public int Saves { get; set; }
     public double PlayMinutes { get; set; }
     public Dictionary<string, int> EarnedByJob { get; set; } = new();
+    /// <summary>Tanque e bateria da caminhonete da empresa (0 a 1; -1 = save antigo, usa o padrão).</summary>
+    public float VanFuel { get; set; } = -1f;
+    public float VanBattery { get; set; } = -1f;
 }
 
 public static class SaveManager
@@ -70,12 +75,28 @@ public static class SaveManager
         data.SavedAt = Time.GetDatetimeStringFromSystem(false, true);
         data.Level = Professions.CurrentLevel;
         data.Profession = Professions.Current;
+        if (delivery?.City?.WorldData is WorldGenerationData worldData)
+        {
+            data.WorldSeed = worldData.Seed;
+            data.WorldGeneratorVersion = worldData.GeneratorVersion;
+        }
         if (delivery != null && !delivery.NetworkMode)
         {
             data.Shift = delivery.Shift;
             data.TotalDelivered = delivery.TotalDelivered;
         }
         data.Wallet = PlayerInventory.Instance?.Wallet ?? data.Wallet;
+        if (delivery != null && !delivery.NetworkMode && delivery.IsInsideTree())
+        {
+            foreach (Node n in delivery.GetTree().GetNodesInGroup(VanController.GroupName))
+            {
+                if (n is VanController { NetId: "van", Engine: not null } van)
+                {
+                    data.VanFuel = van.Engine.Fuel;
+                    data.VanBattery = van.Electrical.Charge;
+                }
+            }
+        }
         data.Saves++;
         double now = Time.GetTicksMsec();
         data.PlayMinutes += (now - _sessionStartMs) / 60000.0;

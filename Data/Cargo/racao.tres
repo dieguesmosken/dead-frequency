@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="CargoData" format=3]
+
+[ext_resource type="Script" path="res://Scripts/Cargo/CargoData.cs" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+CargoId = "racao"
+CargoName = "Saco de Ração 25 kg"
+WeightKg = 25.0
+Fragility = 0.15
+EmInterference = 0.0
+BasePayment = 130

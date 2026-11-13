@@ -124,8 +124,21 @@ public partial class ProfessionManager : Node3D
         if (_placeOnSpawn)
         {
             _placeOnSpawn = false;
-            if (Job != null && Job.TryGetSpawn(out Vector3 pos, out float yaw) && Player != null && IsInstanceValid(Player))
-                Callable.From(() => Player.Teleport(pos, yaw)).CallDeferred();
+            if (Player != null && IsInstanceValid(Player))
+            {
+                // Prefere o ponto lógico preparado antes da geometria; mantém o Job como fallback
+                // durante a migração de profissões que ainda não tenham spawn no WorldData.
+                if (City?.UsesLogicalWorldData == true &&
+                    City.WorldData != null &&
+                    City.WorldData.TryGetProfessionSpawn(id, out WorldSpawnPoint logicalSpawn))
+                {
+                    Callable.From(() => Player.Teleport(logicalSpawn.Position, logicalSpawn.Yaw)).CallDeferred();
+                }
+                else if (Job != null && Job.TryGetSpawn(out Vector3 pos, out float yaw))
+                {
+                    Callable.From(() => Player.Teleport(pos, yaw)).CallDeferred();
+                }
+            }
         }
         ProfessionChanged?.Invoke(id);
         if (announce)

@@ -16,6 +16,8 @@ public enum CarType
     Pickup,
     Kombi,
     Fusca,
+    /// <summary>Van de viagem anos 80 do Modo História (não aparece estacionada na rua).</summary>
+    Van80,
 }
 
 public static class CarModels
@@ -115,8 +117,8 @@ public static class CarModels
             Box(car, new Vector3(side * (width * 0.5f + 0.08f), lightY + 0.4f, -hz * 0.36f), new Vector3(0.1f, 0.09f, 0.14f), _rubber);
         }
         // Placas (frente no para-choque, trás acima dele).
-        Box(car, new Vector3(0f, bumperY, -hz - 0.1f), new Vector3(0.46f, 0.12f, 0.02f), _plate);
-        Box(car, new Vector3(0f, bumperY + 0.19f, hz + 0.02f), new Vector3(0.46f, 0.12f, 0.03f), _plate);
+        Plates.Attach(car, _plateCode, new Vector3(0f, bumperY, -hz - 0.1f), false);
+        Plates.Attach(car, _plateCode, new Vector3(0f, bumperY + 0.19f, hz + 0.03f), true);
         // Maçanetas.
         foreach (float side in new[] { -1f, 1f })
             Box(car, new Vector3(side * (width * 0.5f + 0.01f), lightY + 0.12f, -0.1f), new Vector3(0.03f, 0.04f, 0.16f), _chrome);
@@ -328,7 +330,17 @@ public static class CarModels
     private static readonly System.Collections.Generic.Dictionary<StandardMaterial3D, StandardMaterial3D> _loftMats = new();
 
     /// <summary>Monta o carro como filho de parent. Retorna o tamanho (largura, altura, comprimento) para colisão.</summary>
-    public static Vector3 Build(Node3D parent, CarType type, Color color)
+    /// <summary>Código da placa do carro que está sendo montado (Plates).</summary>
+    private static string _plateCode = "";
+
+    /// <summary>Monta o carro. plate = código da placa; sem ele, a cidade sorteia na ordem de geração.</summary>
+    public static Vector3 Build(Node3D parent, CarType type, Color color, string plate = null)
+    {
+        _plateCode = plate ?? Plates.Next($"{type}{color.ToHtml()}");
+        return BuildInner(parent, type, color);
+    }
+
+    private static Vector3 BuildInner(Node3D parent, CarType type, Color color)
     {
         EnsureResources();
         _glassDouble ??= new StandardMaterial3D { AlbedoColor = new Color(0.08f, 0.11f, 0.13f), Roughness = 0.1f, Metallic = 0.25f, CullMode = BaseMaterial3D.CullModeEnum.Disabled };
@@ -402,6 +414,17 @@ public static class CarModels
             }
             case CarType.Fusca: // "Fuska" (Folksvagem): carroceria e cabine "torneadas" (malha própria)
             {
+                // v0.10: modelo do Meshy pintado por máscara; o "torneado" antigo fica de reserva.
+                if (MeshyVehicles.HasFuska)
+                {
+                    Vector3 fs = MeshyVehicles.BuildFuska(parent, color, 4.05f);
+                    if (fs != Vector3.Zero)
+                    {
+                        Plates.Attach(parent, _plateCode, new Vector3(0f, 0.36f, -fs.Z * 0.5f - 0.02f), false);
+                        Plates.Attach(parent, _plateCode, new Vector3(0f, 0.5f, fs.Z * 0.5f + 0.02f), true);
+                        return fs;
+                    }
+                }
                 const float w = 1.55f, l = 4.05f;
                 // Carroceria: seção superelíptica que afina na frente (capô) e atrás (motor).
                 (float hw, float yc, float hh) Body(float z)
@@ -442,7 +465,7 @@ public static class CarModels
                 }
                 Box(parent, new Vector3(0f, 0.32f, -2.02f), new Vector3(w + 0.05f, 0.08f, 0.08f), _chrome); // para-choques cromados
                 Box(parent, new Vector3(0f, 0.32f, 2.02f), new Vector3(w + 0.05f, 0.08f, 0.08f), _chrome);
-                Box(parent, new Vector3(0f, 0.44f, 2.04f), new Vector3(0.4f, 0.11f, 0.02f), _plate);
+                Plates.Attach(parent, _plateCode, new Vector3(0f, 0.44f, 2.05f), true);
                 // Tampa do motor e capô são curvos: acha onde a superfície passa em cada altura
                 // (pelo topo da seção) e cola grade, logo e nome ali, inclinados junto (v0.9.7).
                 (Vector3 pos, Vector3 normal) OnSurface(float y, float x, bool rear)
@@ -482,6 +505,60 @@ public static class CarModels
                     foreach (float z in new[] { -1.2f, 1.25f })
                         Wheel(parent, new Vector3(x, 0.3f, z), 0.3f, 0.18f);
                 return new Vector3(w, 1.5f, l);
+            }
+            case CarType.Van80: // "Viajante" (Fórdi): furgão anos 80, saia-e-blusa com faixas
+            {
+                const float w = 1.95f, l = 4.9f;
+                float hz = l * 0.5f;
+                StandardMaterial3D cream = PaintFor(new Color(0.9f, 0.86f, 0.74f));
+                StandardMaterial3D stripeA = PaintFor(new Color(0.95f, 0.72f, 0.12f));
+                StandardMaterial3D stripeB = PaintFor(new Color(0.88f, 0.38f, 0.1f));
+                StandardMaterial3D stripeC = PaintFor(new Color(0.42f, 0.22f, 0.12f));
+                // Bico baixo com capô curto + baú alto do meio para trás; a cabine é a estufa.
+                Box(parent, new Vector3(0f, 0.72f, -1.375f), new Vector3(w, 0.74f, 2.15f), paint);
+                Box(parent, new Vector3(0f, 1.2f, 1.075f), new Vector3(w, 1.7f, 2.75f), cream);
+                Box(parent, new Vector3(0f, 0.72f, 1.075f), new Vector3(w + 0.004f, 0.74f, 2.75f), paint); // saia da cor da van
+                Greenhouse(parent, w - 0.02f, 1.09f, 2.05f, -1.85f, -1.3f, -0.28f, -0.28f, cream, bPillar: false);
+                // Três faixas retas de ponta a ponta (amarelo, laranja, marrom).
+                int k = 0;
+                foreach (StandardMaterial3D stripe in new[] { stripeA, stripeB, stripeC })
+                {
+                    float y = 1.0f + k * 0.075f;
+                    foreach (float side in new[] { -1f, 1f })
+                        Box(parent, new Vector3(side * (w * 0.5f + 0.008f), y, 0.05f), new Vector3(0.012f, 0.06f, l - 0.3f), stripe);
+                    Box(parent, new Vector3(0f, y, hz + 0.008f), new Vector3(w - 0.1f, 0.06f, 0.012f), stripe);
+                    k++;
+                }
+                // Janelinha redonda ("bolha") dos dois lados do baú, com aro cromado.
+                foreach (float side in new[] { -1f, 1f })
+                {
+                    parent.AddChild(new MeshInstance3D { Mesh = _wheel, Position = new Vector3(side * (w * 0.5f + 0.01f), 1.62f, 1.35f), Scale = new Vector3(0.7f, 0.02f, 0.7f), Rotation = new Vector3(0f, 0f, Mathf.Pi * 0.5f), MaterialOverride = _chrome });
+                    parent.AddChild(new MeshInstance3D { Mesh = _wheel, Position = new Vector3(side * (w * 0.5f + 0.02f), 1.62f, 1.35f), Scale = new Vector3(0.58f, 0.02f, 0.58f), Rotation = new Vector3(0f, 0f, Mathf.Pi * 0.5f), MaterialOverride = _glassDouble });
+                }
+                // Porta corrediça do lado do passageiro (vinco e trilho).
+                Box(parent, new Vector3(-(w * 0.5f + 0.006f), 1.2f, 0.25f), new Vector3(0.012f, 1.5f, 0.02f), _rubber);
+                Box(parent, new Vector3(-(w * 0.5f + 0.006f), 1.2f, 1.25f), new Vector3(0.012f, 1.5f, 0.02f), _rubber);
+                Box(parent, new Vector3(-(w * 0.5f + 0.012f), 1.92f, 0.9f), new Vector3(0.02f, 0.03f, 1.6f), _chrome);
+                // Traseira: duas portas com vidro e o estepe pendurado.
+                Box(parent, new Vector3(0f, 1.2f, hz + 0.006f), new Vector3(0.02f, 1.5f, 0.012f), _rubber);
+                foreach (float x in new[] { -0.46f, 0.46f })
+                    Box(parent, new Vector3(x, 1.6f, hz + 0.01f), new Vector3(0.66f, 0.42f, 0.02f), _glassDouble);
+                parent.AddChild(new MeshInstance3D { Mesh = _wheel, Position = new Vector3(0f, 1.0f, hz + 0.14f), Scale = new Vector3(0.68f, 0.22f, 0.68f), Rotation = new Vector3(Mathf.Pi * 0.5f, 0f, 0f), MaterialOverride = _rubber });
+                parent.AddChild(new MeshInstance3D { Mesh = _wheel, Position = new Vector3(0f, 1.0f, hz + 0.26f), Scale = new Vector3(0.36f, 0.02f, 0.36f), Rotation = new Vector3(Mathf.Pi * 0.5f, 0f, 0f), MaterialOverride = _chrome });
+                // Bagageiro cromado no teto (é a van de viagem).
+                foreach (float x in new[] { -0.75f, 0.75f })
+                    Box(parent, new Vector3(x, 2.17f, 0.9f), new Vector3(0.04f, 0.04f, 2.9f), _chrome);
+                for (float z = -0.4f; z <= 2.21f; z += 0.65f)
+                    Box(parent, new Vector3(0f, 2.17f, z), new Vector3(1.54f, 0.03f, 0.04f), _chrome);
+                foreach (float x in new[] { -0.75f, 0.75f })
+                    foreach (float z in new[] { -0.4f, 2.2f })
+                        Box(parent, new Vector3(x, 2.12f, z), new Vector3(0.05f, 0.1f, 0.05f), _chrome);
+                Details(parent, w, l, 0.78f, 0.42f);
+                Badges(parent, "fordi", "VIAJANTE", l, 0.78f, 0.82f, 0.2f);
+                foreach (float x in new[] { -0.86f, 0.86f })
+                    foreach (float z in new[] { -1.5f, 1.6f })
+                        Wheel(parent, new Vector3(x, 0.36f, z), 0.36f, 0.24f);
+                return new Vector3(w, 2.2f, l);
             }
             default: // Sedan: "Opalinha" (Chevrolé), três volumes
             {

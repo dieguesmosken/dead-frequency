@@ -1,0 +1,60 @@
+# Verificação de pull request: compila o jogo e testa o servidor antes do merge.
+# Marque os jobs "Jogo (C#)" e "Servidor" como obrigatórios na regra da main
+# (Settings → Rules → main → Require status checks to pass) para o auto-merge só juntar o que funciona.
+name: Verificação de PR
+
+on:
+  pull_request:
+    branches: [main, Internal]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-check-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  game:
+    name: Jogo (C#)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Compilar o C# (sem abrir o Godot)
+        run: dotnet build DeadFrequency.csproj -c Release
+      - name: Versão e changelog batem
+        run: |
+          VER=$(grep -oP 'Current = "\K[0-9.]+' Scripts/Core/GameVersion.cs)
+          grep -q "new(\"$VER\"" Scripts/Core/GameVersion.cs || { echo "::error::GameVersion.Current=$VER sem entrada no Changelog"; exit 1; }
+          grep -q "## v$VER " CHANGELOG.md || echo "::warning::CHANGELOG.md sem a seção v$VER (rode o gerador antes da release)"
+      - name: Site gera sem erro
+        run: python3 site/build.py
+
+  server:
+    name: Servidor
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Smoke test (Worker local)
+        run: |
+          npx wrangler dev --port 8787 > wrangler.log 2>&1 &
+          for i in $(seq 1 60); do grep -q "Ready on" wrangler.log && break; sleep 1; done
+          node test/smoke.mjs http://127.0.0.1:8787
+      - name: Log do Worker (se falhar)
+        if: failure()
+        run: tail -100 wrangler.log

@@ -1,0 +1,21 @@
+name: 💡 Ideia
+description: Sugestão de recurso, conteúdo ou melhoria
+title: "[Ideia] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: ideia
+    attributes:
+      label: A ideia
+      description: Como funcionaria no jogo?
+    validations:
+      required: true
+  - type: textarea
+    id: porque
+    attributes:
+      label: Por que deixaria o jogo melhor
+  - type: textarea
+    id: referencia
+    attributes:
+      label: Referências
+      description: Fotos, vídeos, outros jogos

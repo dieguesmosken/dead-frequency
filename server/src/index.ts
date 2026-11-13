@@ -58,7 +58,7 @@ function roomSummaryKey(protocol: number | undefined, code: string): string {
   return (protocol ?? 7) === 7 ? `room:${code}` : `room:v${protocol}:${code}`;
 }
 /** Veículos da fase (VanController.NetId no Godot): a van e, desde a v0.9.3, a moto e os caminhões do pátio. */
-const VEHICLES = ["van", "moto", "truck_yellow", "truck_red", "car_gou", "car_fusca", "car_opalinha"];
+const VEHICLES = ["van", "moto", "truck_yellow", "truck_red", "car_gou", "car_fusca", "car_opalinha", "taxi", "van_viagem"];
 /** Carros da concessionária (v0.9.7): comprados uma vez por sala, com o dinheiro do grupo. */
 const CARS = ["car_gou", "car_fusca", "car_opalinha"];
 const MAX_PLAYERS = 8;
@@ -107,7 +107,21 @@ const CARGO_CATALOG = [
   { name: "Antena Parabólica", payment: 200 },
   { name: "Caixote de Tomates", payment: 110 },
   { name: "Panela de Feijoada", payment: 170 },
+  // v0.9.9: saco de ração do Agro-Tudão, só no sítio.
+  { name: "Saco de Ração", payment: 130, levels: ["farm"] },
 ];
+
+/** Sorteio de carga por fase (mesma regra de CargoRules.Pool no Godot): no sítio a ração pesa 3x. */
+function cargoPool(level: string): number[] {
+  const pool: number[] = [];
+  CARGO_CATALOG.forEach((c, i) => {
+    const levels = (c as { levels?: string[] }).levels;
+    if (levels && !levels.includes(level)) return;
+    const weight = levels ? 3 : 1;
+    for (let k = 0; k < weight; k++) pool.push(i);
+  });
+  return pool;
+}
 
 /** Preços da loja — mesmos de ItemCatalog.cs no Godot. */
 const ITEM_SLOTS: Record<string, string> = {
@@ -134,6 +148,14 @@ const SHOP_PRICES: Record<string, number> = {
   espetinho: 12,
   chinelos: 80,
   prego: 10,
+  // v0.9.9 — Lã de Aço 1001 Utilidades
+  palha_aco: 8,
+  // v0.9.9 — Conserta-Tudo do Primo
+  lanterna_forte: 120,
+  repelente: 18,
+  // Painel diegético (Fase 3)
+  fusivel: 12,
+  galao: 45,
   // v0.9.7 — Auto Center Dois Mil
   car_gou: 2000,
   car_fusca: 2000,
@@ -1722,11 +1744,12 @@ export class GameRoom extends DurableObject<Env> {
     // Só os entregadores contam para o tamanho do turno (os outros têm as tarefas da profissão).
     const count = Math.min(6, 2 + Math.max(1, this.entregadores()));
     const random = crypto.getRandomValues(new Uint32Array(count * 2));
+    const pool = cargoPool(room.level ?? "city");
 
     for (const job of room.jobs) delete room.owners[job.id];
     room.jobs = Array.from({ length: count }, (_, i) => ({
       id: `c${room.shift}_${i}`,
-      type: random[i * 2] % CARGO_CATALOG.length,
+      type: pool[random[i * 2] % pool.length],
       pick: random[i * 2 + 1] % 100000,
       slot: i,
       status: "pending" as JobStatus,

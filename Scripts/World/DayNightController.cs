@@ -26,6 +26,8 @@ public partial class DayNightController : Node
 
     private double _soloHours;
     private float _lastNight = -1f;
+    private int _lastMode = -1;
+    private float _lastAppliedHour = -1f;
 
     // Paletas: dia, pôr do sol e noite.
     private static readonly Color DayTop = new(0.2f, 0.4f, 0.72f), DayHorizon = new(0.68f, 0.74f, 0.8f);
@@ -89,7 +91,9 @@ public partial class DayNightController : Node
             Sun.ShadowEnabled = s.Quality > 0;
             Sun.DirectionalShadowMaxDistance = s.Quality >= 2 ? 120f : 60f;
         }
-        RenderingServer.DirectionalShadowAtlasSetSize(s.Quality >= 2 ? 4096 : 2048, true);
+        // Atlas menor no preset Baixo reduz o uso de memória da GPU.
+        int shadowAtlasSize = s.Quality >= 2 ? 4096 : s.Quality == 1 ? 2048 : 1024;
+        RenderingServer.DirectionalShadowAtlasSetSize(shadowAtlasSize, true);
     }
 
     public override void _Ready()
@@ -128,6 +132,13 @@ public partial class DayNightController : Node
         }
 
         Hour = (float)Mathf.PosMod(totalHours, 24.0);
+
+        // Em horário fixo, céu, iluminação e materiais não precisam ser recalculados a cada frame.
+        if (mode != 0 && mode == _lastMode && Mathf.IsEqualApprox(Hour, _lastAppliedHour))
+            return;
+
+        _lastMode = mode;
+        _lastAppliedHour = Hour;
         Apply(Hour);
     }
 
@@ -189,7 +200,8 @@ public partial class DayNightController : Node
                 Sun.LightColor = new Color(0.55f, 0.65f, 1f);
                 Sun.LightEnergy = Mathf.Lerp(0.05f, 0.35f, moonStrength);
             }
-            Sun.DirectionalShadowMaxDistance = night > 0.5f ? 80f : 120f;
+            int quality = GameSettings.Instance?.Quality ?? 2;
+            Sun.DirectionalShadowMaxDistance = quality <= 0 ? 0f : quality == 1 ? 60f : night > 0.5f ? 80f : 120f;
         }
 
         Environment env = World?.Environment;
@@ -207,12 +219,28 @@ public partial class DayNightController : Node
             }
             else if (env.Sky?.SkyMaterial is ShaderMaterial skyShader)
             {
-                skyShader.SetShaderParameter("day_night_mix", 1f - night * 2f);
+                // Céu procedural (v0.9.9, Shaders/Sky/procedural_sky.gdshader): mesmas cores do resto do ciclo.
+                Color ground = new Color(0.22f, 0.22f, 0.22f).Lerp(new Color(0.02f, 0.022f, 0.026f), night);
+                skyShader.SetShaderParameter("zenith_color", top);
+                skyShader.SetShaderParameter("horizon_color", horizon);
+                skyShader.SetShaderParameter("ground_color", ground);
+                Color cloudLight = new Color(0.96f, 0.96f, 0.98f).Lerp(new Color(1f, 0.7f, 0.5f), dusk * 0.7f).Lerp(new Color(0.3f, 0.32f, 0.36f), night);
+                Color cloudDark = new Color(0.58f, 0.62f, 0.7f).Lerp(new Color(0.45f, 0.3f, 0.35f), dusk * 0.6f).Lerp(new Color(0.045f, 0.05f, 0.06f), night);
+                skyShader.SetShaderParameter("cloud_light_color", cloudLight);
+                skyShader.SetShaderParameter("cloud_dark_color", cloudDark);
+                skyShader.SetShaderParameter("star_brightness", 0.6f * night);
+                skyShader.SetShaderParameter("moon_direction", toMoon);
+                skyShader.SetShaderParameter("moon_brightness", 1.1f * Mathf.Clamp(toMoon.Y / 0.1f, 0f, 1f) * Mathf.Max(night, 0.15f));
+                skyShader.SetShaderParameter("sun_direction", toSun);
+                skyShader.SetShaderParameter("sun_strength", Mathf.Clamp((sunHeight + 0.05f) / 0.15f, 0f, 1f));
+                skyShader.SetShaderParameter("sun_color", new Color(1f, 0.92f, 0.75f).Lerp(new Color(1f, 0.55f, 0.25f), dusk));
+                skyShader.SetShaderParameter("day_night_mix", 1f - night * 2f); // céu antigo (main.gdshader)
             }
             env.AmbientLightColor = new Color(0.62f, 0.66f, 0.74f).Lerp(new Color(0.17f, 0.18f, 0.24f), night).Lerp(new Color(0.6f, 0.45f, 0.4f), dusk * 0.4f);
             env.AmbientLightEnergy = Mathf.Lerp(0.75f, 0.9f, night);
             env.FogLightColor = horizon.Lerp(new Color(0.05f, 0.06f, 0.08f), night * 0.6f);
-            env.FogDensity = Mathf.Lerp(0.004f, 0.016f, night);
+            // Celular: neblina mais perto esconde o que a câmera não desenha (Far menor) e fica mais leve.
+            env.FogDensity = Mathf.Lerp(0.004f, 0.016f, night) * (GameSettings.IsMobile ? 2.2f : 1f);
             env.GlowIntensity = Mathf.Lerp(0.25f, 0.7f, night);
         }
 

@@ -293,7 +293,7 @@ assert(restart.shift === 1 && restart.money === 0, "sala recomeça no turno 1 de
   v2.send({ t: "claim", id: "aviao" });
   await sleep(200);
   assert(v2.find("claimFail")?.id === "moto", "não toma a moto de quem está pilotando");
-  assert(v1.all("owner").some((m) => m.id === "truck_red"), "caminhão emprestado");
+  assert(await waitFor(v1, "owner", (m) => m.id === "truck_red"), "caminhão emprestado");
   assert(!v1.all("owner").some((m) => m.id === "aviao"), "veículo desconhecido ignorado");
   v1.send({ t: "release", id: "moto" });
   await sleep(150);

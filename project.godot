@@ -12,15 +12,11 @@ config_version=5
 
 config/name="Dead Frequency Internal-Pre Alpha"
 config/description="Simulador de entrega e sobrevivência em 1ª pessoa — van anos 90, física tátil, UI diegética."
+config/tags=PackedStringArray("pre_release")
 run/main_scene="res://Scenes/UI/splash_screen.tscn"
 config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 config/icon="res://icon.png"
 config/windows_native_icon="res://icon.ico"
-config/tags=PackedStringArray("pre_release")
-
-[audio]
-
-buses/default_bus_layout="res://default_bus_layout.tres"
 
 [autoload]
 
@@ -28,6 +24,7 @@ GameSettings="*res://Scripts/Core/GameSettings.cs"
 AudioManager="*res://Scripts/Audio/AudioManager.cs"
 NetClient="*res://Scripts/Net/NetClient.cs"
 PlayerInventory="*res://Scripts/Items/PlayerInventory.cs"
+TouchControls="*res://Scripts/UI/TouchControls.cs"
 
 [display]
 
@@ -35,6 +32,7 @@ window/size/viewport_width=1280
 window/size/viewport_height=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+window/handheld/orientation=4
 
 [dotnet]
 
@@ -147,3 +145,15 @@ radio_next={
 3d_physics/layer_3="Interactables"
 3d_physics/layer_4="Cargo"
 3d_physics/layer_5="Vehicle"
+
+[rendering]
+
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
+
+[shader_globals]
+
+ps1_jitter={
+"type": "float",
+"value": 0.0
+}

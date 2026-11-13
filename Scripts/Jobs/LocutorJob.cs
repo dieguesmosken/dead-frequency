@@ -31,6 +31,8 @@ public partial class LocutorJob : JobBase
     private OmniLight3D _light;
     private Label3D _sign;
     private AudioStreamPlayer3D _jingle;
+    private Node3D _marker;
+    private bool _hasRadioPin;
 
     public override void _Ready()
     {
@@ -39,6 +41,7 @@ public partial class LocutorJob : JobBase
             GameHud.Toast(this, "Esta fase não tem estação de rádio.", UiStyle.Warning);
             return;
         }
+        _hasRadioPin = City.PinChunkForPosition(City.RadioConsolePoint);
         _console = new Node3D { Name = "MesaLocutor" };
         AddChild(_console);
         _console.GlobalPosition = City.RadioConsolePoint;
@@ -63,8 +66,16 @@ public partial class LocutorJob : JobBase
             _ => _phase == Phase.OnAir ? $"[E] LER NO AR: \"{_ad}\"" : $"Próximo intervalo comercial em {_timer:0} s",
             _ => Read(),
             _ => _phase == Phase.OnAir);
-        var marker = JobMarkers.Create(this, City.RadioConsolePoint + new Vector3(0f, 0f, 2.5f), Purple, "", 0f, 0.5f);
-        marker.Visible = true;
+        _marker = JobMarkers.Create(this, City.RadioConsolePoint + new Vector3(0f, 0f, 2.5f), Purple, "", 0f, 0.5f);
+        _marker.Visible = true;
+    }
+
+    public override void _ExitTree()
+    {
+        if (_hasRadioPin)
+            City?.UnpinChunkForPosition(City.RadioConsolePoint);
+        _hasRadioPin = false;
+        JobMarkers.Free(ref _marker);
     }
 
     public override void _Process(double delta)

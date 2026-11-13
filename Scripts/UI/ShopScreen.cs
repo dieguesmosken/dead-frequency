@@ -6,7 +6,7 @@ using Godot;
 namespace DeadFrequency;
 
 /// <summary>O que cada vendedor tem (v0.9.7): cada item só aparece em quem vende ele.</summary>
-public enum ShopStock { Ze, Churrasco, Market, Dealer }
+public enum ShopStock { Ze, Churrasco, Market, Dealer, Utilidades, ConsertaTudo, AgroTudao, Posto }
 
 public partial class ShopScreen : ModalScreen
 {
@@ -24,7 +24,15 @@ public partial class ShopScreen : ModalScreen
         ShopStock.Dealer => false,
         ShopStock.Churrasco => def.Id is ItemCatalog.Skewer or ItemCatalog.Guarana,
         ShopStock.Market => TabOf(def) == Tab.Food && def.Id != ItemCatalog.Skewer || def.Id is ItemCatalog.DuctTape or ItemCatalog.Nail,
-        _ => TabOf(def) != Tab.Food || def.Id == ItemCatalog.Guarana,
+        // Lã de Aço 1001 Utilidades (v0.9.9): só miudeza de casa e de conserto.
+        ShopStock.Utilidades => def.Id is ItemCatalog.SteelWool or ItemCatalog.DuctTape or ItemCatalog.Nail or ItemCatalog.Fuse,
+        // Posto (Fase 3): galão de gasolina, fusível e o cafezinho da conveniência.
+        ShopStock.Posto => def.Id is ItemCatalog.JerryCan or ItemCatalog.Fuse or ItemCatalog.Coffee or ItemCatalog.Guarana or ItemCatalog.EnergyDrink,
+        // Conserta-Tudo do Primo (v0.9.9): a lanterna forte e o básico de conserto.
+        ShopStock.ConsertaTudo => def.Id is ItemCatalog.StrongFlashlight or ItemCatalog.RepairKit or ItemCatalog.DuctTape or ItemCatalog.Nail or ItemCatalog.Fuse,
+        // Agro-Tudão (v0.9.9): repelente, luva e o básico de conserto da roça.
+        ShopStock.AgroTudao => def.Id is ItemCatalog.Repellent or ItemCatalog.Gloves or ItemCatalog.RepairKit or ItemCatalog.DuctTape or ItemCatalog.Nail or ItemCatalog.Fuse or ItemCatalog.JerryCan,
+        _ => def.Id is not (ItemCatalog.SteelWool or ItemCatalog.StrongFlashlight or ItemCatalog.Repellent or ItemCatalog.JerryCan) && (TabOf(def) != Tab.Food || def.Id == ItemCatalog.Guarana),
     };
 
     private ShopStock _stock;
@@ -96,12 +104,15 @@ public partial class ShopScreen : ModalScreen
     {
         _stock = stock;
         _salePending = false;
-        _tab = stock switch { ShopStock.Ze => Tab.Gear, ShopStock.Dealer => Tab.Cars, _ => Tab.Food };
+        _tab = stock switch { ShopStock.Ze => Tab.Gear, ShopStock.Dealer => Tab.Cars, ShopStock.Utilidades or ShopStock.ConsertaTudo or ShopStock.AgroTudao => Tab.Repair, _ => Tab.Food };
         _title.Text = vendorName.ToUpperInvariant();
         _tagline.Text = stock switch
         {
             ShopStock.Churrasco => "\"Procedência? Confia.\"",
             ShopStock.Market => "\"Leve 3, pague 3.\"",
+            ShopStock.Utilidades => "\"Tem de tudo. Se não tiver, tem palha de aço.\"",
+            ShopStock.ConsertaTudo => "\"Se não tem conserto, o Primo dá um jeito.\"",
+            ShopStock.AgroTudao => "\"Do pintinho ao trator: tem no Agro-Tudão.\"",
             ShopStock.Dealer => Online ? "\"Carro comprado com o dinheiro do grupo é da sala toda.\"" : "\"Dono único, só ia na missa.\"",
             _ => "\"Tudo testado, tudo funcionando. Quase tudo.\"",
         };

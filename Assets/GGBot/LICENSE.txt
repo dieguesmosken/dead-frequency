@@ -1,0 +1,6 @@
+PSX Style Cars — GGBot (GGBotNet), https://ggbot.itch.io/psx-style-cars
+Licença: CC0 1.0 Universal (domínio público). Crédito não é obrigatório, mas fica registrado aqui.
+
+Usado no jogo: Car 05 / Car5_Taxi (táxi da cooperativa, v0.9.9).
+Alteração: car5_taxi.png com o logo e o letreiro originais das portas apagados
+(o nome fictício da cooperativa é aplicado por cima, em código).

@@ -5,7 +5,10 @@
 //
 // Layout: quarteirões centrados em múltiplos de Period (BlockSize + RoadWidth).
 // As ruas ficam entre eles, centradas em k*Period + Period/2. O quarteirão (0,0) é o depósito.
+using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
+using System.Threading.Tasks;
 using Godot;
 
 namespace DeadFrequency;
@@ -36,6 +39,17 @@ public partial class CityGenerator : Node3D
     public float Period => BlockSize + RoadWidth;
     public bool IsDay { get; private set; }
     public IReadOnlyList<DeliveryPoint> DeliveryPoints => _deliveryPoints;
+
+    /// <summary>Plano lógico calculado antes da criação de qualquer geometria do mundo.</summary>
+    public WorldGenerationData WorldData { get; private set; }
+    public int ChunkPinVersion { get; private set; }
+    public bool UsesLogicalWorldData => _useLogicalWorldData;
+    public bool UsesChunkStreaming => _useLogicalBlockPlans && (Biome == WorldBiome.City || Biome == WorldBiome.Farm);
+    public int StoreBrandCount => _brands.Count;
+    public event Action<WorldGenerationProgress> WorldDataProgress;
+    public event Action WorldDataReady;
+    public event Action<WorldChunkCoordinate> ChunkVisualized;
+    public event Action<WorldChunkCoordinate> ChunkUnloaded;
 
     private static readonly string[] StreetNamesX =
         { "Rua das Antenas", "Rua Estática", "Rua do Chiado", "Rua Ruído Branco", "Rua da Interferência", "Rua Onda Curta", "Rua do Sintonizador", "Rua Válvula", "Rua do Eco" };
@@ -83,58 +97,825 @@ public partial class CityGenerator : Node3D
 
     private Node3D _staticRoot;
     private Node3D _lightsRoot;
+    private bool _useLogicalWorldData;
+    private bool _useLogicalServiceData;
+    private bool _useLogicalBlockPlans;
+    private Vector3 _initialChunkPosition;
+    private bool _hasInitialChunkPosition;
+    private Node3D _activeChunkRoot;
+    private WorldChunkCoordinate? _activeChunkCoordinate;
+    private readonly Dictionary<WorldChunkCoordinate, Node3D> _chunkRoots = new();
+    private readonly Dictionary<WorldChunkCoordinate, Node3D> _chunkLightRoots = new();
+    private readonly Dictionary<WorldChunkCoordinate, List<Vector3>> _chunkObstaclePositions = new();
+    private readonly Dictionary<WorldChunkCoordinate, int> _pinnedChunkCounts = new();
+    private WorldChunkManager _chunkManager;
 
-    public override void _Ready()
+    private sealed class ChunkBuildRandomState
     {
-        HomeGuide.Clear(); // a casa só existe na cidade (o prédio registra de novo)
-        // No multiplayer todos usam a seed da sala, então a cidade (e os endereços) são iguais para todos.
-        if (NetClient.Instance?.IsOnline == true)
-            Seed = NetClient.Instance.Seed;
-        _rng = new RandomNumberGenerator { Seed = (ulong)Seed };
-        // Detalhes (lojas, ar-condicionados, orelhões) usam outro gerador para não mudar o resto da cidade.
-        _decoRng = new RandomNumberGenerator { Seed = (ulong)Seed * 7919UL + 13UL };
-        BuildResources();
-        BuildLandmarkResources();
+        public RandomNumberGenerator Visual;
+        public RandomNumberGenerator Decoration;
+    }
 
-        _staticRoot = new Node3D { Name = "Static" };
-        _lightsRoot = new Node3D { Name = "Lights" };
-        AddChild(_staticRoot);
-        AddChild(_lightsRoot);
+    private Node3D ActiveLightsRoot
+    {
+        get
+        {
+            if (!_activeChunkCoordinate.HasValue)
+                return _lightsRoot;
+
+            WorldChunkCoordinate coordinate = _activeChunkCoordinate.Value;
+            if (!_chunkLightRoots.TryGetValue(coordinate, out Node3D root) || !GodotObject.IsInstanceValid(root))
+            {
+                root = new Node3D { Name = $"ChunkLights_{coordinate.X}_{coordinate.Z}" };
+                _lightsRoot.AddChild(root);
+                _chunkLightRoots[coordinate] = root;
+            }
+            return root;
+        }
+    }
+
+    public bool IsChunkVisualized(WorldChunkCoordinate coordinate) =>
+        _chunkRoots.TryGetValue(coordinate, out Node3D root)
+        && GodotObject.IsInstanceValid(root)
+        && !root.IsQueuedForDeletion();
+
+    public IReadOnlyList<WorldChunkCoordinate> GetLoadedChunkCoordinates() =>
+        new List<WorldChunkCoordinate>(_chunkRoots.Keys);
+
+    /// <summary>Impede o descarregamento do chunk que contém uma missão/objeto ativo.</summary>
+    public bool PinChunkForPosition(Vector3 position)
+    {
+        if (!UsesChunkStreaming || WorldData == null)
+            return false;
+
+        WorldChunkCoordinate coordinate = WorldData.GetChunkCoordinate(position);
+        if (!WorldData.TryGetChunk(coordinate, out _))
+            return false;
+
+        _pinnedChunkCounts.TryGetValue(coordinate, out int count);
+        if (count == 0)
+            ChunkPinVersion++;
+        _pinnedChunkCounts[coordinate] = count + 1;
+        return true;
+    }
+
+    /// <summary>Libera uma reserva feita por PinChunkForPosition.</summary>
+    public void UnpinChunkForPosition(Vector3 position)
+    {
+        if (!UsesChunkStreaming || WorldData == null)
+            return;
+
+        WorldChunkCoordinate coordinate = WorldData.GetChunkCoordinate(position);
+        if (!_pinnedChunkCounts.TryGetValue(coordinate, out int count))
+            return;
+
+        if (count <= 1)
+        {
+            _pinnedChunkCounts.Remove(coordinate);
+            ChunkPinVersion++;
+        }
+        else
+        {
+            _pinnedChunkCounts[coordinate] = count - 1;
+        }
+    }
+
+    public bool IsChunkPinned(WorldChunkCoordinate coordinate) =>
+        _pinnedChunkCounts.TryGetValue(coordinate, out int count) && count > 0;
+
+    public IReadOnlyList<WorldChunkCoordinate> GetPinnedChunkCoordinates() =>
+        new List<WorldChunkCoordinate>(_pinnedChunkCounts.Keys);
+
+    /// <summary>Cria a geometria de um único chunk na thread principal.</summary>
+    public bool BuildChunkVisuals(WorldChunkData chunk)
+    {
+        if (!_useLogicalBlockPlans || IsChunkVisualized(chunk.Coordinate))
+            return false;
 
         if (Biome == WorldBiome.Farm)
+            return BuildFarmChunkVisuals(chunk);
+        if (Biome != WorldBiome.City)
+            return false;
+
+        var root = new Node3D { Name = $"Chunk_{chunk.Coordinate.X}_{chunk.Coordinate.Z}" };
+        _staticRoot.AddChild(root);
+        _chunkRoots[chunk.Coordinate] = root;
+
+        if (!WorldData.TryGetBlock(chunk.Coordinate, out WorldBlockData plan))
         {
-            BuildFarm();
+            root.QueueFree();
+            _chunkRoots.Remove(chunk.Coordinate);
+            return false;
+        }
+
+        Node3D previousRoot = _activeChunkRoot;
+        WorldChunkCoordinate? previousCoordinate = _activeChunkCoordinate;
+        RandomNumberGenerator previousRng = _rng;
+        RandomNumberGenerator previousDecoRng = _decoRng;
+        _activeChunkRoot = root;
+        _activeChunkCoordinate = chunk.Coordinate;
+        _rng = new RandomNumberGenerator { Seed = plan.VisualSeed };
+        _decoRng = new RandomNumberGenerator { Seed = plan.DecorationSeed };
+
+        try
+        {
+            if (plan.Kind == WorldBlockKind.Depot)
+                BuildDepot(parent: root);
+            else
+                BuildBlockCore(chunk.Coordinate.X, chunk.Coordinate.Z, plan.Kind, plan);
+
+            BuildChunkDecorations(chunk.Coordinate);
+            OptimizeVisibility(root);
+            if (_chunkLightRoots.TryGetValue(chunk.Coordinate, out Node3D chunkLights) &&
+                GodotObject.IsInstanceValid(chunkLights))
+                OptimizeVisibility(chunkLights);
+            ChunkVisualized?.Invoke(chunk.Coordinate);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            GD.PushError($"Falha ao construir chunk {chunk.Coordinate.X},{chunk.Coordinate.Z}: {ex}");
+            // Usa a rotina normal de descarregamento para também limpar obstáculos e referências
+            // auxiliares criadas antes da falha; os dados lógicos permanecem intactos.
+            UnloadChunkVisuals(chunk.Coordinate);
+            return false;
+        }
+        finally
+        {
+            _activeChunkRoot = previousRoot;
+            _activeChunkCoordinate = previousCoordinate;
+            _rng = previousRng;
+            _decoRng = previousDecoRng;
+        }
+    }
+
+
+    /// <summary>
+    /// Constrói um chunk de cidade em etapas distribuídas entre frames.
+    /// O gerador síncrono continua disponível para a região inicial, durante a tela de loading.
+    /// </summary>
+    public async Task<bool> BuildChunkVisualsAsync(WorldChunkData chunk)
+    {
+        if (!_useLogicalBlockPlans || WorldData == null || IsChunkVisualized(chunk.Coordinate))
+            return false;
+
+        if (Biome == WorldBiome.Farm)
+            return BuildFarmChunkVisuals(chunk);
+        if (Biome != WorldBiome.City)
+            return false;
+
+        var root = new Node3D { Name = $"Chunk_{chunk.Coordinate.X}_{chunk.Coordinate.Z}" };
+        _staticRoot.AddChild(root);
+        _chunkRoots[chunk.Coordinate] = root;
+
+        if (!WorldData.TryGetBlock(chunk.Coordinate, out WorldBlockData plan))
+        {
+            root.QueueFree();
+            _chunkRoots.Remove(chunk.Coordinate);
+            return false;
+        }
+
+        var chunkRandom = new ChunkBuildRandomState
+        {
+            Visual = new RandomNumberGenerator { Seed = plan.VisualSeed },
+            Decoration = new RandomNumberGenerator { Seed = plan.DecorationSeed },
+        };
+
+        try
+        {
+            if (plan.Kind == WorldBlockKind.Buildings)
+            {
+                // A base e o ponto lógico são leves; cada prédio é criado em seu próprio frame.
+                Node3D blockRoot = null;
+                await RunChunkVisualStepAsync(
+                    chunk.Coordinate, root, chunkRandom,
+                    () =>
+                    {
+                        int bx = chunk.Coordinate.X;
+                        int bz = chunk.Coordinate.Z;
+                        Vector3 center = BlockCenter(bx, bz);
+                        blockRoot = new Node3D { Name = $"Block_{bx}_{bz}" };
+                        root.AddChild(blockRoot);
+                        AddBox(
+                            blockRoot,
+                            center + new Vector3(0f, CurbHeight * 0.5f, 0f),
+                            new Vector3(BlockSize, CurbHeight, BlockSize),
+                            _sidewalkMaterial);
+                        RegisterDeliveryPoint(bx, bz);
+                    });
+
+                foreach (WorldBuildingPlan building in plan.Buildings)
+                {
+                    var buildingRandom = new ChunkBuildRandomState
+                    {
+                        Visual = new RandomNumberGenerator { Seed = building.VisualSeed },
+                        Decoration = new RandomNumberGenerator { Seed = building.DecorationSeed },
+                    };
+                    await RunChunkVisualStepAsync(
+                        chunk.Coordinate, root, buildingRandom,
+                        () =>
+                        {
+                            if (blockRoot == null || !GodotObject.IsInstanceValid(blockRoot))
+                                return;
+
+                            Vector3 center = BlockCenter(chunk.Coordinate.X, chunk.Coordinate.Z);
+                            BuildBuilding(
+                                blockRoot,
+                                building.BaseCenter,
+                                building.Width,
+                                building.Depth,
+                                building.Height,
+                                building.HasStorefront);
+                            DecorateBuilding(
+                                blockRoot,
+                                building.BaseCenter,
+                                building.Width,
+                                building.Depth,
+                                building.Height,
+                                center,
+                                building.Front,
+                                building.HasStorefront,
+                                building.StoreBrandIndex);
+                        });
+                }
+            }
+            else
+            {
+                await RunChunkVisualStepAsync(
+                    chunk.Coordinate, root, chunkRandom,
+                    () =>
+                    {
+                        if (plan.Kind == WorldBlockKind.Depot)
+                            BuildDepot(parent: root);
+                        else
+                            BuildBlockCore(chunk.Coordinate.X, chunk.Coordinate.Z, plan.Kind, plan);
+                    });
+            }
+
+            int x = chunk.Coordinate.X;
+            int z = chunk.Coordinate.Z;
+            await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildStreetLampForBlock(x, z));
+            await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildBikeLanesForBlock(x, z));
+            await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildStreetDrainageForBlock(x, z));
+            await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildParkedCarsForBlock(x, z));
+            await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildStreetSignsForBlock(x, z));
+            await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildPhoneBoothsForBlock(x, z));
+            await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildHydrantsForBlock(x, z));
+            await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildStreetPropsForBlock(x, z));
+            await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildStrayDogsForBlock(x, z));
+            await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildNoParkingSignsForBlock(x, z));
+            await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildCurbMarkingsForBlock(x, z));
+
+            OptimizeVisibility(root);
+            if (_chunkLightRoots.TryGetValue(chunk.Coordinate, out Node3D chunkLights) &&
+                GodotObject.IsInstanceValid(chunkLights))
+                OptimizeVisibility(chunkLights);
+
+            ChunkVisualized?.Invoke(chunk.Coordinate);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            GD.PushError($"Falha ao construir chunk {chunk.Coordinate.X},{chunk.Coordinate.Z} em etapas: {ex}");
+            UnloadChunkVisuals(chunk.Coordinate);
+            return false;
+        }
+    }
+
+    private async Task RunChunkVisualStepAsync(
+        WorldChunkCoordinate coordinate,
+        Node3D root,
+        ChunkBuildRandomState randomState,
+        Action action)
+    {
+        Node3D previousRoot = _activeChunkRoot;
+        WorldChunkCoordinate? previousCoordinate = _activeChunkCoordinate;
+        RandomNumberGenerator previousRng = _rng;
+        RandomNumberGenerator previousDecoRng = _decoRng;
+
+        try
+        {
+            _activeChunkRoot = root;
+            _activeChunkCoordinate = coordinate;
+            _rng = randomState.Visual;
+            _decoRng = randomState.Decoration;
+            action();
+            randomState.Visual = _rng;
+            randomState.Decoration = _decoRng;
+        }
+        finally
+        {
+            _activeChunkRoot = previousRoot;
+            _activeChunkCoordinate = previousCoordinate;
+            _rng = previousRng;
+            _decoRng = previousDecoRng;
+        }
+
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+    }
+
+    private void BuildChunkDecorations(WorldChunkCoordinate coordinate)
+    {
+        int bx = coordinate.X;
+        int bz = coordinate.Z;
+        BuildStreetLampForBlock(bx, bz);
+        BuildBikeLanesForBlock(bx, bz);
+        BuildStreetDrainageForBlock(bx, bz);
+        BuildParkedCarsForBlock(bx, bz);
+        BuildStreetSignsForBlock(bx, bz);
+        BuildPhoneBoothsForBlock(bx, bz);
+        BuildHydrantsForBlock(bx, bz);
+        BuildStreetPropsForBlock(bx, bz);
+        BuildStrayDogsForBlock(bx, bz);
+        BuildNoParkingSignsForBlock(bx, bz);
+        BuildCurbMarkingsForBlock(bx, bz);
+    }
+
+    /// <summary>Descarta apenas a geometria do chunk; os dados lógicos permanecem na memória.</summary>
+    public void UnloadChunkVisuals(WorldChunkCoordinate coordinate)
+    {
+        ChunkUnloaded?.Invoke(coordinate);
+        Node3D unloadedRoot = null;
+        if (_chunkRoots.TryGetValue(coordinate, out Node3D root))
+        {
+            unloadedRoot = root;
+            _chunkRoots.Remove(coordinate);
+            if (GodotObject.IsInstanceValid(root))
+                root.QueueFree();
+        }
+
+        if (_chunkLightRoots.TryGetValue(coordinate, out Node3D lights))
+        {
+            _chunkLightRoots.Remove(coordinate);
+            if (GodotObject.IsInstanceValid(lights))
+                lights.QueueFree();
+        }
+
+        // Remove referências auxiliares pela propriedade do chunk, não pela posição do objeto:
+        // sinais e obstáculos podem ficar sobre a divisa entre dois chunks.
+        if (_chunkObstaclePositions.Remove(coordinate, out List<Vector3> obstacles))
+        {
+            foreach (Vector3 position in obstacles)
+                SidewalkObstacles.Remove(position);
+        }
+        if (!_useLogicalBlockPlans)
+            _noParking.RemoveAll(entry => entry.owner == coordinate);
+        if (unloadedRoot != null && GodotObject.IsInstanceValid(unloadedRoot))
+        {
+            _parkedCars.RemoveAll(car =>
+                !GodotObject.IsInstanceValid(car) || IsOwnedByRoot(car, unloadedRoot));
+        }
+        else
+        {
+            _parkedCars.RemoveAll(car => !GodotObject.IsInstanceValid(car));
+        }
+    }
+
+    private static bool IsOwnedByRoot(Node node, Node root)
+    {
+        Node current = node;
+        while (current != null)
+        {
+            if (current == root)
+                return true;
+            current = current.GetParent();
+        }
+        return false;
+    }
+
+    private void PrepareLogicalNoParkingZones()
+    {
+        _noParking.Clear();
+        foreach (WorldNoParkingZoneData zone in WorldData.Services.NoParkingZones)
+            _noParking.Add((zone.Center, zone.Direction, zone.HalfLength, zone.Owner));
+    }
+
+    private bool IsCityBlockInRange(Vector2I block) =>
+        block.X >= -Radius && block.X <= Radius &&
+        block.Y >= -Radius && block.Y <= Radius;
+
+    private void AddPreparedNoParkingZone(Vector3 center, float halfLength, WorldChunkCoordinate owner)
+    {
+        _noParking.Add((center, Vector3.Right, halfLength, owner));
+    }
+
+    private string GetInitialProfessionForWorld()
+    {
+        string wanted = Professions.Current;
+        if (NetClient.Instance?.IsOnline != true)
+        {
+            SaveData save = SaveManager.Load();
+            if (save != null && !string.IsNullOrEmpty(save.Profession) &&
+                GameSettings.Instance?.Profession == save.Profession)
+                wanted = save.Profession;
+        }
+        return wanted;
+    }
+
+    public override void _Ready() => InitializeWorldAsync();
+
+    private async void InitializeWorldAsync()
+    {
+        HomeGuide.Clear();
+        if (NetClient.Instance?.IsOnline == true)
+        {
+            Seed = NetClient.Instance.Seed;
+        }
+        else if (SaveManager.Load() is SaveData savedWorld &&
+                 string.Equals(savedWorld.Level, Biome.ToString().ToLowerInvariant(), StringComparison.Ordinal))
+        {
+            Seed = savedWorld.WorldSeed;
+        }
+
+        _useLogicalWorldData = NetClient.Instance?.IsOnline != true
+            || NetClient.Instance.ActiveProtocolVersion >= NetClient.PreferredProtocolVersion;
+        _useLogicalServiceData = Biome == WorldBiome.City;
+        _useLogicalBlockPlans = _useLogicalWorldData;
+
+        int gridWidth = Radius * 2 + 1;
+        int farmChunkWidth = Mathf.CeilToInt(FarmExtent / WorldDataGenerator.FarmChunkSize) * 2;
+        int logicalChunkCount = Biome == WorldBiome.City
+            ? gridWidth * gridWidth
+            : farmChunkWidth * farmChunkWidth;
+        int logicalBlockCount = Biome == WorldBiome.City ? logicalChunkCount : 0;
+        int logicalFarmSiteCount = Biome == WorldBiome.Farm ? 1 : 0;
+        int logicalFarmVegetationCount = Biome == WorldBiome.Farm ? 1 : 0;
+        int logicalNoParkingCount = Biome == WorldBiome.City ? 1 : 0;
+        int logicalRoadCarCount = Biome == WorldBiome.City ? 1 : 0;
+        int logicalServiceCount = Biome == WorldBiome.City ? logicalChunkCount - 1 : 0;
+        int logicalDeliveryCount = Biome == WorldBiome.City && _useLogicalWorldData ? logicalChunkCount - 1 : 0;
+        int logicalTotal = Mathf.Max(1,
+            logicalChunkCount + logicalBlockCount + logicalFarmSiteCount + logicalFarmVegetationCount +
+            logicalNoParkingCount + logicalRoadCarCount + logicalServiceCount + logicalDeliveryCount + 1);
+
+        var logicalOffsets = new Dictionary<string, int>();
+        if (Biome == WorldBiome.City)
+        {
+            logicalOffsets["Indexando chunks da cidade"] = 0;
+            logicalOffsets["Planejando quarteirões e prédios"] = logicalChunkCount;
+            logicalOffsets["Calculando regras de estacionamento"] =
+                logicalChunkCount + logicalBlockCount;
+            logicalOffsets["Calculando veículos estacionados"] =
+                logicalChunkCount + logicalBlockCount + logicalNoParkingCount;
+            logicalOffsets["Calculando locais de serviço"] =
+                logicalChunkCount + logicalBlockCount + logicalNoParkingCount + logicalRoadCarCount;
+            logicalOffsets["Calculando endereços e entregas"] =
+                logicalChunkCount + logicalBlockCount + logicalNoParkingCount +
+                logicalRoadCarCount + logicalServiceCount;
+            logicalOffsets["Preparando pontos de início"] =
+                logicalChunkCount + logicalBlockCount + logicalNoParkingCount +
+                logicalRoadCarCount + logicalServiceCount + logicalDeliveryCount;
+        }
+        else
+        {
+            logicalOffsets["Indexando chunks do rancho"] = 0;
+            logicalOffsets["Calculando sítios e destinos do rancho"] = logicalChunkCount;
+            logicalOffsets["Planejando árvores e vegetação do rancho"] =
+                logicalChunkCount + logicalFarmSiteCount;
+            logicalOffsets["Preparando pontos de início"] =
+                logicalChunkCount + logicalFarmSiteCount + logicalFarmVegetationCount;
+        }
+
+        WorldLoadingScreen loading = null;
+        if (_useLogicalBlockPlans)
+        {
+            loading = new WorldLoadingScreen { Name = "WorldLoading" };
+            AddChild(loading);
+            loading.SetProgress("Calculando os dados lógicos do mundo...", 0, 1, 0f);
+        }
+
+        // Captura parâmetros simples na thread principal. A worker thread não acessa Nodes,
+        // recursos ou propriedades do motor; só calcula structs e coleções gerenciadas.
+        int generationSeed = Seed;
+        WorldBiome generationBiome = Biome;
+        int generationRadius = Radius;
+        float generationBlockSize = BlockSize;
+        float generationSidewalkWidth = SidewalkWidth;
+        float generationRoadWidth = RoadWidth;
+        float generationFarmExtent = FarmExtent;
+        float generationCurbHeight = CurbHeight;
+        Vector2I generationMarketBlock = MarketBlock;
+        Vector2I generationRadioBlock = RadioStationBlock;
+        Vector2I generationFireBlock = FireStationBlock;
+        Vector2I generationPoliceBlock = PoliceStationBlock;
+        Vector2I generationMallBlock = ShoppingMallBlock;
+        Vector2I generationApartmentBlock = ApartmentBlock;
+        Vector2I generationDealerBlock = DealerBlock;
+        Vector2I generationWaterTowerBlock = WaterTowerBlock;
+        Vector2I generationCarWashBlock = CarWashBlock;
+        float generationParkChance = ParkChance;
+        float generationParkingChance = ParkingLotChance;
+        IReadOnlyList<(Vector2I Block, string Id)> generationGasStations = GasStations;
+        int generationStoreBrandCount = StoreBrandCount;
+        float generationStorefrontChance = StorefrontChance;
+        float generationParkedCarChance = ParkedCarChance;
+        IReadOnlyList<string> generationFarmNames = FarmNameCatalog;
+        bool prepareLogicalCityData = _useLogicalWorldData;
+
+        WorldGenerationData GenerateWorldData(Action<WorldGenerationProgress> progress) =>
+            WorldDataGenerator.Generate(
+                generationSeed, generationBiome, generationRadius,
+                generationBlockSize, generationSidewalkWidth, generationRoadWidth,
+                generationFarmExtent, generationCurbHeight,
+                generationMarketBlock, generationRadioBlock, generationFireBlock, generationPoliceBlock,
+                generationMallBlock, generationApartmentBlock, generationDealerBlock,
+                generationWaterTowerBlock, generationCarWashBlock,
+                generationParkChance, generationParkingChance, generationGasStations,
+                generationStoreBrandCount, generationStorefrontChance, generationParkedCarChance,
+                generationFarmNames, prepareLogicalCityData, progress);
+
+        if (_useLogicalBlockPlans)
+        {
+            SceneTree generationTree = GetTree();
+            bool previousGenerationPaused = generationTree.Paused;
+            var progressQueue = new ConcurrentQueue<WorldGenerationProgress>();
+
+            try
+            {
+                // Deixa a interface aparecer antes de começar o trabalho pesado.
+                await ToSignal(generationTree, SceneTree.SignalName.ProcessFrame);
+                generationTree.Paused = true;
+
+                Task<WorldGenerationData> generationTask = Task.Run(() =>
+                    GenerateWorldData(progress => progressQueue.Enqueue(progress)));
+
+                // Drena os eventos no fio principal. Mesmo que o cálculo termine muito rápido,
+                // a barra consegue apresentar etapas reais em vez de saltar diretamente ao fim.
+                while (!generationTask.IsCompleted || !progressQueue.IsEmpty)
+                {
+                    int processed = 0;
+                    while (processed < 8 && progressQueue.TryDequeue(out WorldGenerationProgress snapshot))
+                    {
+                        WorldDataProgress?.Invoke(snapshot);
+                        int stageOffset = logicalOffsets.TryGetValue(snapshot.Stage, out int offset) ? offset : 0;
+                        float logicalRatio = (float)(stageOffset + snapshot.Completed) / logicalTotal;
+                        loading.SetProgress(
+                            snapshot.Stage,
+                            snapshot.Completed,
+                            snapshot.Total,
+                            logicalRatio * 0.68f);
+                        processed++;
+                    }
+
+                    await ToSignal(generationTree, SceneTree.SignalName.ProcessFrame);
+                }
+
+                WorldData = await generationTask;
+                loading.SetProgress("Dados lógicos prontos", logicalTotal, logicalTotal, 0.68f);
+            }
+            catch (Exception ex)
+            {
+                GD.PushError($"Falha na preparação lógica do mundo: {ex}");
+                loading?.SetFailure("Falha ao preparar os dados do mundo.");
+                await ToSignal(generationTree, SceneTree.SignalName.ProcessFrame);
+                if (GodotObject.IsInstanceValid(loading))
+                    loading.QueueFree();
+                return;
+            }
+            finally
+            {
+                generationTree.Paused = previousGenerationPaused;
+            }
+        }
+        else
+        {
+            // O protocolo V7 continua no gerador legado síncrono e com seus dados preservados.
+            WorldData = GenerateWorldData(progress => WorldDataProgress?.Invoke(progress));
+        }
+
+        if (Biome == WorldBiome.City)
+        {
+            if (_useLogicalBlockPlans)
+                PrepareLogicalNoParkingZones();
+
+            if (_useLogicalWorldData)
+            {
+                _deliveryPoints.Clear();
+                foreach (WorldDeliveryPointData point in WorldData.DeliveryPoints)
+                    _deliveryPoints.Add(new DeliveryPoint { Position = point.Position, Address = point.Address });
+            }
+
+            // Os pontos de profissão ficam disponíveis antes de qualquer mesh, inclusive em salas V7.
+            DumpsterSpots.Clear();
+            DumpsterSpots.AddRange(WorldData.Services.DumpsterSpots);
+            GasSpots.Clear();
+            foreach (WorldGasSpotData spot in WorldData.Services.GasSpots)
+                GasSpots.Add((spot.Position, spot.Brand));
+            MarketShelfSlots.Clear();
+            foreach (WorldMarketShelfSlotData slot in WorldData.Services.MarketShelfSlots)
+                MarketShelfSlots.Add((slot.Position, slot.RotationY));
+            MarketStockPoint = WorldData.Services.MarketStockPoint;
+            MarketEntrance = WorldData.Services.MarketEntrance;
+            RadioConsolePoint = WorldData.Services.RadioConsolePoint;
+        }
+        else if (Biome == WorldBiome.Farm && _useLogicalWorldData)
+        {
+            _deliveryPoints.Clear();
+            foreach (WorldDeliveryPointData point in WorldData.DeliveryPoints)
+                _deliveryPoints.Add(new DeliveryPoint { Position = point.Position, Address = point.Address });
+        }
+
+        // Sistemas de missão só podem iniciar depois que endereços e pontos de profissão existem.
+        WorldDataReady?.Invoke();
+
+        _rng = new RandomNumberGenerator { Seed = (ulong)Seed };
+        _decoRng = new RandomNumberGenerator { Seed = (ulong)Seed * 7919UL + 13UL };
+
+        // V7 conserva a construção síncrona e o RNG antigo: não muda o mapa nem os endereços existentes.
+        if (!_useLogicalBlockPlans)
+        {
+            BuildResources();
+            BuildLandmarkResources();
+            _staticRoot = new Node3D { Name = "Static" };
+            _lightsRoot = new Node3D { Name = "Lights" };
+            AddChild(_staticRoot);
+            AddChild(_lightsRoot);
+
+            if (Biome == WorldBiome.Farm)
+            {
+                BuildFarm();
+                return;
+            }
+
+            BuildGround();
+            for (int bx = -Radius; bx <= Radius; bx++)
+            {
+                for (int bz = -Radius; bz <= Radius; bz++)
+                {
+                    if (bx == 0 && bz == 0)
+                        BuildDepot();
+                    else
+                        BuildBlock(bx, bz);
+                }
+            }
+
+            BuildCurbMarkings();
+            BuildBikeLanes();
+            BuildStreetDrainage();
+            BuildStreetLamps();
+            BuildStreetSigns();
+            BuildPhoneBooths();
+            BuildHydrants();
+            BuildStreetProps();
+            BuildStrayDogs();
+            BuildParkedCars();
+            float legacyOutside = Radius * Period + Period * 0.5f + RoadWidth * 0.5f + 6f;
+            BuildRadioTower(new Vector3(-legacyOutside, 0f, -legacyOutside));
+            BuildBoundary();
+            BuildBillboards();
+            OptimizeVisibility(this);
             return;
         }
 
-        BuildGround();
-
-        for (int bx = -Radius; bx <= Radius; bx++)
+        SceneTree tree = GetTree();
+        bool previousPaused = tree.Paused;
+        try
         {
-            for (int bz = -Radius; bz <= Radius; bz++)
-            {
-                if (bx == 0 && bz == 0)
-                    BuildDepot();
-                else
-                    BuildBlock(bx, bz);
-            }
-        }
+            loading.SetProgress("Dados lógicos prontos", logicalTotal, logicalTotal, 0.68f);
+            await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+            tree.Paused = true;
 
-        BuildCurbMarkings();
-        BuildBikeLanes();
-        BuildStreetDrainage();
-        BuildStreetLamps();
-        BuildStreetSigns();
-        BuildPhoneBooths();
-        BuildHydrants();
-        BuildStreetProps();
-        BuildStrayDogs();
-        BuildParkedCars();
-        float outside = Radius * Period + Period * 0.5f + RoadWidth * 0.5f + 6f; // além da última rua
-        BuildRadioTower(new Vector3(-outside, 0f, -outside));
-        BuildBoundary();
-        BuildBillboards();
-        OptimizeVisibility(this);
+            loading.SetProgress("Carregando materiais e recursos...", 0, 1, 0.68f);
+            BuildResources();
+            BuildLandmarkResources();
+            _staticRoot = new Node3D { Name = "Static" };
+            _lightsRoot = new Node3D { Name = "Lights" };
+            AddChild(_staticRoot);
+            AddChild(_lightsRoot);
+            loading.SetProgress("Materiais e recursos carregados", 1, 1, 0.72f);
+            await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+
+            if (Biome == WorldBiome.Farm)
+            {
+                loading.SetProgress("Carregando terreno, estradas e pontos centrais", 0, 1, 0.72f);
+                BuildFarm();
+                loading.SetProgress("Estrutura central do rancho pronta", 1, 1, 0.76f);
+                await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+
+                PlayerController farmPlayer = GetParent()?.GetNodeOrNull<PlayerController>("Player");
+                Vector3 farmFallback = farmPlayer != null
+                    ? farmPlayer.GlobalPosition
+                    : new Vector3(-3f, 0f, 8f);
+                string farmProfession = GetInitialProfessionForWorld();
+                _initialChunkPosition = WorldData.TryGetProfessionSpawn(
+                    farmProfession, out WorldSpawnPoint farmSpawn)
+                    ? farmSpawn.Position
+                    : farmFallback;
+                _hasInitialChunkPosition = true;
+
+                IReadOnlyList<WorldChunkData> initialFarmChunks =
+                    WorldData.GetChunksAround(_initialChunkPosition, radius: 1);
+                int totalFarmChunks = Mathf.Max(1, initialFarmChunks.Count);
+                int completedFarmChunks = 0;
+                foreach (WorldChunkData chunk in initialFarmChunks)
+                {
+                    BuildChunkVisuals(chunk);
+                    completedFarmChunks++;
+                    float farmRatio = 0.76f + 0.23f * completedFarmChunks / totalFarmChunks;
+                    loading.SetProgress(
+                        $"Carregando sítios e vegetação ({chunk.Coordinate.X}, {chunk.Coordinate.Z})",
+                        completedFarmChunks,
+                        initialFarmChunks.Count,
+                        farmRatio);
+                    await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+                }
+
+                if (farmPlayer != null)
+                {
+                    _chunkManager = new WorldChunkManager
+                    {
+                        City = this,
+                        Target = farmPlayer,
+                        InitialPosition = _initialChunkPosition,
+                        HasInitialPosition = _hasInitialChunkPosition,
+                        LoadRadius = 1,
+                        UnloadRadius = 2,
+                    };
+                    AddChild(_chunkManager);
+                }
+
+                loading.SetProgress("Rancho pronto", 1, 1, 1f);
+                await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+                return;
+            }
+
+            BuildGround();
+            loading.SetProgress("Terreno preparado", 1, 1, 0.74f);
+            await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+
+            PlayerController player = GetParent()?.GetNodeOrNull<PlayerController>("Player");
+            Vector3 fallback = player != null ? player.GlobalPosition : new Vector3(-3f, 0f, 8f);
+            string profession = GetInitialProfessionForWorld();
+            _initialChunkPosition = WorldData.TryGetProfessionSpawn(profession, out WorldSpawnPoint spawn)
+                ? spawn.Position
+                : fallback;
+            _hasInitialChunkPosition = true;
+
+            // A cidade prepara uma faixa maior ainda sob a tela de carregamento.
+            // O rancho mantém o raio curto por causa do custo da vegetação.
+            int initialLoadRadius = Biome == WorldBiome.City ? 2 : 1;
+            IReadOnlyList<WorldChunkData> initialChunks =
+                WorldData.GetChunksAround(_initialChunkPosition, radius: initialLoadRadius);
+            int totalChunkVisuals = Mathf.Max(1, initialChunks.Count);
+            int completedChunks = 0;
+            foreach (WorldChunkData chunk in initialChunks)
+            {
+                BuildChunkVisuals(chunk);
+                completedChunks++;
+                float chunkRatio = 0.74f + 0.21f * completedChunks / totalChunkVisuals;
+                loading.SetProgress(
+                    $"Construindo região inicial ({chunk.Coordinate.X}, {chunk.Coordinate.Z})",
+                    completedChunks, initialChunks.Count, chunkRatio);
+                await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+            }
+
+            BuildCurbMarkings();
+            BuildBikeLanes();
+            BuildStreetDrainage();
+            BuildStreetLamps();
+            BuildStreetSigns();
+            BuildPhoneBooths();
+            BuildHydrants();
+            BuildStreetProps();
+            BuildStrayDogs();
+            BuildParkedCars();
+            float outside = Radius * Period + Period * 0.5f + RoadWidth * 0.5f + 6f;
+            BuildRadioTower(new Vector3(-outside, 0f, -outside));
+            BuildBoundary();
+            BuildBillboards();
+            OptimizeVisibility(this);
+            loading.SetProgress("Preparando elementos globais", 1, 1, 0.99f);
+            await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+
+            if (player != null)
+            {
+                _chunkManager = new WorldChunkManager
+                {
+                    City = this,
+                    Target = player,
+                    InitialPosition = _initialChunkPosition,
+                    HasInitialPosition = _hasInitialChunkPosition,
+                    LoadRadius = 2,
+                    UnloadRadius = 2,
+                };
+                AddChild(_chunkManager);
+            }
+
+            loading.SetProgress("Mundo pronto", 1, 1, 1f);
+            await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+        }
+        catch (Exception ex)
+        {
+            GD.PushError($"Falha ao preparar o mundo: {ex}");
+            loading?.SetFailure("Falha ao preparar o mundo.");
+            await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+        }
+        finally
+        {
+            if (GodotObject.IsInstanceValid(loading))
+                loading.QueueFree();
+            tree.Paused = previousPaused;
+        }
     }
 
     /// <summary>Otimização (v0.9.7): peça pequena (banco, placa, ar-condicionado, lixeira...) some além de
@@ -324,9 +1105,35 @@ public partial class CityGenerator : Node3D
 
     private void BuildBlock(int bx, int bz)
     {
+        if (_useLogicalBlockPlans &&
+            WorldData.TryGetBlock(new WorldChunkCoordinate(bx, bz), out WorldBlockData plan))
+        {
+            // Cada quarteirão recebe RNGs próprios. A ordem de construção ou carregamento dos
+            // chunks deixa de alterar prédios, árvores, carros e decoração dos outros quarteirões.
+            RandomNumberGenerator previousRng = _rng;
+            RandomNumberGenerator previousDecoRng = _decoRng;
+            _rng = new RandomNumberGenerator { Seed = plan.VisualSeed };
+            _decoRng = new RandomNumberGenerator { Seed = plan.DecorationSeed };
+            try
+            {
+                BuildBlockCore(bx, bz, plan.Kind, plan);
+            }
+            finally
+            {
+                _rng = previousRng;
+                _decoRng = previousDecoRng;
+            }
+            return;
+        }
+
+        BuildBlockCore(bx, bz, null, null);
+    }
+
+    private void BuildBlockCore(int bx, int bz, WorldBlockKind? plannedKind, WorldBlockData blockPlan = null)
+    {
         Vector3 center = BlockCenter(bx, bz);
         var block = new Node3D { Name = $"Block_{bx}_{bz}" };
-        _staticRoot.AddChild(block);
+        (_activeChunkRoot ?? _staticRoot).AddChild(block);
 
         // Calçada elevada (meio-fio).
         AddBox(block, center + new Vector3(0f, CurbHeight * 0.5f, 0f), new Vector3(BlockSize, CurbHeight, BlockSize), _sidewalkMaterial);
@@ -349,8 +1156,24 @@ public partial class CityGenerator : Node3D
         if (TryBuildServiceBlock(block, center, bx, bz))
             return;
 
-        float roll = _rng.Randf();
+        if (plannedKind.HasValue)
+        {
+            switch (plannedKind.Value)
+            {
+                case WorldBlockKind.Park:
+                    BuildPark(block, center, inner, blockPlan);
+                    break;
+                case WorldBlockKind.ParkingLot:
+                    BuildParkingLot(block, center, inner, blockPlan);
+                    break;
+                default:
+                    BuildBuildings(block, center, inner, bx, bz, blockPlan);
+                    break;
+            }
+            return;
+        }
 
+        float roll = _rng.Randf();
         if (roll < ParkChance)
             BuildPark(block, center, inner);
         else if (roll < ParkChance + ParkingLotChance)
@@ -359,8 +1182,38 @@ public partial class CityGenerator : Node3D
             BuildBuildings(block, center, inner, bx, bz);
     }
 
-    private void BuildBuildings(Node3D block, Vector3 center, float inner, int bx, int bz)
+    private void BuildBuildings(
+        Node3D block,
+        Vector3 center,
+        float inner,
+        int bx,
+        int bz,
+        WorldBlockData blockPlan = null)
     {
+        if (_useLogicalBlockPlans && blockPlan != null)
+        {
+            foreach (WorldBuildingPlan building in blockPlan.Buildings)
+            {
+                RandomNumberGenerator previousRng = _rng;
+                RandomNumberGenerator previousDecoRng = _decoRng;
+                _rng = new RandomNumberGenerator { Seed = building.VisualSeed };
+                _decoRng = new RandomNumberGenerator { Seed = building.DecorationSeed };
+                try
+                {
+                    BuildBuilding(block, building.BaseCenter, building.Width, building.Depth,
+                        building.Height, building.HasStorefront);
+                    DecorateBuilding(block, building.BaseCenter, building.Width, building.Depth,
+                        building.Height, center, building.Front, building.HasStorefront,
+                        building.StoreBrandIndex);
+                }
+                finally
+                {
+                    _rng = previousRng;
+                    _decoRng = previousDecoRng;
+                }
+            }
+            return;
+        }
         // Divide o miolo do quarteirão em 1, 2 ou 4 lotes.
         float split = _rng.Randf();
         var lots = new List<Rect2>();
@@ -409,12 +1262,15 @@ public partial class CityGenerator : Node3D
             height = Mathf.Max(4f, Mathf.Round(height / 3.2f) * 3.2f + 0.4f);
 
             Vector3 lotCenter = center + new Vector3(lot.Position.X + lot.Size.X * 0.5f, CurbHeight, lot.Position.Y + lot.Size.Y * 0.5f);
-            BuildBuilding(block, lotCenter, w, d, height);
-            DecorateBuilding(block, lotCenter, w, d, height, center);
+            Vector3 front = GetBuildingFront(lotCenter, center);
+            bool hasStorefront = _decoRng.Randf() < StorefrontChance;
+            float buildingHeight = hasStorefront ? 4.4f : height;
+            BuildBuilding(block, lotCenter, w, d, buildingHeight, hasStorefront);
+            DecorateBuilding(block, lotCenter, w, d, buildingHeight, center, front, hasStorefront);
         }
     }
 
-    private void BuildBuilding(Node3D parent, Vector3 baseCenter, float width, float depth, float height)
+    private void BuildBuilding(Node3D parent, Vector3 baseCenter, float width, float depth, float height, bool isStorefront = false)
     {
         Color wall = WallPalette[_rng.RandiRange(0, WallPalette.Length - 1)];
         float lightSeed = _rng.Randf() * 100f;
@@ -445,24 +1301,27 @@ public partial class CityGenerator : Node3D
         AddBox(parent, roofCenter + new Vector3(width * 0.5f, 0f, 0f), new Vector3(0.25f, 0.8f, depth), _concrete, false);
         AddBox(parent, roofCenter - new Vector3(width * 0.5f, 0f, 0f), new Vector3(0.25f, 0.8f, depth), _concrete, false);
 
-        // Ar-condicionados e caixas d'água.
-        int props = _rng.RandiRange(0, 3);
-        for (int i = 0; i < props; i++)
+        if (!isStorefront)
         {
-            var offset = new Vector3(_rng.RandfRange(-width * 0.35f, width * 0.35f), 0f, _rng.RandfRange(-depth * 0.35f, depth * 0.35f));
-            if (_rng.Randf() < 0.6f)
-                AddBox(parent, new Vector3(baseCenter.X, roofY + 0.6f, baseCenter.Z) + offset, new Vector3(1.6f, 1.2f, 1.2f), _darkMetal, false);
-            else
-                AddCylinder(parent, new Vector3(baseCenter.X, roofY + 1.5f, baseCenter.Z) + offset, 1.1f, 3f, _darkMetal);
-        }
+            // Ar-condicionados e caixas d'água.
+            int props = _rng.RandiRange(0, 3);
+            for (int i = 0; i < props; i++)
+            {
+                var offset = new Vector3(_rng.RandfRange(-width * 0.35f, width * 0.35f), 0f, _rng.RandfRange(-depth * 0.35f, depth * 0.35f));
+                if (_rng.Randf() < 0.6f)
+                    AddBox(parent, new Vector3(baseCenter.X, roofY + 0.6f, baseCenter.Z) + offset, new Vector3(1.6f, 1.2f, 1.2f), _darkMetal, false);
+                else
+                    AddCylinder(parent, new Vector3(baseCenter.X, roofY + 1.5f, baseCenter.Z) + offset, 1.1f, 3f, _darkMetal);
+            }
 
-        // Antena com luz vermelha.
-        if (_rng.Randf() < 0.3f)
-        {
-            float antennaH = _rng.RandfRange(4f, 9f);
-            Vector3 pos = new(baseCenter.X + width * 0.25f, roofY + antennaH * 0.5f, baseCenter.Z - depth * 0.25f);
-            AddCylinder(parent, pos, 0.08f, antennaH, _darkMetal);
-            AddBox(parent, pos + new Vector3(0f, antennaH * 0.5f + 0.15f, 0f), new Vector3(0.3f, 0.3f, 0.3f), _redBeacon, false);
+            // Antena com luz vermelha.
+            if (_rng.Randf() < 0.3f)
+            {
+                float antennaH = _rng.RandfRange(4f, 9f);
+                Vector3 pos = new(baseCenter.X + width * 0.25f, roofY + antennaH * 0.5f, baseCenter.Z - depth * 0.25f);
+                AddCylinder(parent, pos, 0.08f, antennaH, _darkMetal);
+                AddBox(parent, pos + new Vector3(0f, antennaH * 0.5f + 0.15f, 0f), new Vector3(0.3f, 0.3f, 0.3f), _redBeacon, false);
+            }
         }
     }
 
@@ -481,6 +1340,9 @@ public partial class CityGenerator : Node3D
     /// <summary>Caramelos de rua (v0.9.5) nas esquinas: dê um espetinho e um deles segue você.</summary>
     private void BuildStrayDogs()
     {
+        if (_useLogicalBlockPlans)
+            return; // Os animais da cidade acompanham o chunk onde aparecem.
+
         var root = new Node3D { Name = "Caramelos" };
         _staticRoot.AddChild(root);
         float corner = BlockSize * 0.5f - 1.3f;
@@ -503,10 +1365,91 @@ public partial class CityGenerator : Node3D
         root.AddChild(FarmAnimal.Create("ShibaInu.gltf", 0.9f, new Vector3(-4.5f, CurbHeight, 31.4f), 0.4f, 1.2f));
     }
 
-    private void BuildPark(Node3D block, Vector3 center, float inner)
+    private void BuildStrayDogsForBlock(int bx, int bz)
+    {
+        int rank = 0;
+        bool selected = false;
+        int selectedHash = 0;
+
+        // Preserva a regra antiga: somente os primeiros oito quarteirões elegíveis recebem cão.
+        for (int x = -Radius; x <= Radius && !selected; x++)
+        {
+            for (int z = -Radius; z <= Radius; z++)
+            {
+                int hash = AssetProps.Hash(BlockCenter(x, z), 21);
+                if (hash % 5 != 0)
+                    continue;
+
+                if (x == bx && z == bz)
+                {
+                    selected = rank < 8;
+                    selectedHash = hash;
+                    break;
+                }
+                rank++;
+            }
+        }
+
+        bool hasDepotDog = bx == 0 && bz == 1;
+        if (!selected && !hasDepotDog)
+            return;
+
+        var root = new Node3D { Name = $"Caramelos_{bx}_{bz}" };
+        (_activeChunkRoot ?? _staticRoot).AddChild(root);
+
+        if (selected)
+        {
+            float corner = BlockSize * 0.5f - 1.3f;
+            float sx = selectedHash % 2 == 0 ? 1f : -1f;
+            float sz = (selectedHash / 2) % 2 == 0 ? 1f : -1f;
+            Vector3 pos = BlockCenter(bx, bz) + new Vector3(sx * corner, CurbHeight, sz * corner);
+            root.AddChild(FarmAnimal.Create("ShibaInu.gltf", 0.9f, pos, selectedHash % 628 / 100f, 1.2f));
+        }
+
+        if (hasDepotDog)
+            root.AddChild(FarmAnimal.Create("ShibaInu.gltf", 0.9f,
+                new Vector3(-4.5f, CurbHeight, 31.4f), 0.4f, 1.2f));
+    }
+
+    private void BuildPark(Node3D block, Vector3 center, float inner, WorldBlockData blockPlan = null)
     {
         AddBox(block, center + new Vector3(0f, CurbHeight + 0.05f, 0f), new Vector3(inner, 0.1f, inner), _grass, false);
         GrassTufts.Fill(block, center + new Vector3(0f, CurbHeight + 0.1f, 0f), new Vector2(inner - 0.6f, inner - 0.6f), 0.55f, new Color(0.8f, 0.95f, 0.75f));
+
+        if (_useLogicalBlockPlans && blockPlan != null)
+        {
+            foreach (WorldParkTreePlan treePlan in blockPlan.ParkTrees)
+            {
+                if (NatureKit.Spawn(block, treePlan.Model, treePlan.Position, treePlan.RotationY,
+                    treePlan.Scale * 0.7f, 0.25f) != null)
+                    continue;
+
+                var fallbackTree = new StaticBody3D
+                {
+                    Position = treePlan.Position,
+                    CollisionLayer = 1,
+                    CollisionMask = 0,
+                };
+                fallbackTree.AddChild(new CollisionShape3D
+                {
+                    Shape = new CylinderShape3D { Radius = 0.25f, Height = 3f },
+                    Position = new Vector3(0f, 1.5f, 0f),
+                });
+                AddCylinder(fallbackTree, new Vector3(0f, 1.2f * treePlan.Scale, 0f),
+                    0.18f * treePlan.Scale, 2.4f * treePlan.Scale, _trunk);
+                AddCylinder(fallbackTree, new Vector3(0f, 3.6f * treePlan.Scale, 0f),
+                    1.6f * treePlan.Scale, 3.6f * treePlan.Scale, _leaves, _treeTop);
+                AddCylinder(fallbackTree, new Vector3(0f, 5f * treePlan.Scale, 0f),
+                    1.1f * treePlan.Scale, 2.6f * treePlan.Scale, _leaves, _treeTop);
+                block.AddChild(fallbackTree);
+            }
+
+            foreach (WorldParkBenchPlan bench in blockPlan.ParkBenches)
+                AddBox(block, bench.Position, new Vector3(1.8f, 0.5f, 0.5f),
+                    _trunk, true, bench.RotationY);
+            return;
+        }
+
 
         int trees = _rng.RandiRange(7, 14);
         for (int i = 0; i < trees; i++)
@@ -525,6 +1468,7 @@ public partial class CityGenerator : Node3D
             block.AddChild(tree);
         }
 
+
         // Bancos.
         for (int i = 0; i < 3; i++)
         {
@@ -533,10 +1477,28 @@ public partial class CityGenerator : Node3D
         }
     }
 
-    private void BuildParkingLot(Node3D block, Vector3 center, float inner)
+    private void BuildParkingLot(Node3D block, Vector3 center, float inner, WorldBlockData blockPlan = null)
     {
         AddBox(block, center + new Vector3(0f, CurbHeight + 0.02f, 0f), new Vector3(inner, 0.04f, inner), _darkMetal, false);
         PaintParkingStripes(block, center, inner);
+        if (_useLogicalBlockPlans && blockPlan != null)
+        {
+            foreach (WorldParkingCarPlan carPlan in blockPlan.ParkingCars)
+            {
+                RandomNumberGenerator previousRng = _rng;
+                _rng = new RandomNumberGenerator { Seed = carPlan.VisualSeed };
+                try
+                {
+                    BuildCar(block, carPlan.Position, carPlan.RotationY);
+                }
+                finally
+                {
+                    _rng = previousRng;
+                }
+            }
+            return;
+        }
+
         int cars = _rng.RandiRange(3, 7);
         for (int i = 0; i < cars; i++)
         {
@@ -590,7 +1552,10 @@ public partial class CityGenerator : Node3D
 
     private void RegisterDeliveryPoint(int bx, int bz)
     {
-        // Um ponto de entrega no meio de um lado aleatório do quarteirão, na calçada.
+        if (_useLogicalWorldData)
+            return; // Os pontos da cidade já foram calculados na fase lógica.
+
+        // Compatibilidade V7/offline: mantém os pontos legados até a migração completa do gerador.
         int side = _rng.RandiRange(0, 3);
         Vector3 center = BlockCenter(bx, bz);
         float edge = BlockSize * 0.5f - 1.5f;
@@ -613,10 +1578,10 @@ public partial class CityGenerator : Node3D
 
     // ------------------------------------------------------------------ depósito
 
-    private void BuildDepot(bool farm = false)
+    private void BuildDepot(bool farm = false, Node3D parent = null)
     {
         var depot = new Node3D { Name = "Depot" };
-        _staticRoot.AddChild(depot);
+        (parent ?? _activeChunkRoot ?? _staticRoot).AddChild(depot);
         float half = BlockSize * 0.5f;
 
         // Galpão ao fundo, virado para +Z: oco, com interior e escritório (CityGenerator.Depot.cs).
@@ -663,24 +1628,40 @@ public partial class CityGenerator : Node3D
                 SpotAngle = 50f,
                 ShadowEnabled = true,
             };
-            _lightsRoot.AddChild(spot);
+            ActiveLightsRoot.AddChild(spot);
         }
 
-        // Muro baixo (cerca de madeira no rancho) com portões para as ruas de +X e +Z.
+        // Muro baixo (cerca de madeira no rancho) com portões para as ruas de +Z (frente), +X e -X.
+        // v0.9.9: portão novo em -X (pedido dos testes) e grade de metal em cima do muro da cidade.
         float wallH = farm ? 1.2f : 1.3f;
         float gate = 10f;
         float seg = (BlockSize - gate) * 0.5f;
         Material wallMat = farm ? _trunk : _concrete;
-        AddBox(depot, new Vector3(0f, wallH * 0.5f, -half), new Vector3(BlockSize, wallH, 0.3f), wallMat);
-        AddBox(depot, new Vector3(-half, wallH * 0.5f, 0f), new Vector3(0.3f, wallH, BlockSize), wallMat);
-        AddBox(depot, new Vector3(-half + seg * 0.5f, wallH * 0.5f, half), new Vector3(seg, wallH, 0.3f), wallMat);
-        AddBox(depot, new Vector3(half - seg * 0.5f, wallH * 0.5f, half), new Vector3(seg, wallH, 0.3f), wallMat);
-        AddBox(depot, new Vector3(half, wallH * 0.5f, -half + seg * 0.5f), new Vector3(0.3f, wallH, seg), wallMat);
-        AddBox(depot, new Vector3(half, wallH * 0.5f, half - seg * 0.5f), new Vector3(0.3f, wallH, seg), wallMat);
+        (Vector3 c, Vector3 s)[] walls =
+        {
+            (new Vector3(0f, wallH * 0.5f, -half), new Vector3(BlockSize, wallH, 0.3f)),
+            (new Vector3(-half + seg * 0.5f, wallH * 0.5f, half), new Vector3(seg, wallH, 0.3f)),
+            (new Vector3(half - seg * 0.5f, wallH * 0.5f, half), new Vector3(seg, wallH, 0.3f)),
+            (new Vector3(half, wallH * 0.5f, -half + seg * 0.5f), new Vector3(0.3f, wallH, seg)),
+            (new Vector3(half, wallH * 0.5f, half - seg * 0.5f), new Vector3(0.3f, wallH, seg)),
+            (new Vector3(-half, wallH * 0.5f, -half + seg * 0.5f), new Vector3(0.3f, wallH, seg)),
+            (new Vector3(-half, wallH * 0.5f, half - seg * 0.5f), new Vector3(0.3f, wallH, seg)),
+        };
+        foreach ((Vector3 c, Vector3 s) in walls)
+        {
+            if (farm)
+                AddBox(depot, c, s, wallMat);
+            else
+                WallWithRailing(depot, c, s, wallMat, 0.9f);
+        }
+        // Ninguém estaciona na frente dos três portões (guia rebaixada: sem placa nem pintura).
+        KeepClear(depot.Position + new Vector3(0f, 0f, half), Vector3.Right, gate * 0.5f + 1f);
+        KeepClear(depot.Position + new Vector3(half, 0f, 0f), Vector3.Back, gate * 0.5f + 1f);
+        KeepClear(depot.Position + new Vector3(-half, 0f, 0f), Vector3.Back, gate * 0.5f + 1f);
 
-        // Pilha de paletes e tambores decorativos.
+        // Pilha de paletes e tambores decorativos (paletes encostados no galpão, fora do caminho do portão -X).
         for (int i = 0; i < 4; i++)
-            AddBox(depot, new Vector3(-12f + i * 1.3f, 0.1f + i % 2 * 0.2f, -half + 15f), new Vector3(1.2f, 0.2f + i % 2 * 0.2f, 1.0f), _trunk);
+            AddBox(depot, new Vector3(-12f + i * 1.3f, 0.1f + i % 2 * 0.2f, -half + 13.6f), new Vector3(1.2f, 0.2f + i % 2 * 0.2f, 1.0f), _trunk);
         for (int i = 0; i < 3; i++)
             AddCylinder(depot, new Vector3(13f, 0.45f, -half + 15f + i * 0.9f), 0.35f, 0.9f, _darkMetal);
     }
@@ -689,18 +1670,22 @@ public partial class CityGenerator : Node3D
 
     private void BuildStreetLamps()
     {
-        float edge = BlockSize * 0.5f - 0.7f;
+        if (_useLogicalBlockPlans)
+            return; // Os postes são criados junto com cada chunk.
+
         for (int bx = -Radius; bx <= Radius; bx++)
-        {
             for (int bz = -Radius; bz <= Radius; bz++)
-            {
-                Vector3 c = BlockCenter(bx, bz);
-                float y = (bx == 0 && bz == 0) ? 0f : CurbHeight;
-                // Lado +X (ilumina a rua vertical) e lado +Z (ilumina a avenida).
-                BuildLamp(c + new Vector3(edge, y, -BlockSize * 0.25f), Vector3.Right);
-                BuildLamp(c + new Vector3(-BlockSize * 0.25f, y, edge), Vector3.Back);
-            }
-        }
+                BuildStreetLampForBlock(bx, bz);
+    }
+
+    private void BuildStreetLampForBlock(int bx, int bz)
+    {
+        float edge = BlockSize * 0.5f - 0.7f;
+        Vector3 c = BlockCenter(bx, bz);
+        float y = (bx == 0 && bz == 0) ? 0f : CurbHeight;
+        // Lado +X (ilumina a rua vertical) e lado +Z (ilumina a avenida).
+        BuildLamp(c + new Vector3(edge, y, -BlockSize * 0.25f), Vector3.Right);
+        BuildLamp(c + new Vector3(-BlockSize * 0.25f, y, edge), Vector3.Back);
     }
 
     private void BuildLamp(Vector3 basePos, Vector3 towardRoad)
@@ -715,7 +1700,7 @@ public partial class CityGenerator : Node3D
         AddBox(lamp, armCenter, armSize, _darkMetal, false);
         Vector3 headPos = towardRoad * 1.5f + new Vector3(0f, height - 0.25f, 0f);
         AddBox(lamp, headPos, new Vector3(0.6f, 0.15f, 0.6f), _lampHead, false);
-        _staticRoot.AddChild(lamp);
+        (_activeChunkRoot ?? _staticRoot).AddChild(lamp);
 
         var light = new OmniLight3D
         {
@@ -728,13 +1713,16 @@ public partial class CityGenerator : Node3D
             DistanceFadeBegin = 70f,
             DistanceFadeLength = 25f,
         };
-        _lightsRoot.AddChild(light);
+        ActiveLightsRoot.AddChild(light);
     }
 
     // ------------------------------------------------------------------ carros
 
     private void BuildParkedCars()
     {
+        if (_useLogicalBlockPlans)
+            return; // Carros estacionados são gerados junto do chunk proprietário.
+
         float laneOffset = RoadWidth * 0.5f - 1.4f;
         float reach = BlockSize * 0.5f - 4f;
         for (int k = -Radius - 1; k <= Radius; k++)
@@ -765,8 +1753,39 @@ public partial class CityGenerator : Node3D
         }
     }
 
+    private void BuildParkedCarsForBlock(int bx, int bz)
+    {
+        if (WorldData == null ||
+            !WorldData.TryGetBlock(new WorldChunkCoordinate(bx, bz), out WorldBlockData blockPlan))
+            return;
+
+        foreach (WorldRoadCarPlan carPlan in blockPlan.RoadCars)
+        {
+            // Zonas dinâmicas (por exemplo, pontos de ônibus) podem ser registradas depois
+            // da geração lógica inicial; nunca renderiza um carro dentro delas.
+            if (InNoParking(carPlan.Position))
+                continue;
+
+            RandomNumberGenerator previousRng = _rng;
+            _rng = new RandomNumberGenerator { Seed = carPlan.VisualSeed };
+            try
+            {
+                BuildCar(
+                    _activeChunkRoot ?? _staticRoot,
+                    carPlan.Position,
+                    carPlan.RotationY,
+                    carPlan.CurbOffset,
+                    carPlan.HasCurb);
+            }
+            finally
+            {
+                _rng = previousRng;
+            }
+        }
+    }
+
     private readonly List<Node3D> _parkedCars = new();
-    private readonly List<(Vector3 center, Vector3 dir, float halfLength)> _noParking = new();
+    private readonly List<(Vector3 center, Vector3 dir, float halfLength, WorldChunkCoordinate owner)> _noParking = new();
     private bool _curbMarkingsBuilt;
 
     /// <summary>Proíbe estacionar num trecho de rua e pinta o meio-fio correspondente de amarelo.</summary>
@@ -774,15 +1793,41 @@ public partial class CityGenerator : Node3D
     public void ForbidParking(Vector3 center, Vector3 dir, float halfLength, string signLabel = null, float signShift = 0f)
     {
         Vector3 normalizedDir = dir.Normalized();
-        _noParking.Add((center, normalizedDir, halfLength));
+        WorldChunkCoordinate owner = _activeChunkCoordinate
+            ?? (WorldData != null ? WorldData.GetChunkCoordinate(center) : default);
+        bool alreadyPrepared = false;
+        if (_useLogicalBlockPlans)
+        {
+            foreach (var zone in _noParking)
+            {
+                if (zone.owner == owner && zone.center.DistanceSquaredTo(center) < 0.001f)
+                {
+                    alreadyPrepared = true;
+                    break;
+                }
+            }
+        }
+
+        if (!alreadyPrepared)
+            _noParking.Add((center, normalizedDir, halfLength, owner));
+
         for (int i = _parkedCars.Count - 1; i >= 0; i--)
         {
-            if (IsInstanceValid(_parkedCars[i]) && InNoParking(_parkedCars[i].Position))
+            Node3D car = _parkedCars[i];
+            if (GodotObject.IsInstanceValid(car) && InNoParking(car.GlobalPosition))
             {
-                _parkedCars[i].QueueFree();
+                car.QueueFree();
                 _parkedCars.RemoveAt(i);
             }
         }
+
+        if (_useLogicalBlockPlans)
+        {
+            if (!alreadyPrepared)
+                RenderDynamicNoParkingZone(center, normalizedDir, halfLength, owner, signLabel);
+            return;
+        }
+
         if (_curbMarkingsBuilt)
             PaintNoParkingCurb(center, normalizedDir, halfLength);
         BuildNoParkingSigns(center + normalizedDir * signShift, normalizedDir, signLabel);
@@ -790,12 +1835,12 @@ public partial class CityGenerator : Node3D
 
     private void BuildCurbMarkings()
     {
-        // v0.9.8: o meio-fio padrão (cinza com faixas brancas intercaladas) é desenhado pelo shader da
-        // calçada; aqui só entram os trechos amarelos, com a mesma tinta gasta.
-        var yellow = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/curb_paint.gdshader") };
-        yellow.SetShaderParameter("curb_height", CurbHeight);
-        _curbYellow = yellow;
-        _lppYellow = Flat(new Color(0.9f, 0.7f, 0.1f), 0.7f);
+        if (_useLogicalBlockPlans)
+            return; // Cada chunk recebe suas próprias marcações.
+
+        // Mantém o caminho legado intacto: todas as marcações e zonas proibidas são pintadas
+        // uma única vez, com a mesma ordem que existia antes do streaming.
+        EnsureCurbMaterials();
         for (int bx = -Radius; bx <= Radius; bx++)
         {
             for (int bz = -Radius; bz <= Radius; bz++)
@@ -809,8 +1854,75 @@ public partial class CityGenerator : Node3D
         }
 
         _curbMarkingsBuilt = true;
-        foreach ((Vector3 center, Vector3 dir, float halfLength) in _noParking)
+        foreach ((Vector3 center, Vector3 dir, float halfLength, WorldChunkCoordinate owner) in _noParking)
             PaintNoParkingCurb(center, dir, halfLength);
+    }
+
+    private void EnsureCurbMaterials()
+    {
+        // v0.9.8: o meio-fio padrão (cinza com faixas brancas) vem do shader da calçada; aqui só os trechos amarelos.
+        if (_curbYellow == null)
+        {
+            var yellow = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/curb_paint.gdshader") };
+            yellow.SetShaderParameter("curb_height", CurbHeight);
+            _curbYellow = yellow;
+        }
+        _lppYellow ??= Flat(new Color(0.9f, 0.7f, 0.1f), 0.7f);
+    }
+
+    private void RenderDynamicNoParkingZone(
+        Vector3 center,
+        Vector3 direction,
+        float halfLength,
+        WorldChunkCoordinate owner,
+        string label)
+    {
+        if (!_chunkRoots.TryGetValue(owner, out Node3D root) ||
+            !GodotObject.IsInstanceValid(root))
+            return; // A zona fica no plano e será renderizada quando esse chunk carregar.
+
+        Node3D previousRoot = _activeChunkRoot;
+        WorldChunkCoordinate? previousCoordinate = _activeChunkCoordinate;
+        _activeChunkRoot = root;
+        _activeChunkCoordinate = owner;
+        try
+        {
+            EnsureCurbMaterials();
+            PaintNoParkingCurb(center, direction, halfLength);
+            BuildNoParkingSigns(center, direction, label);
+        }
+        finally
+        {
+            _activeChunkRoot = previousRoot;
+            _activeChunkCoordinate = previousCoordinate;
+        }
+    }
+
+    private void BuildNoParkingSignsForBlock(int bx, int bz)
+    {
+        WorldChunkCoordinate owner = new(bx, bz);
+        foreach ((Vector3 center, Vector3 dir, float halfLength, WorldChunkCoordinate zoneOwner) in _noParking)
+        {
+            if (zoneOwner == owner)
+                BuildNoParkingSigns(center, dir, null);
+        }
+    }
+
+    private void BuildCurbMarkingsForBlock(int bx, int bz)
+    {
+        EnsureCurbMaterials();
+        Vector3 center = BlockCenter(bx, bz);
+        PaintCurbEdge(center, Vector3.Right, Vector3.Back);
+        PaintCurbEdge(center, Vector3.Left, Vector3.Forward);
+        PaintCurbEdge(center, Vector3.Back, Vector3.Left);
+        PaintCurbEdge(center, Vector3.Forward, Vector3.Right);
+
+        WorldChunkCoordinate coordinate = new(bx, bz);
+        foreach ((Vector3 noParkingCenter, Vector3 dir, float halfLength, WorldChunkCoordinate owner) in _noParking)
+            if (owner == coordinate)
+                PaintNoParkingCurb(noParkingCenter, dir, halfLength);
+
+        _curbMarkingsBuilt = true;
     }
 
     private void PaintCurbEdge(Vector3 blockCenter, Vector3 outward, Vector3 along)
@@ -845,13 +1957,13 @@ public partial class CityGenerator : Node3D
         Vector3 size = Mathf.Abs(outward.X) > 0.5f
             ? new Vector3(0.03f, CurbHeight, length)
             : new Vector3(length, CurbHeight, 0.03f);
-        AddBox(_staticRoot, position, size, material, false);
+        AddBox(_activeChunkRoot ?? _staticRoot, position, size, material, false);
         if (material == _curbYellow)
         {
             // Linha amarela oficial no asfalto, 20 cm para dentro da pista.
             Vector3 line = blockCenter + outward * (BlockSize * 0.5f + 0.2f) + along * midpoint;
             line.Y = 0.006f;
-            AddBox(_staticRoot, line, Mathf.Abs(outward.X) > 0.5f ? new Vector3(0.1f, 0.012f, length) : new Vector3(length, 0.012f, 0.1f), _lppYellow, false);
+            AddBox(_activeChunkRoot ?? _staticRoot, line, Mathf.Abs(outward.X) > 0.5f ? new Vector3(0.1f, 0.012f, length) : new Vector3(length, 0.012f, 0.1f), _lppYellow, false);
         }
     }
 
@@ -867,8 +1979,8 @@ public partial class CityGenerator : Node3D
                 if (!InNoParking(parkingSpot))
                     continue;
                 Vector3 curb = new(roadX + side * (RoadWidth * 0.5f - 0.045f), CurbHeight * 0.5f, center.Z);
-                AddBox(_staticRoot, curb, new Vector3(0.03f, CurbHeight, length), _curbYellow, false);
-                AddBox(_staticRoot, new Vector3(roadX + side * (RoadWidth * 0.5f - 0.2f), 0.006f, center.Z), new Vector3(0.1f, 0.012f, length), _lppYellow, false);
+                AddBox(_activeChunkRoot ?? _staticRoot, curb, new Vector3(0.03f, CurbHeight, length), _curbYellow, false);
+                AddBox(_activeChunkRoot ?? _staticRoot, new Vector3(roadX + side * (RoadWidth * 0.5f - 0.2f), 0.006f, center.Z), new Vector3(0.1f, 0.012f, length), _lppYellow, false);
             }
         }
         else
@@ -880,14 +1992,38 @@ public partial class CityGenerator : Node3D
                 if (!InNoParking(parkingSpot))
                     continue;
                 Vector3 curb = new(center.X, CurbHeight * 0.5f, roadZ + side * (RoadWidth * 0.5f - 0.045f));
-                AddBox(_staticRoot, curb, new Vector3(length, CurbHeight, 0.03f), _curbYellow, false);
-                AddBox(_staticRoot, new Vector3(center.X, 0.006f, roadZ + side * (RoadWidth * 0.5f - 0.2f)), new Vector3(length, 0.012f, 0.1f), _lppYellow, false);
+                AddBox(_activeChunkRoot ?? _staticRoot, curb, new Vector3(length, CurbHeight, 0.03f), _curbYellow, false);
+                AddBox(_activeChunkRoot ?? _staticRoot, new Vector3(center.X, 0.006f, roadZ + side * (RoadWidth * 0.5f - 0.2f)), new Vector3(length, 0.012f, 0.1f), _lppYellow, false);
+            }
+        }
+    }
+
+    private readonly List<(Vector3 center, Vector3 dir, float halfLength)> _keepClear = new();
+
+    /// <summary>Trecho sem carro estacionado, mas sem placa nem pintura (portões, guia rebaixada).</summary>
+    public void KeepClear(Vector3 center, Vector3 dir, float halfLength)
+    {
+        _keepClear.Add((center, dir.Normalized(), halfLength));
+        for (int i = _parkedCars.Count - 1; i >= 0; i--)
+        {
+            if (IsInstanceValid(_parkedCars[i]) && InNoParking(_parkedCars[i].Position))
+            {
+                _parkedCars[i].QueueFree();
+                _parkedCars.RemoveAt(i);
             }
         }
     }
 
     private bool InNoParking(Vector3 p)
     {
+        foreach (var z in _keepClear)
+        {
+            Vector3 d = p - z.center;
+            d.Y = 0f;
+            float along = d.Dot(z.dir);
+            if (Mathf.Abs(along) < z.halfLength && (d - z.dir * along).Length() < 6f)
+                return true;
+        }
         foreach (var z in _noParking)
         {
             Vector3 d = p - z.center;
@@ -938,23 +2074,31 @@ public partial class CityGenerator : Node3D
     /// <summary>Placa de PARE em uma esquina de cada cruzamento e semáforo de pedestre na esquina oposta.</summary>
     private void BuildStreetSigns()
     {
-        float corner = BlockSize * 0.5f - 0.6f;
+        if (_useLogicalBlockPlans)
+            return; // Placas são vinculadas ao ciclo de vida do chunk.
+
         for (int bx = -Radius; bx <= Radius; bx++)
-        {
             for (int bz = -Radius; bz <= Radius; bz++)
-            {
-                if (bx == 0 && bz == 0)
-                    continue;
-                Vector3 c = BlockCenter(bx, bz) + new Vector3(0f, CurbHeight, 0f);
-                // PARE virada para quem vem pela rua vertical (indo para +Z).
-                BuildStopSign(c + new Vector3(corner, 0f, corner - 1.2f), 0f);
-                BuildCrosswalkSign(c + new Vector3(-corner, 0f, -corner + 1.2f), Mathf.Pi);
-            }
-        }
+                BuildStreetSignsForBlock(bx, bz);
+    }
+
+    private void BuildStreetSignsForBlock(int bx, int bz)
+    {
+        if (bx == 0 && bz == 0)
+            return;
+
+        float corner = BlockSize * 0.5f - 0.6f;
+        Vector3 c = BlockCenter(bx, bz) + new Vector3(0f, CurbHeight, 0f);
+        // PARE virada para quem vem pela rua vertical (indo para +Z).
+        BuildStopSign(c + new Vector3(corner, 0f, corner - 1.2f), 0f);
+        BuildCrosswalkSign(c + new Vector3(-corner, 0f, -corner + 1.2f), Mathf.Pi);
     }
 
     private void BuildNoParkingSigns(Vector3 center, Vector3 dir, string label)
     {
+        // A central (quarteirão 0,0) não tem calçada: a placa do lado dela cairia dentro do pátio.
+        float half = BlockSize * 0.5f;
+        bool InsideDepot(Vector3 p) => Mathf.Abs(p.X) < half && Mathf.Abs(p.Z) < half;
         const float laneOffset = 1.4f;
         const float sidewalkOffset = 1.1f;
         if (Mathf.Abs(dir.Z) > 0.5f)
@@ -968,7 +2112,8 @@ public partial class CityGenerator : Node3D
 
                 Vector3 roadNormal = new(-side, 0f, 0f);
                 Vector3 basePos = new(roadX + side * (RoadWidth * 0.5f + sidewalkOffset), CurbHeight, center.Z);
-                BuildNoParkingSign(basePos, roadNormal, label);
+                if (!InsideDepot(basePos))
+                    BuildNoParkingSign(basePos, roadNormal, label);
             }
         }
         else
@@ -982,7 +2127,8 @@ public partial class CityGenerator : Node3D
 
                 Vector3 roadNormal = new(0f, 0f, -side);
                 Vector3 basePos = new(center.X, CurbHeight, roadZ + side * (RoadWidth * 0.5f + sidewalkOffset));
-                BuildNoParkingSign(basePos, roadNormal, label);
+                if (!InsideDepot(basePos))
+                    BuildNoParkingSign(basePos, roadNormal, label);
             }
         }
     }
@@ -1001,7 +2147,8 @@ public partial class CityGenerator : Node3D
             string file = label == "BOMBEIROS" ? "proibido_estacionar_bombeiros.png" : "proibido_estacionar_policia.png";
             SignOnPole(sign, Vector3.Zero, facing, 2.1f, new Vector2(0.5f, 0.75f), file, null, _darkMetal);
         }
-        (_staticRoot ?? this).AddChild(sign);
+
+        (_activeChunkRoot ?? _staticRoot).AddChild(sign);
     }
 
     private void BuildStopSign(Vector3 basePos, float rotationY)
@@ -1031,14 +2178,14 @@ public partial class CityGenerator : Node3D
             Position = new Vector3(0f, 2.55f, -0.08f),
             RotationDegrees = new Vector3(0f, 180f, 0f),
         });
-        _staticRoot.AddChild(sign);
+        (_activeChunkRoot ?? _staticRoot).AddChild(sign);
     }
 
     /// <summary>Semáforo de pedestre (fica vermelho quando vem veículo). Era uma placa "faixa de pedestre".</summary>
     private void BuildCrosswalkSign(Vector3 basePos, float rotationY)
     {
         RegisterObstacle(basePos);
-        _staticRoot.AddChild(new PedestrianSignal { Name = "SemaforoPedestre", Position = basePos });
+        (_activeChunkRoot ?? _staticRoot).AddChild(new PedestrianSignal { Name = "SemaforoPedestre", Position = basePos });
     }
 
     // ------------------------------------------------------------------ marcos e limites

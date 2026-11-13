@@ -84,6 +84,13 @@ public partial class VanController : VehicleBody3D
     public RadioPlayer Radio { get; private set; }
     /// <summary>Batida (variação brusca de velocidade em m/s). O taxista usa para o passageiro reclamar.</summary>
     public event System.Action<float> Crashed;
+    /// <summary>Painel diegético (Fase 3): motor, elétrica e painel físico. Só a caminhonete de entregas tem; nulo nos outros.</summary>
+    public EngineSystem Engine { get; private set; }
+    public ElectricalSystem Electrical { get; private set; }
+    public VanDashboard Dashboard { get; private set; }
+    /// <summary>Centro da caçamba (para medir a interferência da carga).</summary>
+    private static readonly Vector3 BedCenter = new(0f, 1.3f, -0.7f);
+
     /// <summary>Banco do carona (v0.9.6): ao lado do motorista (garupa, na moto) e onde ele desce.</summary>
     public Marker3D PassengerSeat { get; private set; }
     public Marker3D PassengerExit { get; private set; }
@@ -180,8 +187,157 @@ public partial class VanController : VehicleBody3D
         AddChild(Radio);
 
         if (Kind == "van")
+        {
             VanDetails.Build(this);
+            SetupSystems();
+        }
     }
+
+    // ---------------- Painel diegético (Fase 3)
+
+    private void SetupSystems()
+    {
+        Engine = new EngineSystem { Name = "Engine" };
+        Electrical = new ElectricalSystem { Name = "Electrical" };
+        AddChild(Engine);
+        AddChild(Electrical);
+        // Offline, a caminhonete da empresa lembra do tanque e da bateria do último save.
+        if (NetId == "van" && !(NetClient.Instance?.IsOnline ?? false) && SaveManager.Load() is SaveData save)
+        {
+            if (save.VanFuel >= 0f) Engine.Restore(save.VanFuel);
+            if (save.VanBattery >= 0f) Electrical.Restore(save.VanBattery);
+        }
+        Engine.Started += () =>
+        {
+            if (_engine?.Stream != null && !_engine.Playing)
+                _engine.Play();
+        };
+        Engine.Notice += (text, warning) =>
+        {
+            if (LocalInside)
+                GameHud.Toast(this, text, warning ? UiStyle.Warning : UiStyle.Phosphor, 4.5);
+        };
+        Crashed += change => Electrical.OnCrash(change);
+        Dashboard = VanDashboard.Build(this);
+    }
+
+    private bool LocalInside => PlayerController.Local is PlayerController p && IsInstanceValid(p) && p.CurrentVehicle == this;
+
+    /// <summary>Botão CHAVE do painel: liga ou desliga o motor.</summary>
+    public void ToggleIgnition()
+    {
+        if (Engine == null)
+            return;
+        if (Engine.Running || Engine.Cranking)
+            Engine.Stop();
+        else
+            StartEngine();
+    }
+
+    private void StartEngine()
+    {
+        if (Engine == null || Engine.Running || Engine.Cranking)
+            return;
+        Engine.Start(Electrical.BatteryLow);
+        if (_engine?.Stream != null && !_engine.Playing)
+            _engine.Play();
+    }
+
+    /// <summary>Botão FAROL (ou a tecla da lanterna, dirigindo).</summary>
+    public void ToggleLights()
+    {
+        if (Electrical == null)
+            return;
+        Electrical.LightsSwitch = !Electrical.LightsSwitch;
+        if (Electrical.LightsSwitch && !Electrical.FuseOk(Circuit.Lights))
+            GameHud.Toast(this, "O farol não acende: fusível queimado (caixa do lado do carona).", UiStyle.Warning, 4.0);
+        else if (Electrical.LightsSwitch && Electrical.BatteryDead)
+            GameHud.Toast(this, "Bateria arriada: sem farol até o motor carregar.", UiStyle.Warning, 4.0);
+    }
+
+    /// <summary>Botão RÁDIO do painel ou a tecla R.</summary>
+    public void ToggleRadio()
+    {
+        if (Radio == null)
+            return;
+        if (!Radio.On && Electrical != null && !Electrical.Powered(Circuit.Radio))
+        {
+            GameHud.Toast(this, Electrical.BatteryDead ? "Bateria arriada: o rádio nem acende." : "Rádio mudo: fusível queimado (caixa do lado do carona).", UiStyle.Warning, 4.0);
+            return;
+        }
+        Radio.Toggle();
+        if (HasDriver)
+            AudioManager.Instance?.SetMusicDucked(Radio.On);
+        if (GetNodeOrNull<Label3D>("RadioDisplay") is Label3D display)
+            display.Visible = Radio.On;
+        GameHud.Toast(this, Radio.On ? "📻 " + Radio.NowPlaying : "Rádio desligado", UiStyle.Phosphor, 4.0);
+    }
+
+    /// <summary>Galão de gasolina (item): abastece a caminhonete mais perto do jogador. Retorna a mensagem do HUD ("" = não usou).</summary>
+    public static string RefuelNearest(PlayerController player)
+    {
+        if (player == null || !player.IsInsideTree())
+            return "";
+        VanController best = null;
+        float bestDistance = 7f;
+        foreach (Node n in player.GetTree().GetNodesInGroup(GroupName))
+        {
+            if (n is not VanController van || van.Engine == null)
+                continue;
+            float d = van.GlobalPosition.DistanceTo(player.GlobalPosition);
+            if (d < bestDistance)
+            {
+                bestDistance = d;
+                best = van;
+            }
+        }
+        if (best == null)
+        {
+            GameHud.Toast(player, "Chegue perto da caminhonete para abastecer.", UiStyle.Warning, 3.0);
+            return "";
+        }
+        if (!best.Engine.Refuel(EngineSystem.JerryCanAmount))
+        {
+            GameHud.Toast(player, "O tanque já está cheio.", UiStyle.Phosphor, 3.0);
+            return "";
+        }
+        return $"Glub, glub... tanque com {best.Engine.FuelLiters:0} litros.";
+    }
+
+    /// <summary>Motor, bateria, faróis e rádio a cada passo de física (com ou sem motorista).</summary>
+    private void UpdateSystems(float dt, float throttle)
+    {
+        // Pisou com o motor desligado: dá a partida sozinho (ninguém fica preso sem achar a chave).
+        if (HasDriver && Mathf.Abs(throttle) > 0.05f)
+            StartEngine();
+        Engine.Tick(dt, HasDriver ? throttle : 0f, SpeedKmh);
+        bool radioOn = Radio != null && Radio.On;
+        Electrical.Tick(dt, Engine.Running, Engine.Cranking, radioOn, GlobalTransform * BedCenter);
+        if (radioOn && !Electrical.Powered(Circuit.Radio))
+        {
+            Radio.SetOn(false);
+            if (HasDriver)
+                AudioManager.Instance?.SetMusicDucked(false);
+            if (GetNodeOrNull<Label3D>("RadioDisplay") is Label3D display)
+                display.Visible = false;
+        }
+        if (Radio != null)
+            Radio.Interference = Electrical.Interference;
+        if (_headlights != null && !HasRemoteDriver)
+        {
+            float level = Electrical.LightLevel;
+            _headlights.Visible = level > 0f;
+            if (!Mathf.IsEqualApprox(level, _lightLevel))
+            {
+                _lightLevel = level;
+                foreach (Node n in _headlights.GetChildren())
+                    if (n is SpotLight3D spot)
+                        spot.LightEnergy = 6f * level;
+            }
+        }
+    }
+
+    private float _lightLevel = 1f;
 
     public override void _UnhandledInput(InputEvent @event)
     {
@@ -189,11 +345,7 @@ public partial class VanController : VehicleBody3D
             return;
         if (@event.IsActionPressed("radio"))
         {
-            Radio.Toggle();
-            AudioManager.Instance?.SetMusicDucked(Radio.On);
-            if (GetNodeOrNull<Label3D>("RadioDisplay") is Label3D display)
-                display.Visible = Radio.On;
-            GameHud.Toast(this, Radio.On ? "📻 " + Radio.NowPlaying : "Rádio desligado", UiStyle.Phosphor, 4.0);
+            ToggleRadio();
             GetViewport().SetInputAsHandled();
         }
         else if (@event.IsActionPressed("radio_next") && Radio.On)
@@ -288,6 +440,15 @@ public partial class VanController : VehicleBody3D
         Driver = driver;
         if (Radio != null)
             AudioManager.Instance?.SetMusicDucked(driver != null && Radio.On);
+        if (Engine != null)
+        {
+            // Sentou: gira a chave. Desceu: desliga o motor (o farol fica como o botão estiver!).
+            if (driver != null)
+                StartEngine();
+            else
+                Engine.Stop();
+            return;
+        }
         if (driver != null && _engine?.Stream != null && !_engine.Playing)
             _engine.Play();
         if (_headlights != null)
@@ -353,6 +514,13 @@ public partial class VanController : VehicleBody3D
             brake = CoastBrake;
         }
 
+        if (Engine != null)
+        {
+            UpdateSystems(dt, throttle);
+            engine *= Engine.PowerFactor;
+            if (Engine.OutOfFuel && SpeedKmh > 25f && engine != 0f)
+                engine = 0f; // no cheiro da gasolina: só devagarinho
+        }
         if (engine > 0f && SpeedKmh > MaxSpeedKmh)
             engine = 0f;
         if (handbrake)
@@ -439,7 +607,8 @@ public partial class VanController : VehicleBody3D
         if (_engine?.Stream == null)
             return;
 
-        if (!HasDriver && !HasRemoteDriver)
+        bool engineOn = HasRemoteDriver || (Engine != null && !IsRemote ? Engine.Running || Engine.Cranking : HasDriver);
+        if (!engineOn)
         {
             // Motor desligado: some aos poucos.
             _engine.VolumeDb = Mathf.MoveToward(_engine.VolumeDb, -60f, 40f * dt);
@@ -448,6 +617,13 @@ public partial class VanController : VehicleBody3D
             return;
         }
 
+        if (Engine != null && Engine.Cranking)
+        {
+            // Motor de arranque: grave e tremido até pegar.
+            _engine.PitchScale = 0.42f + 0.05f * Mathf.Sin((float)Time.GetTicksMsec() * 0.04f);
+            _engine.VolumeDb = Mathf.MoveToward(_engine.VolumeDb, -13f, 80f * dt);
+            return;
+        }
         _engineLoad = Mathf.MoveToward(_engineLoad, Mathf.Abs(throttle), 3f * dt);
         float speedFactor = Mathf.Clamp(Mathf.Abs(forwardSpeed) / 26f, 0f, 1f);
         float targetPitch = 0.55f + speedFactor * 1.1f + _engineLoad * 0.25f;

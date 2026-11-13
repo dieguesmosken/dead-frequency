@@ -146,6 +146,7 @@ public partial class BusLine : Node3D
         // Placa do ponto (v0.9.8): a placa azul de "ÔNIBUS" de verdade, de frente para o ônibus que chega.
         Vector3 localFacing = stop.Basis.Transposed() * -dir;
         CityGenerator.SignOnPole(stop, new Vector3(2.5f, 0f, -1.15f), localFacing, 2.3f, new Vector2(0.4f, 0.6f), "onibus.png", null, metal);
+        stop.AddToGroup(WorldChunkManager.TrackedObjectGroup);
         stop.AddChild(new Label3D
         {
             Text = LineName,
@@ -164,6 +165,7 @@ public partial class BusLine : Node3D
     {
         _bus = new AnimatableBody3D { Name = "Bus", SyncToPhysics = true, CollisionLayer = 1, CollisionMask = 0 };
         _bus.AddToGroup(PedestrianSignal.TrafficGroup); // semáforos de pedestre ficam vermelhos quando ele passa
+        _bus.AddToGroup(WorldChunkManager.TrackedObjectGroup);
         _bus.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(2.5f, 2.9f, 11f) }, Position = new Vector3(0f, 1.75f, 0f) });
         AddChild(_bus);
         _bus.AddToGroup(MinimapView.MarkerGroup);

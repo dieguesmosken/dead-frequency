@@ -103,6 +103,9 @@ public partial class PlayerController : CharacterBody3D
     public PlayerState State { get; private set; } = PlayerState.Walking;
     /// <summary>Desligado com o menu aberto no multiplayer (o jogo não pausa online).</summary>
     public bool InputEnabled { get; set; } = true;
+
+    /// <summary>O jogador local (só existe um PlayerController por fase). Usado pelos controles de toque.</summary>
+    public static PlayerController Local { get; private set; }
     public bool IsHolding => _heldItem != null && IsInstanceValid(_heldItem);
     public CargoItem HeldItem => IsHolding ? _heldItem : null;
     public bool HasSelectedItem => !string.IsNullOrEmpty(PlayerInventory.Instance?.SelectedHotbarItemId);
@@ -145,6 +148,12 @@ public partial class PlayerController : CharacterBody3D
         _head = GetNode<Node3D>("Head");
         _camera = GetNode<Camera3D>("Head/Camera3D");
         _cameraBase = _camera.Position;
+        if (GameSettings.IsMobile)
+        {
+            // Celular: começa em primeira pessoa (mais leve e melhor no toque) e enxerga menos longe.
+            _thirdPerson = false;
+            _camera.Far = Mathf.Min(_camera.Far, 160f);
+        }
         InitializeComfortCamera();
         _carryMarker = GetNode<Marker3D>("Head/CarryMarker");
         _collisionShape = GetNode<CollisionShape3D>("CollisionShape3D");
@@ -187,7 +196,8 @@ public partial class PlayerController : CharacterBody3D
             SpotRange = 22f,
             SpotAngle = 24f,
             SpotAttenuation = 0.9f,
-            ShadowEnabled = true,
+            // Sombras da lanterna são desativadas no preset Baixo para reduzir custo de GPU.
+            ShadowEnabled = (GameSettings.Instance?.Quality ?? 2) >= 1,
             Position = new Vector3(0.15f, -0.1f, 0f),
         };
         GetAimCamera().AddChild(_flashlight);
@@ -195,8 +205,12 @@ public partial class PlayerController : CharacterBody3D
         Input.MouseMode = Input.MouseModeEnum.Captured;
     }
 
+    public override void _EnterTree() => Local = this;
+
     public override void _ExitTree()
     {
+        if (Local == this)
+            Local = null;
         if (GameSettings.Instance != null)
             GameSettings.Instance.SettingsChanged -= ApplySettings;
         DropHeld();
@@ -211,6 +225,8 @@ public partial class PlayerController : CharacterBody3D
         _invertY = s.InvertY;
         if (_camera != null)
             _camera.Fov = s.Fov;
+        if (_flashlight != null)
+            _flashlight.ShadowEnabled = s.Quality >= 1;
     }
 
     // ---------------- Input ----------------
@@ -219,6 +235,10 @@ public partial class PlayerController : CharacterBody3D
     {
         HandleComfortCameraInput(@event);
         if (!InputEnabled)
+            return;
+
+        // Mouse "de mentira" gerado pelo toque: a câmera do celular vem de TouchControls.Look.
+        if (@event is InputEventMouse mouse && mouse.Device == Godot.InputEvent.DeviceIdEmulation && TouchControls.Active)
             return;
 
         if (@event is InputEventMouseMotion motion && Input.MouseMode == Input.MouseModeEnum.Captured)
@@ -233,6 +253,13 @@ public partial class PlayerController : CharacterBody3D
             Input.MouseMode = Input.MouseModeEnum.Captured;
             GetViewport().SetInputAsHandled();
         }
+    }
+
+    /// <summary>Câmera pelo arrasto do dedo (TouchControls), com a mesma sensibilidade do mouse.</summary>
+    public void TouchLook(Vector2 relative)
+    {
+        if (InputEnabled)
+            RotateLook(relative);
     }
 
     private void RotateLook(Vector2 relative)
@@ -325,8 +352,19 @@ public partial class PlayerController : CharacterBody3D
             return;
 
         // Polling em vez de eventos: funciona mesmo se algum Control da UI estiver com foco.
-        if (Input.IsActionJustPressed("flashlight"))
+        if (Input.IsActionJustPressed("flashlight") && State == PlayerState.Driving && CurrentVehicle?.Electrical != null)
+        {
+            // Dirigindo a caminhonete, a tecla da lanterna é o botão do farol.
+            CurrentVehicle.ToggleLights();
+        }
+        else if (Input.IsActionJustPressed("flashlight"))
+        {
             _flashlight.Visible = !_flashlight.Visible;
+            // Lanterna de longo alcance (Conserta-Tudo do Primo, v0.9.9): basta estar na mochila.
+            bool strong = PlayerInventory.Instance != null && System.Linq.Enumerable.Contains(PlayerInventory.Instance.Items, ItemCatalog.StrongFlashlight);
+            _flashlight.SpotRange = strong ? 44f : 22f;
+            _flashlight.SpotAngle = strong ? 30f : 24f;
+        }
 
         if (Input.IsActionJustPressed("night_vision"))
         {
@@ -353,7 +391,7 @@ public partial class PlayerController : CharacterBody3D
                 DropSelectedItem();
         }
 
-        if (Input.IsActionJustPressed("throw") && Input.MouseMode == Input.MouseModeEnum.Captured)
+        if (Input.IsActionJustPressed("throw") && (Input.MouseMode == Input.MouseModeEnum.Captured || TouchControls.Active))
         {
             if (IsHolding)
                 ThrowHeld();

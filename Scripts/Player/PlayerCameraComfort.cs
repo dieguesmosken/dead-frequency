@@ -49,6 +49,9 @@ public partial class PlayerController
 
     public bool IsThirdPerson => _thirdPerson;
 
+    /// <summary>Alterna primeira/terceira pessoa (roda do mouse, V ou o botão CÂMERA do celular).</summary>
+    public void ToggleCameraView() => SetThirdPerson(!_thirdPerson, true);
+
     private void HandleComfortCameraInput(InputEvent e)
     {
         if (Input.MouseMode != Input.MouseModeEnum.Captured)
@@ -104,7 +107,7 @@ public partial class PlayerController
         }
 
         if (notify)
-            GameHud.Toast(this, enabled ? "Câmera em terceira pessoa (V)" : "Câmera em primeira pessoa (V)", UiStyle.Phosphor, 2.2);
+            GameHud.Toast(this, (enabled ? "Câmera em terceira pessoa" : "Câmera em primeira pessoa") + (TouchControls.Active ? "" : " (V)"), UiStyle.Phosphor, 2.2);
     }
 
     private void UpdateComfortCamera(float delta)
@@ -137,6 +140,8 @@ public partial class PlayerController
         float speed = State == PlayerState.Walking
             ? new Vector2(Velocity.X, Velocity.Z).Length()
             : (CurrentVehicle != null ? CurrentVehicle.LinearVelocity.Length() : 0f);
+        _localCharacter.Carrying = IsHolding;
+        _localCharacter.Airborne = State == PlayerState.Walking && !IsOnFloor() && Velocity.Y > 0.5f;
         _localCharacter.Animate(delta, State == PlayerState.Walking ? speed : 0f);
         _localCharacter.SetHeadPitch(_head.Rotation.X);
         _localCharacter.SetSeated(State == PlayerState.Driving || State == PlayerState.Riding);

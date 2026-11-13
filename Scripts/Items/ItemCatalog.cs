@@ -51,6 +51,17 @@ public static class ItemCatalog
     public const string Slippers = "chinelos";
     public const string SlippersBroken = "chinelos_quebrados";
     public const string Nail = "prego";
+    // v0.9.9 — Lã de Aço 1001 Utilidades
+    public const string SteelWool = "palha_aco";
+    // v0.9.9 — Conserta-Tudo do Primo
+    public const string StrongFlashlight = "lanterna_forte";
+    /// <summary>Repelente do Agro-Tudão (v0.9.9): 5 minutos sem pernilongo no sítio.</summary>
+    public const string Repellent = "repelente";
+    // Painel diegético (Fase 3)
+    /// <summary>Fusível reserva da caminhonete: fica na mochila e entra na troca quando a caixa não tem mais.</summary>
+    public const string Fuse = "fusivel";
+    /// <summary>Galão de gasolina dos postos: meio tanque da caminhonete.</summary>
+    public const string JerryCan = "galao";
     public const string CarGou = "car_gou";
     public const string CarFusca = "car_fusca";
     public const string CarOpalinha = "car_opalinha";
@@ -85,6 +96,16 @@ public static class ItemCatalog
             Description = "A tira soltou: você anda pisando torto (mais devagar). Use um Prego para consertar." },
         new ItemDef { Id = Nail, Name = "Prego", Price = 10, Slot = ItemSlot.None, Color = new Color(0.7f, 0.7f, 0.72f),
             Description = "Conserta a tira do chinelo arrebentado (precisa estar calçado)." },
+        new ItemDef { Id = SteelWool, Name = "Palha de aço Brilhaço", Price = 8, Slot = ItemSlot.None, Color = new Color(0.78f, 0.74f, 0.66f),
+            Description = "Da Lã de Aço 1001 Utilidades. Use perto da TV do apartamento: enrolada na antena, acaba com o chuvisco da imagem." },
+        new ItemDef { Id = Repellent, Name = "Repelente Espanta-Muriçoca", Price = 18, Slot = ItemSlot.None, Color = new Color(0.35f, 0.75f, 0.85f),
+            Description = "Do Agro-Tudão. Passa no braço e os pernilongos do sítio somem por 5 minutos." },
+        new ItemDef { Id = StrongFlashlight, Name = "Lanterna de longo alcance", Price = 120, Slot = ItemSlot.None, Color = new Color(0.95f, 0.85f, 0.4f),
+            Description = "Do Conserta-Tudo do Primo. Basta levar na mochila: a lanterna (F) ilumina o dobro da distância, com o facho mais aberto." },
+        new ItemDef { Id = Fuse, Name = "Fusível de vidro", Price = 12, Slot = ItemSlot.None, Color = new Color(0.95f, 0.75f, 0.1f),
+            Description = "Reserva para a caixa de fusíveis da caminhonete. Leve na mochila: sentado no banco, mire no fusível queimado e aperte E." },
+        new ItemDef { Id = JerryCan, Name = "Galão de gasolina", Price = 45, Slot = ItemSlot.None, Color = new Color(0.85f, 0.15f, 0.1f),
+            Description = "Dos postos. Use perto da caminhonete de entregas: enche meio tanque (25 litros)." },
         // v0.9.7 — Auto Center Dois Mil (preço de lançamento; depois sobe).
         new ItemDef { Id = CarGou, Name = "Gou 1.0 quadrado", Price = 2000, Slot = ItemSlot.None, Color = new Color(0.35f, 0.55f, 0.95f), Car = true,
             Description = "Folksvagem 1.0, econômico e valente. Fica no pátio da concessionária para todo mundo da sala dirigir." },

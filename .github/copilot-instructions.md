@@ -87,6 +87,8 @@ This repository is a Godot 4.7.2 .NET game project with a Cloudflare Worker back
 - The project’s current design notes are summarized in `CLAUDE.md`; it is a useful source for repo-specific architecture and implementation rules that are not obvious from a single file.
 - `README.md` remains the best source for user-facing gameplay and release instructions.
 - `server/README.md` covers the worker rules and local multiplayer test flow.
+- Story mode, new levels (Bananal, Gruta, Serra), IK and level optimization are documented in `docs/README_PARA_IAS.md` (Portuguese). Read it before touching those areas. The game is a cozy everyday-life sim: never add horror, monsters or supernatural elements.
+- `docs/` is documentation only: code templates live in `docs/templates/*.cs.txt` and `DeadFrequency.csproj` excludes `docs/**`. Never add `.cs` files under `docs/`.
 
 ## Working expectations
 

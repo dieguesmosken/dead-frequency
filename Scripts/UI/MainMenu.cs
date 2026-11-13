@@ -1,5 +1,7 @@
 // Scripts/UI/MainMenu.cs
 // Tela de título. Montada em código (ver UiStyle); a cena main_menu.tscn só tem este nó.
+// v0.9.9: além do clássico, três visuais liberados por código (MenuStyles): Órbita, Cinema e Terminal
+// (MainMenu.Styles.cs). Os botões e painéis são os mesmos; só muda a disposição e o fundo.
 using Godot;
 
 namespace DeadFrequency;
@@ -13,7 +15,12 @@ public partial class MainMenu : Control
     public string MenuMusic { get; set; } = "res://Audio/Music/music_menu.wav";
 
     private Label _title;
-    private VBoxContainer _menu;
+    private BoxContainer _menu;
+    private Control _background;
+    private CenterContainer _center;
+    private VBoxContainer _stack;
+    private HBoxContainer _footer;
+    private MenuStyle _style;
     private OptionsPanel _options;
     private PanelContainer _optionsPanel;
     private PanelContainer _characterPanel;
@@ -45,17 +52,23 @@ public partial class MainMenu : Control
         Theme = UiStyle.Theme;
         SetAnchorsPreset(LayoutPreset.FullRect);
 
+        _style = (MenuStyle)Mathf.Clamp(GameSettings.Instance?.MenuStyle ?? 0, 0, MenuStyles.Names.Length - 1);
+        if (GameSettings.IsMobile)
+            _style = MenuStyle.Classico; // celular: layout próprio (MainMenu.Mobile.cs)
         var background = new ColorRect { Color = new Color(0.015f, 0.025f, 0.02f), MouseFilter = MouseFilterEnum.Ignore };
         background.SetAnchorsPreset(LayoutPreset.FullRect);
         AddChild(background);
+        _background = background;
 
         var center = new CenterContainer { MouseFilter = MouseFilterEnum.Ignore };
         center.SetAnchorsPreset(LayoutPreset.FullRect);
         AddChild(center);
+        _center = center;
 
         var stack = new VBoxContainer();
         stack.AddThemeConstantOverride("separation", 14);
         center.AddChild(stack);
+        _stack = stack;
 
         _title = UiStyle.MakeLabel("DEAD FREQUENCY", 72);
         stack.AddChild(_title);
@@ -66,7 +79,7 @@ public partial class MainMenu : Control
         _header.AddChild(UiStyle.MakeLabel("escolha sua profissão, sintonize a 96.6 e boa sorte", 16, color: UiStyle.PhosphorDim));
         _header.AddChild(new Control { CustomMinimumSize = new Vector2(0, 30) });
 
-        _menu = new VBoxContainer();
+        _menu = new BoxContainer { Vertical = true };
         _menu.AddThemeConstantOverride("separation", 12);
         stack.AddChild(_menu);
 
@@ -148,12 +161,13 @@ public partial class MainMenu : Control
         string save = SaveManager.Summary();
         var footerRow = new HBoxContainer();
         footerRow.AddThemeConstantOverride("separation", 8);
-        footerRow.AddChild(UiStyle.MakeLabel($"v{GameVersion.Display}", 14, HorizontalAlignment.Left, UiStyle.PhosphorDim));
+        footerRow.AddChild(UiStyle.MakeLabel($"v{GameVersion.Build}", 14, HorizontalAlignment.Left, UiStyle.PhosphorDim));
         footerRow.AddChild(UiStyle.AlphaBadge());
         if (save.Length > 0)
             footerRow.AddChild(UiStyle.MakeLabel("·   " + save, 14, HorizontalAlignment.Left, UiStyle.PhosphorDim));
         AddChild(footerRow);
         footerRow.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomLeft, LayoutPresetMode.Minsize, 16);
+        _footer = footerRow;
 
         // Aviso de versão nova no GitHub (canto inferior direito).
         _updateBox = new HBoxContainer { Visible = false };
@@ -161,7 +175,12 @@ public partial class MainMenu : Control
         AddChild(_updateBox);
         _updateBox.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomRight, LayoutPresetMode.Minsize, 16);
         _updateBox.GrowHorizontal = GrowDirection.Begin;
-        if (GameSettings.Instance?.CheckUpdates != false)
+        if (GameSettings.Instance?.CheckUpdates != false && AppUpdater.Supported)
+        {
+            // Celular: o próprio jogo baixa e instala o APK novo (não tem launcher no Android).
+            AppUpdater.Check(this, ShowApkUpdate);
+        }
+        else if (GameSettings.Instance?.CheckUpdates != false)
         {
             UpdateChecker.Check(this, (tag, url) =>
             {
@@ -173,12 +192,17 @@ public partial class MainMenu : Control
             });
         }
 
+        ApplyStyle();
+        if (GameSettings.IsMobile)
+            ApplyMobileLayout();
         AddChild(UiStyle.MakeScanlines());
 
         _startButton.GrabFocus();
 
         // Primeira vez nesta versão: mostra o que mudou (uma vez só).
         GameSettings settings = GameSettings.Instance;
+        if (AppUpdater.Supported)
+            AppUpdater.CleanUp();
         if (settings != null && settings.LastSeenVersion != GameVersion.Current)
         {
             string previous = settings.LastSeenVersion;
@@ -186,6 +210,61 @@ public partial class MainMenu : Control
             settings.Save();
             Callable.From(() => ShowInfo(true, previous)).CallDeferred();
         }
+    }
+
+    /// <summary>Aviso de APK novo no canto: Atualizar → barra de progresso → instalador do Android.</summary>
+    private void ShowApkUpdate(AppUpdater.ApkRelease release)
+    {
+        if (!IsInstanceValid(this))
+            return;
+        foreach (Node n in _updateBox.GetChildren())
+            n.QueueFree();
+        string mb = release.Size > 0 ? $" ({release.Size / 1048576f:0} MB)" : "";
+        Label status = UiStyle.MakeLabel($"Nova versão {release.Tag}{mb}", 16, color: UiStyle.Warning);
+        _updateBox.AddChild(status);
+        // Um botão só, que muda de papel: Atualizar → (baixando) → Instalar, ou Navegador se falhar.
+        int stage = 0; // 0 = atualizar, 1 = baixando, 2 = instalar, 3 = navegador
+        Button button = null;
+        button = UiStyle.MakeButton("Atualizar", () =>
+        {
+            switch (stage)
+            {
+                case 2:
+                    AppUpdater.Install(release);
+                    return;
+                case 3:
+                    OS.ShellOpen(release.Url);
+                    return;
+                case 1:
+                    return;
+            }
+            stage = 1;
+            button.Disabled = true;
+            status.Text = "Baixando... 0%";
+            AppUpdater.Download(this, release,
+                p => { if (IsInstanceValid(status)) status.Text = $"Baixando... {p * 100f:0}%"; },
+                (ok, message) =>
+                {
+                    if (!IsInstanceValid(status))
+                        return;
+                    button.Disabled = false;
+                    if (ok)
+                    {
+                        stage = 2;
+                        status.Text = "Pronto: confirme a instalação.";
+                        button.Text = "Instalar";
+                        AppUpdater.Install(release);
+                    }
+                    else
+                    {
+                        stage = 3;
+                        status.Text = message;
+                        button.Text = "Navegador";
+                    }
+                });
+        }, 160);
+        _updateBox.AddChild(button);
+        _updateBox.Visible = true;
     }
 
     private void ShowInfo(bool justUpdated, string previousVersion = null)
@@ -210,6 +289,7 @@ public partial class MainMenu : Control
 
     public override void _Process(double delta)
     {
+        UpdateStyle(delta);
         // Falha de sinal ocasional no título.
         _glitchTimer -= delta;
         if (_glitchTimer > 0)
@@ -285,7 +365,7 @@ public partial class MainMenu : Control
     {
         _menu.Visible = false;
         _header.Visible = false;
-        _title.AddThemeFontSizeOverride("font_size", 40);
+        _title.AddThemeFontSizeOverride("font_size", Mathf.Min(40, TitleSize));
         _optionsPanel.Visible = true;
         _options.FocusFirst();
     }
@@ -294,7 +374,7 @@ public partial class MainMenu : Control
     {
         _menu.Visible = false;
         _header.Visible = false;
-        _title.AddThemeFontSizeOverride("font_size", 40);
+        _title.AddThemeFontSizeOverride("font_size", Mathf.Min(40, TitleSize));
         _characterPanel.Visible = true;
         _character.FocusFirst();
     }
@@ -304,7 +384,7 @@ public partial class MainMenu : Control
         _menu.Visible = false;
         // A tela do multiplayer é alta: some com o subtítulo e o título fica menor.
         _header.Visible = false;
-        _title.AddThemeFontSizeOverride("font_size", 40);
+        _title.AddThemeFontSizeOverride("font_size", Mathf.Min(40, TitleSize));
         _multiplayerPanel.Visible = true;
         _multiplayer.FocusFirst();
     }
@@ -318,8 +398,14 @@ public partial class MainMenu : Control
         _levelPanel.Visible = false;
         _profPanel.Visible = false;
         _header.Visible = true;
-        _title.AddThemeFontSizeOverride("font_size", 72);
+        _title.AddThemeFontSizeOverride("font_size", TitleSize);
         _menu.Visible = true;
+        // Mudou o menu inicial nas Opções (código): monta a tela de novo com o visual novo.
+        if ((GameSettings.Instance?.MenuStyle ?? 0) != (int)_style)
+        {
+            Callable.From(() => GetTree().ReloadCurrentScene()).CallDeferred();
+            return;
+        }
         _startButton.GrabFocus();
     }
 }

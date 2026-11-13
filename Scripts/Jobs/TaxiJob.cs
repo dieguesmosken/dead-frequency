@@ -1,6 +1,7 @@
 // Scripts/Jobs/TaxiJob.cs
-// Taxista: um passageiro espera na calçada (feixe amarelo). Pare a van perto dele, ele embarca e diz
+// Taxista: um passageiro espera na calçada (feixe amarelo). Pare o táxi perto dele, ele embarca e diz
 // o destino; pare perto do destino para receber a corrida (R$ 30 + pela distância, até R$ 400).
+// v0.9.9: só embarca no táxi amarelo da cooperativa (fica no pátio da central, CityGenerator.Taxi).
 // v0.9.5: passageiros exigentes. Executivo (roupa social) quer a 96.6 ligada, sem passar de 60 km/h e sem
 // batida; apressado paga bônus se chegar rápido; tranquilo só não gosta de batida.
 using Godot;
@@ -14,13 +15,18 @@ public partial class TaxiJob : JobBase
     {
         "Me leva na {0}, por favor. E abaixa esse rádio... ou não, pode deixar.",
         "{0}. Rapidinho que eu tô atrasado pro plantão.",
-        "Toca pra {0}! Essa van é segura mesmo?",
+        "Toca pra {0}! Esse táxi é seguro mesmo?",
         "Boa noite. {0}. Não passa pela Rua Estática que lá tem coisa estranha.",
         "Vai pra {0}? Eu pago em dinheiro... trocado, tá?",
     };
 
     private int _pickup = -1;
     private int _dest = -1;
+    private Vector3 _pickupPinPosition;
+    private Vector3 _destPinPosition;
+    private bool _hasPickupPin;
+    private bool _hasDestPin;
+    private readonly System.Collections.Generic.List<Vector3> _pendingPassengerPins = new();
     private bool _riding;
     private CharacterModel _passenger;
     private Node3D _marker;
@@ -35,6 +41,11 @@ public partial class TaxiJob : JobBase
     private VanController _rideVan;
     private static readonly string[] MoodName = { "Executivo", "Apressado", "Tranquilo" };
 
+    /// <summary>O táxi da cooperativa (null se a fase não tem um, aí qualquer veículo serve).</summary>
+    private VanController TaxiCar => City?.Taxi != null && IsInstanceValid(City.Taxi) ? City.Taxi : null;
+
+    private bool IsTaxi(VanController v) => v != null && (TaxiCar == null || v == TaxiCar);
+
     public override void _Ready() => NewPassenger();
 
     public override void _ExitTree()
@@ -42,17 +53,42 @@ public partial class TaxiJob : JobBase
         if (_rideVan != null && IsInstanceValid(_rideVan))
             _rideVan.Crashed -= OnCrash;
         JobMarkers.Free(ref _marker);
+        ReleasePickupPin();
+        ReleaseDestinationPin();
+        foreach (Vector3 position in _pendingPassengerPins)
+            City?.UnpinChunkForPosition(position);
+        _pendingPassengerPins.Clear();
         if (_passenger != null && IsInstanceValid(_passenger))
             _passenger.QueueFree();
     }
 
+    private void ReleasePickupPin()
+    {
+        if (!_hasPickupPin)
+            return;
+        City?.UnpinChunkForPosition(_pickupPinPosition);
+        _hasPickupPin = false;
+    }
+
+    private void ReleaseDestinationPin()
+    {
+        if (!_hasDestPin)
+            return;
+        City?.UnpinChunkForPosition(_destPinPosition);
+        _hasDestPin = false;
+    }
+
     private void NewPassenger()
     {
+        ReleasePickupPin();
+        ReleaseDestinationPin();
         _riding = false;
         _pickup = RandomPoint(PlayerPos, 60f, 320f);
         if (_pickup < 0)
             return;
         DeliveryPoint p = City.DeliveryPoints[_pickup];
+        _pickupPinPosition = p.Position;
+        _hasPickupPin = City.PinChunkForPosition(_pickupPinPosition);
         var rng = new RandomNumberGenerator();
         rng.Randomize();
         _mood = (Mood)rng.RandiRange(0, 2);
@@ -81,9 +117,11 @@ public partial class TaxiJob : JobBase
             return;
 
         VanController van = Player?.CurrentVehicle;
+        if (!IsTaxi(van))
+            van = null; // passageiro não embarca (nem desce) em outro veículo
         if (!_riding && _passenger != null && IsInstanceValid(_passenger))
         {
-            // Passageiro acena e olha para a van.
+            // Passageiro acena e olha para o táxi.
             _passenger.Animate((float)delta, 0f);
             _passenger.SetHeadPitch(Mathf.Sin(_anim * 2f) * 0.2f);
             if (van != null)
@@ -171,8 +209,21 @@ public partial class TaxiJob : JobBase
         _crashes = 0;
         _warnedSpeed = false;
         _passenger.Visible = false;
+        ReleasePickupPin();
         _dest = RandomPoint(City.DeliveryPoints[_pickup].Position, 140f, 600f, _pickup);
+        if (_dest < 0)
+        {
+            // Sem destino válido, encerra a tentativa e deixa o passageiro esperando novamente.
+            _riding = false;
+            _passenger.Visible = true;
+            _pickupPinPosition = City.DeliveryPoints[_pickup].Position;
+            _hasPickupPin = City.PinChunkForPosition(_pickupPinPosition);
+            _wait = 2.0;
+            return;
+        }
         DeliveryPoint d = City.DeliveryPoints[_dest];
+        _destPinPosition = d.Position;
+        _hasDestPin = City.PinChunkForPosition(_destPinPosition);
         JobMarkers.Free(ref _marker);
         _marker = JobMarkers.Create(this, d.Position, Yellow, "DESTINO");
         string line = string.Format(Lines[Rng.RandiRange(0, Lines.Length - 1)], d.Address);
@@ -204,10 +255,24 @@ public partial class TaxiJob : JobBase
             _passenger.GlobalPosition = City.DeliveryPoints[_dest].Position;
             CharacterModel p = _passenger;
             _passenger = null;
+            Vector3 destinationPin = _destPinPosition;
+            bool releaseDestinationPin = _hasDestPin;
+            _hasDestPin = false;
             Tween tw = p.CreateTween();
             Vector3 away = p.GlobalPosition + new Vector3(Rng.RandfRange(-6f, 6f), 0f, Rng.RandfRange(-6f, 6f));
             tw.TweenProperty(p, "global_position", away, 4.0);
-            tw.TweenCallback(Callable.From(p.QueueFree));
+            tw.TweenCallback(Callable.From(() =>
+            {
+                p.QueueFree();
+                if (releaseDestinationPin && _pendingPassengerPins.Remove(destinationPin))
+                    City?.UnpinChunkForPosition(destinationPin);
+            }));
+            if (releaseDestinationPin)
+                _pendingPassengerPins.Add(destinationPin);
+        }
+        else
+        {
+            ReleaseDestinationPin();
         }
         _riding = false;
         _pickup = -1;
@@ -220,10 +285,11 @@ public partial class TaxiJob : JobBase
         label = "";
         if (City == null)
             return false;
-        if (Player?.CurrentVehicle == null && M.Van != null && IsInstanceValid(M.Van))
+        VanController taxi = TaxiCar;
+        if (!IsTaxi(Player?.CurrentVehicle) && taxi != null)
         {
-            position = M.Van.GlobalPosition;
-            label = "VAN";
+            position = taxi.GlobalPosition;
+            label = "TÁXI";
             return true;
         }
         if (_riding && _dest >= 0)
@@ -245,12 +311,12 @@ public partial class TaxiJob : JobBase
     {
         if (_pickup < 0 || City == null)
             return "Procurando passageiro...";
-        bool inVan = Player?.CurrentVehicle != null;
-        string van = inVan ? "" : "\n(Entre na van para fazer as corridas.)";
+        bool inTaxi = IsTaxi(Player?.CurrentVehicle);
+        string van = inTaxi ? "" : "\n(Pegue o táxi amarelo no pátio da central para fazer as corridas.)";
         if (!_riding)
         {
             DeliveryPoint p = City.DeliveryPoints[_pickup];
-            return $"· Passageiro esperando em {p.Address} ({PlayerPos.DistanceTo(p.Position):0} m)\n  Pare a van do lado dele.{van}";
+            return $"· Passageiro esperando em {p.Address} ({PlayerPos.DistanceTo(p.Position):0} m)\n  Pare o táxi do lado dele.{van}";
         }
         DeliveryPoint d = City.DeliveryPoints[_dest];
         string mood = _mood switch

@@ -7,13 +7,28 @@ namespace DeadFrequency;
 
 public static class GameVersion
 {
-    public const string Current = "0.9.8";
+    public const string Current = "0.9.9";
     public const string Display = Current;
 
     public readonly record struct Release(string Version, string Date, string Title, string[] Changes);
 
     public static readonly Release[] Changelog =
     {
+        new("0.9.9", "12/11/2026", "Lojas de verdade", new[]
+        {
+            "Táxi amarelo da cooperativa Rádio Táxi Sintonia no pátio da central (com o adesivo do app 66): o taxista agora faz as corridas com ele, e o passageiro só embarca no táxi.",
+            "Van de viagem anos 80, a Fórdi Viajante, estacionada no pátio da central: é a van do futuro Modo História e já dá para dirigir.",
+            "Shopping Marconi com oito balcões, dois pisos e escada para subir a pé; as fachadas comerciais viraram lojas térreas do tamanho certo.",
+            "Lã de Aço 1001 Utilidades no shopping: a palha de aço Brilhaço enrolada na antena acaba com o chuvisco da TV do apartamento.",
+            "Conserta-Tudo do Primo em frente à central: o gari acha sucata na rua e vende ao Primo, que também vende a lanterna de longo alcance.",
+            "Agro-Tudão no sítio: casa de rações na Estrada do Rancho, entregas de saco de ração para os sítios e o Repelente Espanta-Muriçoca.",
+            "Central de entregas com portão novo do lado esquerdo e grade de metal em cima do muro; ninguém estaciona mais na frente dos portões. A Rádio 96.6 ganhou muro, grade e um portãozinho.",
+            "Céu novo: nuvens, sol, lua com relevo e estrelas que acompanham o ciclo de dia e noite.",
+            "Menus iniciais novos liberados por código em Opções > Interface: ORBITA966, CINEMA966 e TERMINAL966 (VISUAL966 libera os três).",
+            "Mais leve em PC fraco: a cidade carrega em pedaços em volta do jogador, com tela de carregamento do mundo.",
+            "Prévia para celular nas versões de teste: APK de Android com controles de toque e atualização pelo próprio jogo.",
+            "Online: táxi, van de viagem, sucata, ração e itens novos validados pelo servidor. Atualize o servidor com npm run deploy.",
+        }),
         new("0.9.8", "10/11/2026", "Rua de verdade", new[]
         {
             "Meio-fio de concreto cinza com faixas brancas intercaladas e tinta gasta pelo tempo; amarelo nos cruzamentos e trechos proibidos, com a linha amarela oficial no asfalto junto à sarjeta (como manda a Resolução CONTRAN 973/2022). Carros gerados só estacionam onde é permitido.",
@@ -297,6 +312,47 @@ public static class GameVersion
     }
 
     /// <summary>Compara "0.5.0" com "0.4.2". Versões vazias contam como mais antigas.</summary>
+    /// <summary>
+    /// Build exato instalado: o CI grava em application/config/version (ex.: "0.9.9.8-pre" na Internal,
+    /// "0.9.9" no público). Rodando pelo editor fica vazio e vale Current.
+    /// </summary>
+    public static string Build
+    {
+        get
+        {
+            string v = Godot.ProjectSettings.GetSetting("application/config/version", "").AsString();
+            return string.IsNullOrWhiteSpace(v) ? Current : v.Trim();
+        }
+    }
+
+    /// <summary>Build de teste (Internal / APK de teste): recebe os pré-releases no atualizador.</summary>
+    public static bool IsInternalBuild => Build.Contains('-');
+
+    /// <summary>
+    /// Compara builds com número da Internal: "0.9.9.8-pre" &lt; "0.9.9.9-pre" &lt; "0.9.9" (o público fecha a versão)
+    /// &lt; "0.9.10.1-pre". Build sem número (ex.: editor) conta como o começo da versão.
+    /// </summary>
+    public static int CompareBuild(string a, string b)
+    {
+        static int[] Parse(string v)
+        {
+            v ??= "";
+            bool pre = v.Contains('-');
+            string[] p = v.Split('-')[0].Split('.');
+            int[] r = new int[4];
+            for (int i = 0; i < 4; i++)
+                r[i] = i < p.Length && int.TryParse(p[i], out int x) ? x : 0;
+            if (!pre)
+                r[3] = int.MaxValue; // público: depois de todos os -pre da mesma versão
+            return r;
+        }
+        int[] x = Parse(a), y = Parse(b);
+        for (int i = 0; i < 4; i++)
+            if (x[i] != y[i])
+                return x[i].CompareTo(y[i]);
+        return 0;
+    }
+
     public static int Compare(string a, string b)
     {
         string[] pa = (a ?? "").Split('.'), pb = (b ?? "").Split('.');

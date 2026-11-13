@@ -157,28 +157,31 @@ public partial class CityGenerator
 
     // ================================================================ prédios comuns
 
-    private void DecorateBuilding(Node3D parent, Vector3 baseCenter, float width, float depth, float height, Vector3 blockCenter)
+    private Vector3 GetBuildingFront(Vector3 baseCenter, Vector3 blockCenter)
     {
         // Fachada principal = lado do lote mais perto da rua.
         Vector3 toLot = baseCenter - blockCenter;
-        Vector3 front;
         if (Mathf.Abs(toLot.X) < 0.5f && Mathf.Abs(toLot.Z) < 0.5f)
-            front = _decoRng.Randf() < 0.5f ? Vector3.Back : Vector3.Right; // lote único: qualquer lado
-        else if (Mathf.Abs(toLot.X) > Mathf.Abs(toLot.Z))
-            front = new Vector3(Mathf.Sign(toLot.X), 0f, 0f);
-        else
-            front = new Vector3(0f, 0f, Mathf.Sign(toLot.Z));
+            return _decoRng.Randf() < 0.5f ? Vector3.Back : Vector3.Right; // lote único: qualquer lado
+        if (Mathf.Abs(toLot.X) > Mathf.Abs(toLot.Z))
+            return new Vector3(Mathf.Sign(toLot.X), 0f, 0f);
+        return new Vector3(0f, 0f, Mathf.Sign(toLot.Z));
+    }
 
-        if (_decoRng.Randf() < StorefrontChance)
-            BuildStorefront(parent, baseCenter, width, depth, front, blockCenter);
+    private void DecorateBuilding(Node3D parent, Vector3 baseCenter, float width, float depth, float height, Vector3 blockCenter, Vector3 front, bool hasStorefront, int storeBrandIndex = -1)
+    {
+        if (hasStorefront)
+            BuildStorefront(parent, baseCenter, width, depth, front, blockCenter, storeBrandIndex);
 
         if (_decoRng.Randf() < WallAcChance && height > 6f)
             BuildWallAcs(parent, baseCenter, width, depth, height, front);
     }
 
-    private void BuildStorefront(Node3D parent, Vector3 baseCenter, float width, float depth, Vector3 front, Vector3 blockCenter)
+    private void BuildStorefront(Node3D parent, Vector3 baseCenter, float width, float depth, Vector3 front, Vector3 blockCenter, int brandIndex = -1)
     {
-        StoreBrand brand = NextBrand();
+        StoreBrand brand = brandIndex >= 0 && brandIndex < _brands.Count
+            ? _brands[brandIndex]
+            : NextBrand();
         float facadeWidth = Mathf.Abs(front.X) > 0.5f ? depth : width;
         float halfDepth = Mathf.Abs(front.X) > 0.5f ? width * 0.5f : depth * 0.5f;
         float signWidth = Mathf.Min(facadeWidth * 0.85f, 9f);
@@ -266,6 +269,9 @@ public partial class CityGenerator
 
     private void BuildPhoneBooths()
     {
+        if (_useLogicalBlockPlans)
+            return; // O conteúdo acompanha cada chunk.
+
         float edge = BlockSize * 0.5f - 0.9f;
         var booths = new Node3D { Name = "PhoneBooths" };
         _staticRoot.AddChild(booths);
@@ -285,6 +291,26 @@ public partial class CityGenerator
         }
         // Um em frente ao portão do depósito, para quem acabou de chegar.
         AddPhoneBooth(booths, new Vector3(8f, 0f, BlockSize * 0.5f - 1.4f), Vector3.Back);
+    }
+
+    private void BuildPhoneBoothsForBlock(int bx, int bz)
+    {
+        var booths = new Node3D { Name = $"PhoneBooths_{bx}_{bz}" };
+        (_activeChunkRoot ?? _staticRoot).AddChild(booths);
+
+        if (bx == 0 && bz == 0)
+        {
+            // Um orelhão em frente ao portão do depósito, para quem acabou de chegar.
+            AddPhoneBooth(booths, new Vector3(8f, 0f, BlockSize * 0.5f - 1.4f), Vector3.Back);
+            return;
+        }
+
+        float edge = BlockSize * 0.5f - 0.9f;
+        Vector3 center = BlockCenter(bx, bz) + new Vector3(0f, CurbHeight, 0f);
+        if (_decoRng.Randf() < PhoneBoothChance)
+            AddPhoneBooth(booths, center + new Vector3(-edge, 0f, BlockSize * 0.25f), Vector3.Left);
+        if (_decoRng.Randf() < PhoneBoothChance * 0.5f)
+            AddPhoneBooth(booths, center + new Vector3(BlockSize * 0.25f, 0f, -edge), Vector3.Forward);
     }
 
     private void AddPhoneBooth(Node3D parent, Vector3 position, Vector3 towardRoad, PhoneBrand? forced = null)
@@ -311,6 +337,9 @@ public partial class CityGenerator
 
     private void BuildHydrants()
     {
+        if (_useLogicalBlockPlans)
+            return; // Hidrantes são gerados pelo chunk correspondente.
+
         var root = new Node3D { Name = "Hydrants" };
         _staticRoot.AddChild(root);
         float corner = BlockSize * 0.5f - 1.0f;
@@ -324,6 +353,18 @@ public partial class CityGenerator
                 AddHydrant(root, c + new Vector3(corner, 0f, -corner + 2.5f));
             }
         }
+    }
+
+    private void BuildHydrantsForBlock(int bx, int bz)
+    {
+        if ((bx == 0 && bz == 0) || _decoRng.Randf() > 0.35f)
+            return;
+
+        var root = new Node3D { Name = $"Hydrants_{bx}_{bz}" };
+        (_activeChunkRoot ?? _staticRoot).AddChild(root);
+        float corner = BlockSize * 0.5f - 1.0f;
+        Vector3 center = BlockCenter(bx, bz) + new Vector3(0f, CurbHeight, 0f);
+        AddHydrant(root, center + new Vector3(corner, 0f, -corner + 2.5f));
     }
 
     private void AddHydrant(Node3D parent, Vector3 position)
@@ -408,6 +449,20 @@ public partial class CityGenerator
         truck.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(2.5f, 3f, 8.4f) }, Position = new Vector3(0f, 1.6f, 0f) });
         parent.AddChild(truck);
 
+        StandardMaterial3D beacon = Emissive(new Color(1f, 0.1f, 0.05f), lightsOn ? 4f : 0.4f);
+        if (MeshyVehicles.HasProp("bombeiros"))
+        {
+            // Modelo do Meshy (v0.9.9): as luzes azuis do teto viram vermelhas pela máscara.
+            MeshyVehicles.BuildProp(truck, "bombeiros", new Vector3(2.5f, 3.2f, 8.4f), 1, new Color(0.95f, 0.08f, 0.05f), 0.0632f);
+            if (lightsOn)
+            {
+                var light = new OmniLight3D { Position = new Vector3(0f, 3.5f, 2.6f), LightColor = new Color(1f, 0.1f, 0.05f), LightEnergy = 3f, OmniRange = 12f };
+                truck.AddChild(light);
+                Blink(light, beacon, 3f, 0.35f);
+            }
+            return;
+        }
+
         AddBox(truck, new Vector3(0f, 1.6f, 2.95f), new Vector3(2.5f, 2.3f, 2.3f), _fireRed, false);           // cabine
         AddBox(truck, new Vector3(0f, 2.15f, 4.12f), new Vector3(2.2f, 0.9f, 0.05f), _glass, false);          // para-brisa
         AddBox(truck, new Vector3(0f, 1.65f, -1.25f), new Vector3(2.5f, 2.4f, 6.0f), _fireRed, false);         // baú
@@ -427,7 +482,6 @@ public partial class CityGenerator
                 wheel.Rotation = new Vector3(0f, 0f, Mathf.Pi * 0.5f);
             }
         // Giroflex.
-        StandardMaterial3D beacon = Emissive(new Color(1f, 0.1f, 0.05f), lightsOn ? 4f : 0.4f);
         AddBox(truck, new Vector3(0f, 2.85f, 3.2f), new Vector3(1.8f, 0.18f, 0.35f), beacon, false);
         if (lightsOn)
         {
@@ -544,10 +598,14 @@ public partial class CityGenerator
         StandardMaterial3D red = Emissive(new Color(1f, 0.08f, 0.05f), lightsOn ? 4f : 0.3f);
         StandardMaterial3D blue = Emissive(new Color(0.15f, 0.35f, 1f), lightsOn ? 4f : 0.3f);
         // Viatura da Quaternius (Realistic Car Pack, frente em +Z: gira de volta).
-        bool model = AssetProps.Spawn(car, "res://Assets/Quaternius/Vehicles/Cop.fbx", Vector3.Zero, Mathf.Pi, 1.05f) != null;
+        // Modelo do Meshy (v0.9.9, frente em -Z como o CarModels); sem ele, a viatura da Quaternius.
+        bool meshy = MeshyVehicles.HasProp("policia");
+        bool model = meshy
+            ? MeshyVehicles.BuildProp(car, "policia", new Vector3(1.85f, 1.55f, 4.4f), -1) != Vector3.Zero
+            : AssetProps.Spawn(car, "res://Assets/Quaternius/Vehicles/Cop.fbx", Vector3.Zero, Mathf.Pi, 1.05f) != null;
         if (model)
         {
-            car.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(1.85f, 1.1f, 3.9f) }, Position = new Vector3(0f, 0.65f, 0f) });
+            car.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(1.85f, 1.1f, meshy ? 4.4f : 3.9f) }, Position = new Vector3(0f, 0.65f, 0f) });
             // O modelo já tem a barra de luz (giroflex): só as luzes piscando (sem desenhar outra por cima).
         }
         else

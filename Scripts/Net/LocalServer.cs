@@ -25,7 +25,7 @@ public partial class LocalServer : Node
     private const string CodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
     /// <summary>Mesma ordem de DeliveryManager.CargoCatalog / CARGO_CATALOG do servidor.</summary>
-    private static readonly int[] CargoPayments = { 150, 300, 120, 180, 220, 90, 160, 140, 260, 280, 200, 110, 170 };
+    private static readonly int[] CargoPayments = { 150, 300, 120, 180, 220, 90, 160, 140, 260, 280, 200, 110, 170, 130 };
     private static readonly string[] PlayerColors = { "#8cff9e", "#ffb347", "#6ec6ff", "#ff6b6b", "#d58cff", "#fff27a", "#7affea", "#ff9ad5" };
 
     public static LocalServer Instance { get; private set; }
@@ -629,6 +629,8 @@ public partial class LocalServer : Node
 
     // ---------------- Turnos ----------------
 
+    private int[] Pool() => CargoRules.Pool(_level);
+
     private void NewShift(bool broadcast)
     {
         _shift += 1;
@@ -642,7 +644,7 @@ public partial class LocalServer : Node
         _jobs = Enumerable.Range(0, count).Select(i => new Job
         {
             Id = $"c{_shift}_{i}",
-            Type = (int)(_rng.Randi() % (uint)CargoPayments.Length),
+            Type = Pool()[(int)(_rng.Randi() % (uint)Pool().Length)],
             Pick = (int)(_rng.Randi() % 100000),
             Slot = i,
         }).ToList();
@@ -685,7 +687,7 @@ public partial class LocalServer : Node
         _jobs.Select(j => new Dictionary<string, object> { ["id"] = j.Id, ["type"] = j.Type, ["pick"] = j.Pick, ["slot"] = j.Slot, ["status"] = j.Status }).ToList();
 
     /// <summary>Mesmos de VEHICLES no servidor.</summary>
-    private static readonly string[] Vehicles = { "van", "moto", "truck_yellow", "truck_red", "car_gou", "car_fusca", "car_opalinha" };
+    private static readonly string[] Vehicles = { "van", "moto", "truck_yellow", "truck_red", "car_gou", "car_fusca", "car_opalinha", "taxi", "van_viagem" };
     private readonly List<string> _cars = new();
 
     private bool IsKnownObject(string id) => Vehicles.Contains(id) || _jobs.Any(j => j.Id == id && j.Status == "pending");

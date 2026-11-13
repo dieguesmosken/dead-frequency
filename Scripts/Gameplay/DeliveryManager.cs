@@ -22,10 +22,13 @@ public class DeliveryJob
     public Label3D Label;
     /// <summary>Multiplayer: já avisamos o servidor, esperando confirmação.</summary>
     public bool Reported;
+    public bool ChunkPinned;
 }
 
 public partial class DeliveryManager : Node3D
 {
+    public const string GroupName = "delivery_manager";
+
     [Signal] public delegate void DeliveryCompletedEventHandler(string cargoName, int payment);
     [Signal] public delegate void CargoLostEventHandler(string cargoName);
     [Signal] public delegate void ShiftStartedEventHandler(int shift);
@@ -55,6 +58,8 @@ public partial class DeliveryManager : Node3D
         "res://Data/Cargo/parabolica.tres",
         "res://Data/Cargo/tomates.tres",
         "res://Data/Cargo/feijoada.tres",
+        // v0.9.9: só no sítio (CARGO_CATALOG levels: ["farm"]); nasce no Agro-Tudão.
+        "res://Data/Cargo/racao.tres",
     };
     [Export] public int CargoPerShift { get; set; } = 3;
     /// <summary>Distância mínima do depósito para sortear um destino.</summary>
@@ -91,7 +96,7 @@ public partial class DeliveryManager : Node3D
     public override void _Ready()
     {
         _rng.Randomize();
-        AddToGroup("delivery_manager");
+        AddToGroup(GroupName);
         _beamMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/beacon_beam.gdshader") };
         _deliveredSound = new AudioStreamPlayer3D { Bus = AudioManager.SfxBus, UnitSize = 10f };
         if (ResourceLoader.Exists("res://Audio/SFX/delivery_ok.wav"))
@@ -109,12 +114,40 @@ public partial class DeliveryManager : Node3D
                 TotalDelivered = save.TotalDelivered;
             }
         }
-        // As profissões (v0.9) entram junto com a fase.
+        // As profissões aguardam o preparo dos destinos e pontos de serviço da fase.
+        if (City != null && City.WorldData == null)
+            City.WorldDataReady += OnWorldDataReady;
+        else
+            QueueProfessionManager();
+    }
+
+    private bool _professionManagerQueued;
+
+    private void OnWorldDataReady()
+    {
+        if (City != null)
+            City.WorldDataReady -= OnWorldDataReady;
+        QueueProfessionManager();
+    }
+
+    private void QueueProfessionManager()
+    {
+        if (_professionManagerQueued || !IsInsideTree())
+            return;
+
+        _professionManagerQueued = true;
         Callable.From(() =>
         {
+            _professionManagerQueued = false;
             if (IsInsideTree() && ProfessionManager.Instance == null)
                 GetParent().AddChild(new ProfessionManager { Name = "Professions", City = City, Player = Player, Delivery = this });
         }).CallDeferred();
+    }
+
+    public override void _ExitTree()
+    {
+        if (City != null)
+            City.WorldDataReady -= OnWorldDataReady;
     }
 
     /// <summary>
@@ -196,7 +229,8 @@ public partial class DeliveryManager : Node3D
         {
             for (int i = 0; i < CargoPerShift; i++)
             {
-                CargoItem cargo = SpawnCargo(_rng.RandiRange(0, CargoCatalog.Length - 1), i);
+                int[] pool = CargoRules.Pool(City != null && City.IsFarm ? "farm" : "city");
+                CargoItem cargo = SpawnCargo(pool[_rng.RandiRange(0, pool.Length - 1)], i);
                 if (cargo != null)
                     cargoList.Add(cargo);
             }
@@ -376,7 +410,9 @@ public partial class DeliveryManager : Node3D
         cargo.Data = GD.Load<CargoData>(CargoCatalog[Mathf.PosMod(typeIndex, CargoCatalog.Length)]);
         GetTree().CurrentScene.AddChild(cargo);
         var offset = new Vector3((slot % 3 - 1) * 1.1f, -0.15f, slot / 3 * 1.1f);
-        cargo.GlobalPosition = CargoSpawn.GlobalPosition + offset;
+        // Saco de ração (v0.9.9) nasce na frente do Agro-Tudão, não na cooperativa.
+        Vector3 origin = cargo.Data?.CargoId == "racao" && City?.AgroTudaoSpawn is Vector3 agro ? agro : CargoSpawn.GlobalPosition;
+        cargo.GlobalPosition = origin + offset;
         return cargo;
     }
 
@@ -391,6 +427,7 @@ public partial class DeliveryManager : Node3D
         if (!ChooseDestination(job, pick))
             return;
 
+        job.ChunkPinned = City.PinChunkForPosition(job.Point.Position);
         BuildMarker(job);
         job.Marker.Visible = EntregadorMode;
         cargo.CargoDestroyed += () => OnJobCargoDestroyed(job);
@@ -503,6 +540,11 @@ public partial class DeliveryManager : Node3D
     private void RemoveJob(DeliveryJob job, bool freeCargo, bool playSound)
     {
         _jobs.Remove(job);
+        if (job.ChunkPinned)
+        {
+            City?.UnpinChunkForPosition(job.Point.Position);
+            job.ChunkPinned = false;
+        }
         if (playSound && job.Marker != null && IsInstanceValid(job.Marker))
         {
             _deliveredSound.GlobalPosition = job.Marker.GlobalPosition;

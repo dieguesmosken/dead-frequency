@@ -16,6 +16,8 @@ public partial class FrentistaJob : JobBase
     private Label3D _label;
     private string _brand = "";
     private Vector3 _spot;
+    private bool _hasStationPin;
+    private readonly System.Collections.Generic.List<Vector3> _routePins = new();
     private bool _arrived;
     private bool _filling;
     private float _fill;
@@ -23,6 +25,10 @@ public partial class FrentistaJob : JobBase
 
     public override void _ExitTree()
     {
+        ReleaseRoutePins();
+        if (_hasStationPin)
+            City?.UnpinChunkForPosition(_spot);
+        _hasStationPin = false;
         JobMarkers.Free(ref _marker);
         if (_car != null && IsInstanceValid(_car))
             _car.QueueFree();
@@ -45,7 +51,12 @@ public partial class FrentistaJob : JobBase
         for (int i = 1; i < City.GasSpots.Count; i++)
             if (PlayerPos.DistanceTo(City.GasSpots[i].Position) < PlayerPos.DistanceTo(City.GasSpots[best].Position))
                 best = i;
+        ReleaseRoutePins();
+        if (_hasStationPin)
+            City.UnpinChunkForPosition(_spot);
         (_spot, _brand) = City.GasSpots[best];
+        _hasStationPin = City.PinChunkForPosition(_spot);
+        PinApproachRoadChunks();
 
         _car = new AnimatableBody3D { Name = "CarroPosto", CollisionLayer = 1, CollisionMask = 0, SyncToPhysics = false };
         AddChild(_car);
@@ -92,6 +103,28 @@ public partial class FrentistaJob : JobBase
     {
         _filling = true;
         GameHud.Toast(this, "Abastecendo... fique perto da bomba.", Green, 2.0);
+    }
+
+    private void PinApproachRoadChunks()
+    {
+        // A rota do veículo usa a avenida em z = _spot.Z + 16 e pode cobrir até 170 m
+        // em ambos os sentidos. Reserva cada trecho para a animação não cruzar cenário descarregado.
+        for (float along = -170f; along <= 170f; along += 36f)
+        {
+            if (Mathf.Abs(along) < 12f)
+                continue;
+
+            Vector3 position = _spot + new Vector3(along, 0f, 16f);
+            if (City.PinChunkForPosition(position))
+                _routePins.Add(position);
+        }
+    }
+
+    private void ReleaseRoutePins()
+    {
+        foreach (Vector3 position in _routePins)
+            City?.UnpinChunkForPosition(position);
+        _routePins.Clear();
     }
 
     // ---------------- trajeto do carro ----------------
@@ -177,6 +210,7 @@ public partial class FrentistaJob : JobBase
             {
                 _car.QueueFree();
                 _car = null;
+                ReleaseRoutePins();
             }
             return;
         }

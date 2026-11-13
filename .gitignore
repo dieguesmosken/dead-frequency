@@ -31,3 +31,9 @@ out/
 launcher/app/_test.gd.uid
 
 Notes/
+# Godot cria .uid ao ver scripts; em docs/ não há scripts de verdade (modelos são .cs.txt).
+docs/**/*.uid
+
+# Chaves de assinatura do Android: nunca no repositório (ficam nos segredos ANDROID_KEYSTORE_* do GitHub).
+*.keystore
+*.jks

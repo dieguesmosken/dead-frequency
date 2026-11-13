@@ -159,7 +159,8 @@ public partial class CityGenerator
                 }
                 foreach (float z in new[] { -7f, -4.5f, -2f })
                     foreach (float y in new[] { 0.6f, 1.05f })
-                        MarketShelfSlots.Add((st.Position + new Vector3(x + side * (gd * 0.5f + 0.05f), y, z), Mathf.Pi * 0.5f));
+                        if (!_useLogicalServiceData)
+                            MarketShelfSlots.Add((st.Position + new Vector3(x + side * (gd * 0.5f + 0.05f), y, z), Mathf.Pi * 0.5f));
             }
         }
         for (int a = 0; a < faces.Length; a++)
