@@ -151,6 +151,8 @@ public partial class OptionsPanel : VBoxContainer
 
         Section(p, "GRÁFICOS");
         Choice(p, "Qualidade", new[] { "Baixa", "Média", "Alta" }, s.Quality, i => s.Quality = i, "Baixa tira as sombras e o brilho; Média encurta as sombras.");
+        Choice(p, "Visual PS1", new[] { "Desligado", "Leve", "Completo" }, s.Ps1Mode, i => s.Ps1Mode = i,
+            "Leve: pixels maiores e cores pontilhadas (dithering). Completo: pixels ainda maiores e os modelos tremem de leve, como no PS1.");
         Choice(p, "Antisserrilhado", new[] { "Desligado", "FXAA", "MSAA 2x", "MSAA 4x" }, s.AntiAliasing, i => s.AntiAliasing = i,
             "Suaviza os serrilhados das bordas. MSAA é mais bonito e mais pesado.");
         Slider(p, "Campo de visão", 60, 110, 1, s.Fov, v => s.Fov = (float)v, v => $"{v:0}°", "Quanto do mundo aparece na tela.");

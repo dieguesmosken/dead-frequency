@@ -150,3 +150,10 @@ radio_next={
 
 renderer/rendering_method.mobile="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true
+
+[shader_globals]
+
+ps1_jitter={
+"type": "float",
+"value": 0.0
+}

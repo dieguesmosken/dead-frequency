@@ -16,7 +16,17 @@ public static class MeshyVehicles
 
     private static Mesh _fuska, _truck;
     private static Texture2D _fuskaTex, _fuskaMask, _truckTex;
-    private static StandardMaterial3D _truckMat;
+    private static Material _truckMat;
+    private static Shader _lit;
+
+    /// <summary>Material sem recolor: textura sem filtro + tremor de vértices do PS1 (Shaders/ps1_lit.gdshader).</summary>
+    private static Material Lit(Texture2D tex)
+    {
+        _lit ??= GD.Load<Shader>("res://Shaders/ps1_lit.gdshader");
+        var m = new ShaderMaterial { Shader = _lit };
+        m.SetShaderParameter("base_tex", tex);
+        return m;
+    }
     private static Shader _recolor;
 
     public static bool HasFuska => ResourceLoader.Exists(FuskaPath);
@@ -54,7 +64,7 @@ public static class MeshyVehicles
         }
         else
         {
-            mat = new StandardMaterial3D { AlbedoTexture = tex, TextureFilter = BaseMaterial3D.TextureFilterEnum.Nearest, Roughness = 0.8f };
+            mat = Lit(tex);
         }
         Aabb box = mesh.GetAabb();
         // Comprimento (frente-trás) = eixo X do modelo; largura = Z; altura = Y.
@@ -112,12 +122,7 @@ public static class MeshyVehicles
         if (_truck == null)
             return Vector3.Zero;
         _truckTex ??= GD.Load<Texture2D>("res://Assets/Meshy/Vehicles/caminhonete_cor.png");
-        _truckMat ??= new StandardMaterial3D
-        {
-            AlbedoTexture = _truckTex,
-            TextureFilter = BaseMaterial3D.TextureFilterEnum.Nearest,
-            Roughness = 0.75f,
-        };
+        _truckMat ??= Lit(_truckTex);
         return Place(parent, _truck, _truckMat, length, 1, width);
     }
 

@@ -198,7 +198,10 @@ Cada profissão nova = um `JobBase` em `Scripts/Jobs/` + a regra em `PROFESSIONS
 - Decoração do apartamento comprada nas lojas (sofá, pôster, planta).
 
 ## Fase 6 — Visual PS1 (Módulo 5 do plano original)
-- Shader com vertex jitter, dithering e cores reduzidas; renderizar em 640×360 com nearest-neighbor.
+- ✅ **Filtro de tela PS1** (`Shaders/ps1_screen.gdshader`, numa camada abaixo da interface): pixels em múltiplo inteiro (360 ou 480 linhas), cores de 15 bits e dithering ordenado 4×4. HUD e menus continuam nítidos.
+- ✅ **Tremor de vértices** (`Shaders/ps1_common.gdshaderinc`, global `ps1_jitter`) nos modelos do Meshy: jogador, moradores, caminhonete, Fuska, barracas e viaturas.
+- ✅ **Opções > Gráficos > Visual PS1:** Desligado, Leve (padrão no PC) ou Completo. No celular começa desligado.
+- Falta: tremor também nos prédios e no chão (precisa trocar os materiais padrão por shaders próprios sem abrir frestas) e textura "afim" (sem correção de perspectiva).
 - Monitor CRT verde dentro da caminhonete mostrando o radar e a música da 96.6.
 
 ## Fase 7 — Lançamento
