@@ -117,8 +117,8 @@ public static class CarModels
             Box(car, new Vector3(side * (width * 0.5f + 0.08f), lightY + 0.4f, -hz * 0.36f), new Vector3(0.1f, 0.09f, 0.14f), _rubber);
         }
         // Placas (frente no para-choque, trás acima dele).
-        Box(car, new Vector3(0f, bumperY, -hz - 0.1f), new Vector3(0.46f, 0.12f, 0.02f), _plate);
-        Box(car, new Vector3(0f, bumperY + 0.19f, hz + 0.02f), new Vector3(0.46f, 0.12f, 0.03f), _plate);
+        Plates.Attach(car, _plateCode, new Vector3(0f, bumperY, -hz - 0.1f), false);
+        Plates.Attach(car, _plateCode, new Vector3(0f, bumperY + 0.19f, hz + 0.03f), true);
         // Maçanetas.
         foreach (float side in new[] { -1f, 1f })
             Box(car, new Vector3(side * (width * 0.5f + 0.01f), lightY + 0.12f, -0.1f), new Vector3(0.03f, 0.04f, 0.16f), _chrome);
@@ -330,7 +330,17 @@ public static class CarModels
     private static readonly System.Collections.Generic.Dictionary<StandardMaterial3D, StandardMaterial3D> _loftMats = new();
 
     /// <summary>Monta o carro como filho de parent. Retorna o tamanho (largura, altura, comprimento) para colisão.</summary>
-    public static Vector3 Build(Node3D parent, CarType type, Color color)
+    /// <summary>Código da placa do carro que está sendo montado (Plates).</summary>
+    private static string _plateCode = "";
+
+    /// <summary>Monta o carro. plate = código da placa; sem ele, a cidade sorteia na ordem de geração.</summary>
+    public static Vector3 Build(Node3D parent, CarType type, Color color, string plate = null)
+    {
+        _plateCode = plate ?? Plates.Next($"{type}{color.ToHtml()}");
+        return BuildInner(parent, type, color);
+    }
+
+    private static Vector3 BuildInner(Node3D parent, CarType type, Color color)
     {
         EnsureResources();
         _glassDouble ??= new StandardMaterial3D { AlbedoColor = new Color(0.08f, 0.11f, 0.13f), Roughness = 0.1f, Metallic = 0.25f, CullMode = BaseMaterial3D.CullModeEnum.Disabled };
@@ -404,6 +414,17 @@ public static class CarModels
             }
             case CarType.Fusca: // "Fuska" (Folksvagem): carroceria e cabine "torneadas" (malha própria)
             {
+                // v0.10: modelo do Meshy pintado por máscara; o "torneado" antigo fica de reserva.
+                if (MeshyVehicles.HasFuska)
+                {
+                    Vector3 fs = MeshyVehicles.BuildFuska(parent, color, 4.05f);
+                    if (fs != Vector3.Zero)
+                    {
+                        Plates.Attach(parent, _plateCode, new Vector3(0f, 0.36f, -fs.Z * 0.5f - 0.02f), false);
+                        Plates.Attach(parent, _plateCode, new Vector3(0f, 0.5f, fs.Z * 0.5f + 0.02f), true);
+                        return fs;
+                    }
+                }
                 const float w = 1.55f, l = 4.05f;
                 // Carroceria: seção superelíptica que afina na frente (capô) e atrás (motor).
                 (float hw, float yc, float hh) Body(float z)
@@ -444,7 +465,7 @@ public static class CarModels
                 }
                 Box(parent, new Vector3(0f, 0.32f, -2.02f), new Vector3(w + 0.05f, 0.08f, 0.08f), _chrome); // para-choques cromados
                 Box(parent, new Vector3(0f, 0.32f, 2.02f), new Vector3(w + 0.05f, 0.08f, 0.08f), _chrome);
-                Box(parent, new Vector3(0f, 0.44f, 2.04f), new Vector3(0.4f, 0.11f, 0.02f), _plate);
+                Plates.Attach(parent, _plateCode, new Vector3(0f, 0.44f, 2.05f), true);
                 // Tampa do motor e capô são curvos: acha onde a superfície passa em cada altura
                 // (pelo topo da seção) e cola grade, logo e nome ali, inclinados junto (v0.9.7).
                 (Vector3 pos, Vector3 normal) OnSurface(float y, float x, bool rear)

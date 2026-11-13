@@ -24,6 +24,7 @@ Antes de usar um arquivo: abrir a página, confirmar a licença e anotar autor +
 | Asset | Ferramenta | Licença | Onde |
 |---|---|---|---|
 | Entregador e entregadora (modelo 3D, esqueleto e 6 animações) | [Meshy](https://www.meshy.ai) (plano pago do Matheus: os modelos gerados pertencem a ele) | Nossos, distribuídos com o jogo (GPL v3) | `Assets/Meshy/Characters/` |
+| Caminhonete de entregas (com calotas) e Fuska | [Meshy](https://www.meshy.ai) (plano pago do Matheus) | Nossos, distribuídos com o jogo (GPL v3) | `Assets/Meshy/Vehicles/` |
 
 Como refazer: desenho em T-pose (`meshy_text_to_image`, nano-banana-pro) → `meshy_image_to_3d` (smart topology
 meshy-t2.5, ~4 mil triângulos, textura meshy-n1) → `meshy_rig` → `meshy_animate` com Idle, Casual Walk, Run 2,
