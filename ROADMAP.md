@@ -288,8 +288,9 @@ Documentação completa em [`docs/README_PARA_IAS.md`](docs/README_PARA_IAS.md).
 ### Modo História (offline)
 - [x] Progressão desacoplada (`StoryManager` + `JobEvents`), salva no `save.tzn` (v0.10). Menu: Iniciar turno → **Modo História** (continuar / recomeçar). HUD com capítulo e meta (`StoryDirector`); linha no F3.
 - [x] Piloto automático na `VanController` + `ChapterTransitionZone` (loading disfarçado na estrada, rádio ligado e banner retrô). Cidade → Rancho pela saída leste, com feixe verde e placa "ESTRADA DO RANCHO" quando a meta é cumprida.
-- [ ] **Decidir os capítulos** (título, resumo e meta de cada um em `docs/lore/01_LORE_E_CAPITULOS.md`): hoje o capítulo I usa a meta de exemplo (5 entregas) e o II só chega ao rancho. Os dados ficam em `Scripts/Story/StoryChapters.cs`.
-- [ ] Campanha em 7 capítulos ligando Cidade, Rancho, Bananal, Gruta, Serra e Rádio 96.6 (capítulos a definir).
+- [x] **Campanha escrita** (13/11/2026, `docs/lore/01_LORE_E_CAPITULOS.md`): "Dead Frequency", 7 capítulos sobre salvar a Repetidora Landell, que leva o sinal da 96.6 ao vale. I Primeiro Turno (Cidade) · II Asfalto e Barro (Rancho) · III Sinal no Bananal · IV A Gruta da Estática · V Neblina na Serra · VI Fora do Ar (Cidade/Rádio) · VII Show da Frequência (praça). Personagens: Seu Waldir, Kátia, Toninho, Dona Lurdes (gerente da DF Entregas, nova), o Primo, Dona Cida, Seu Tonho, o Duvidoso.
+- [x] Capítulos I e II jogáveis com falas pelo rádio (`StoryDialog`), metas e limite de caixas quebradas (passou do limite, a contagem recomeça).
+- [ ] Capítulos III a V: dependem das fases Bananal, Gruta e Serra. VI e VII acontecem na cidade, mas precisam de tarefas novas (avisos no estúdio sem a rádio, recados de porta em porta, equipamento do show).
 
 ### Backlog opcional — vida urbana
 - [ ] Praça da Matriz à noite com barracas de pastel/lanche e carro de som anunciando eventos.

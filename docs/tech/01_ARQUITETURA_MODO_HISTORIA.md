@@ -4,7 +4,9 @@
 > (dados dos capítulos), `StoryDirector` (HUD da meta e saída da cidade), `ChapterBanner`, `ChapterTransitionZone`
 > e `VanController.SetAutoDrive`. Entrada pelo menu: Iniciar turno → "Modo História". O Modo História só roda
 > quando ligado pelo menu e offline; o turno livre e o online não mudam.
-> **Provisório:** a meta do capítulo I (5 entregas) e o capítulo II sem meta, até o Matheus decidir os capítulos.
+> Campanha escrita em 13/11/2026 (`docs/lore/01_LORE_E_CAPITULOS.md`): 7 capítulos em `StoryChapters`, com falas
+> de abertura e de fim (`StoryDialog`, caixa de rádio no pé da tela) e limite de caixas quebradas por capítulo.
+> Jogáveis hoje: I (Cidade) e II (Rancho). III a VII ficam com `Ready = false` até as fases existirem.
 
 ## Visão geral
 
