@@ -15,6 +15,7 @@
 [ext_resource type="Script" path="res://Scripts/Net/NetSync.cs" id="13_net"]
 [ext_resource type="Script" path="res://Scripts/World/DayNightController.cs" id="14_daynight"]
 [ext_resource type="Script" path="res://Scripts/World/BusLine.cs" id="15_bus"]
+[ext_resource type="Script" path="res://Scripts/World/AnnouncerCar.cs" id="40_announcer"]
 [ext_resource type="Script" path="res://Scripts/World/Pedestrians.cs" id="16_peds"]
 [ext_resource type="Script" path="res://Scripts/World/StreetVendor.cs" id="17_vendor"]
 [ext_resource type="Script" path="res://Scripts/UI/NightVisionOverlay.cs" id="18_nv"]
@@ -67,6 +68,18 @@ City = NodePath("../City")
 [node name="BusLine" type="Node3D" parent="." node_paths=PackedStringArray("City")]
 script = ExtResource("15_bus")
 City = NodePath("../City")
+
+[node name="CarroDeSom" type="Node3D" parent="." node_paths=PackedStringArray("City")]
+script = ExtResource("40_announcer")
+City = NodePath("../City")
+
+[node name="CarroDoOvo" type="Node3D" parent="." node_paths=PackedStringArray("City")]
+script = ExtResource("40_announcer")
+City = NodePath("../City")
+Kind = 1
+Ring = 1
+Speed = 3.5
+Reverse = true
 
 [node name="Cyclist" type="Node3D" parent="." node_paths=PackedStringArray("City")]
 script = ExtResource("23_cyclist")
