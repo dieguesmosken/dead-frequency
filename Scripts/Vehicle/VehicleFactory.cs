@@ -126,7 +126,7 @@ public static class VehicleFactory
         {
             // O CarModels monta com a frente em -Z; o VanController anda para +Z: gira meia volta.
             body.Rotation = new Vector3(0f, Mathf.Pi, 0f);
-            size = CarModels.Build(body, type, color);
+            size = CarModels.Build(body, type, color, Plates.For(netId));
         }
         v.AddChild(body);
         v.AddChild(new CollisionShape3D { Name = "BodyShape", Shape = new BoxShape3D { Size = new Vector3(size.X, size.Y - 0.35f, size.Z) }, Position = new Vector3(0f, size.Y * 0.5f + 0.17f, 0f) });
