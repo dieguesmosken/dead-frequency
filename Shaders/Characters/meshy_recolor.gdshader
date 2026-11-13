@@ -5,6 +5,7 @@
 // sombras e as facetas do low-poly continuam. Textura pequena e sem filtro = cara de PS1.
 shader_type spatial;
 render_mode diffuse_lambert, specular_disabled;
+#include "res://Shaders/ps1_common.gdshaderinc"
 
 uniform sampler2D base_tex : source_color, filter_nearest;
 uniform sampler2D mask_tex : filter_nearest;
@@ -17,6 +18,10 @@ uniform vec4 ref_lum = vec4(0.1, 0.065, 0.35, 0.02);
 
 vec3 tint(vec3 target, float lum, float ref) {
 	return target * clamp(lum / max(ref, 0.001), 0.35, 1.8);
+}
+
+void vertex() {
+	POSITION = ps1_snap(PROJECTION_MATRIX * (MODELVIEW_MATRIX * vec4(VERTEX, 1.0)), VIEWPORT_SIZE);
 }
 
 void fragment() {

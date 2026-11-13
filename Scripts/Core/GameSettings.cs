@@ -77,6 +77,34 @@ public partial class GameSettings : Node
     public bool ShowFps { get; set; }
     public float UiScale { get; set; } = 1f;
     public bool Scanlines { get; set; } = true;
+    /// <summary>Visual PS1 (Fase 6): 0 desligado, 1 leve (480 linhas + dithering), 2 completo (360 linhas + tremor de vértices).</summary>
+    public int Ps1Mode { get; set; } = 1;
+    private CanvasLayer _ps1Layer;
+    private ShaderMaterial _ps1Material;
+
+    /// <summary>Liga/desliga o filtro de tela (abaixo da interface) e o tremor de vértices dos modelos.</summary>
+    private void ApplyPs1()
+    {
+        int mode = Mathf.Clamp(Ps1Mode, 0, 2);
+        RenderingServer.GlobalShaderParameterSet("ps1_jitter", mode == 2 ? 240f : 0f);
+        if (mode == 0)
+        {
+            if (_ps1Layer != null)
+                _ps1Layer.Visible = false;
+            return;
+        }
+        if (_ps1Layer == null)
+        {
+            _ps1Material = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/ps1_screen.gdshader") };
+            _ps1Layer = new CanvasLayer { Name = "Ps1Screen", Layer = -50 };
+            var rect = new ColorRect { Material = _ps1Material, MouseFilter = Control.MouseFilterEnum.Ignore };
+            rect.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+            _ps1Layer.AddChild(rect);
+            AddChild(_ps1Layer);
+        }
+        _ps1Layer.Visible = true;
+        _ps1Material.SetShaderParameter("lines", mode == 2 ? 360f : 480f);
+    }
     public bool ShowCrosshair { get; set; } = true;
 
     /// <summary>
@@ -95,6 +123,7 @@ public partial class GameSettings : Node
         MobileDefaultsApplied = true;
         Quality = 0;
         RenderScale = 0.7f;
+        Ps1Mode = 0; // o filtro de tela custa uma passada a mais: no celular começa desligado
         AntiAliasing = 0;
         MaxFps = 30;
         UiScale = 1.6f;
@@ -247,6 +276,7 @@ public partial class GameSettings : Node
             root.Msaa3D = AntiAliasing switch { 2 => Viewport.Msaa.Msaa2X, 3 => Viewport.Msaa.Msaa4X, _ => Viewport.Msaa.Disabled };
             root.ContentScaleFactor = Mathf.Clamp(UiScale, 0.75f, IsMobile ? 2.2f : 1.5f);
         }
+        ApplyPs1();
         if (GetTree() != null)
             foreach (Node n in GetTree().GetNodesInGroup(UiStyle.ScanlineGroup))
                 if (n is CanvasItem c)
@@ -296,6 +326,7 @@ public partial class GameSettings : Node
         cfg.SetValue("game", "stable_vehicle_camera", StableVehicleCamera);
         cfg.SetValue("video", "window_mode", WindowMode);
         cfg.SetValue("video", "render_scale", RenderScale);
+        cfg.SetValue("video", "ps1_mode", Ps1Mode);
         cfg.SetValue("video", "max_fps", MaxFps);
         cfg.SetValue("video", "quality", Quality);
         cfg.SetValue("video", "anti_aliasing", AntiAliasing);
@@ -374,6 +405,7 @@ public partial class GameSettings : Node
         StableVehicleCamera = cfg.GetValue("game", "stable_vehicle_camera", StableVehicleCamera).AsBool();
         WindowMode = cfg.GetValue("video", "window_mode", Fullscreen ? 1 : 0).AsInt32();
         RenderScale = cfg.GetValue("video", "render_scale", RenderScale).AsSingle();
+        Ps1Mode = cfg.GetValue("video", "ps1_mode", Ps1Mode).AsInt32();
         MaxFps = cfg.GetValue("video", "max_fps", MaxFps).AsInt32();
         Quality = cfg.GetValue("video", "quality", Quality).AsInt32();
         AntiAliasing = cfg.GetValue("video", "anti_aliasing", AntiAliasing).AsInt32();
@@ -417,7 +449,7 @@ public partial class GameSettings : Node
         MasterVolume = d.MasterVolume; MusicVolume = d.MusicVolume; SfxVolume = d.SfxVolume; UiVolume = d.UiVolume; RadioVolume = d.RadioVolume;
         WindowMode = d.WindowMode; RenderScale = d.RenderScale; MaxFps = d.MaxFps; Quality = d.Quality; AntiAliasing = d.AntiAliasing;
         Brightness = d.Brightness; Contrast = d.Contrast; VSync = d.VSync; MuteOnFocusLoss = d.MuteOnFocusLoss; PauseOnFocusLoss = d.PauseOnFocusLoss; CheckUpdates = d.CheckUpdates; StableVehicleCamera = d.StableVehicleCamera;
-        VehicleSensitivity = d.VehicleSensitivity; HeadBob = d.HeadBob; TouchMode = d.TouchMode; TouchScale = d.TouchScale; ShowFps = d.ShowFps; UiScale = d.UiScale; Scanlines = d.Scanlines;
+        VehicleSensitivity = d.VehicleSensitivity; HeadBob = d.HeadBob; TouchMode = d.TouchMode; TouchScale = d.TouchScale; ShowFps = d.ShowFps; UiScale = d.UiScale; Scanlines = d.Scanlines; Ps1Mode = d.Ps1Mode;
         ShowCrosshair = d.ShowCrosshair; ShowKeyHints = d.ShowKeyHints; ShowCompass = d.ShowCompass; ToastDuration = d.ToastDuration;
         SpeedUnit = d.SpeedUnit; Clock24h = d.Clock24h; TimeMode = d.TimeMode; DayLengthMinutes = d.DayLengthMinutes;
         d.Free();
