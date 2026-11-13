@@ -1,4 +1,8 @@
-# Avisa (com PR para a Internal) quando dependências do servidor ou do CI ficam desatualizadas.
+# Dependabot: abre PRs para a Internal quando dependências do servidor ou do CI ficam desatualizadas.
+# - Só versões minor/patch entram sozinhas no PR agrupado; versões "major" (que podem quebrar) são ignoradas
+#   aqui e ficam para atualização manual, com teste.
+# - Os avisos de SEGURANÇA não seguem este arquivo: continuam indo para a main, como sempre.
+# - O CodeRabbit não revisa PRs do Dependabot (.coderabbit.yaml): quem confere é a "Verificação de PR".
 version: 2
 updates:
   - package-ecosystem: npm
@@ -7,13 +11,40 @@ updates:
     schedule:
       interval: weekly
       day: monday
+      time: "06:00"
+      timezone: America/Sao_Paulo
     open-pull-requests-limit: 3
+    cooldown:
+      default-days: 5
     groups:
       servidor:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    labels: ["dependencies", "javascript"]
+    commit-message:
+      prefix: "chore(server)"
+
   - package-ecosystem: github-actions
     directory: /
     target-branch: Internal
     schedule:
       interval: monthly
-    open-pull-requests-limit: 2
+      time: "06:00"
+      timezone: America/Sao_Paulo
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+    ignore:
+      # A v2+ da action do SignPath exige o SignPath GitHub App instalado e muda o conector:
+      # atualizar à mão, junto com um teste de assinatura.
+      - dependency-name: "signpath/github-action-submit-signing-request"
+        update-types: ["version-update:semver-major"]
+    labels: ["dependencies", "github_actions"]
+    commit-message:
+      prefix: "ci"
