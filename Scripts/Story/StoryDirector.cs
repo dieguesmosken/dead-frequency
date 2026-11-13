@@ -22,10 +22,17 @@ public partial class StoryDirector : Node
             return;
         sm.ProgressChanged += Refresh;
         sm.ChapterReady += OnChapterReady;
+        sm.GoalReset += OnGoalReset;
         BuildHud();
         Refresh();
         StoryChapters.Chapter c = sm.Chapter;
         ChapterBanner.Show(this, c.Roman, c.Title, 3.0f);
+        // Falas de abertura, uma vez por capítulo (depois do banner).
+        if (!sm.IntroSeen(c.Number) && Professions.CurrentLevel == c.Level)
+        {
+            sm.MarkIntroSeen(c.Number);
+            GetTree().CreateTimer(3.4).Timeout += () => { if (IsInstanceValid(this)) StoryDialog.Play(this, c.Intro); };
+        }
         if (Professions.CurrentLevel == "city" && _city != null)
             Callable.From(BuildCityExit).CallDeferred();
     }
@@ -36,6 +43,7 @@ public partial class StoryDirector : Node
         {
             sm.ProgressChanged -= Refresh;
             sm.ChapterReady -= OnChapterReady;
+            sm.GoalReset -= OnGoalReset;
         }
     }
 
@@ -46,12 +54,14 @@ public partial class StoryDirector : Node
         var box = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         // Canto de cima à esquerda (o meio e a direita já têm o relógio, o turno e a lista de entregas).
         box.Position = new Vector2(16f, 12f);
-        box.Size = new Vector2(360f, 0f);
+        box.Size = new Vector2(300f, 0f);
         _hud.AddChild(box);
         _title = UiStyle.MakeLabel("", 16, HorizontalAlignment.Left, UiStyle.Phosphor);
         _goal = UiStyle.MakeLabel("", 14, HorizontalAlignment.Left, UiStyle.PhosphorDim);
         _goal.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        _goal.CustomMinimumSize = new Vector2(360f, 0f);
+        _title.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _title.CustomMinimumSize = new Vector2(300f, 0f);
+        _goal.CustomMinimumSize = new Vector2(300f, 0f);
         foreach (Label l in new[] { _title, _goal })
         {
             l.AddThemeColorOverride("font_outline_color", Colors.Black);
@@ -66,20 +76,39 @@ public partial class StoryDirector : Node
         if (sm == null || _title == null)
             return;
         StoryChapters.Chapter c = sm.Chapter;
-        _title.Text = "MODO HISTÓRIA · " + c.Roman + (string.IsNullOrEmpty(c.Title) ? "" : " — " + c.Title);
+        _title.Text = c.Roman + (string.IsNullOrEmpty(c.Title) ? "" : " — " + c.Title);
         string count = c.Goal > 0 ? $"  [{Mathf.Min(sm.GoalProgress, c.Goal)}/{c.Goal}]" : "";
-        string goal = sm.CanAdvance ? "Meta cumprida! Pegue a estrada do rancho: saída leste da cidade, de carro." : c.Hint + count;
+        string goal = c.Hint + count;
+        if (sm.CanAdvance)
+        {
+            StoryChapters.Chapter next = StoryChapters.Get(c.Number + 1);
+            goal = !sm.NextChapterPlayable
+                ? $"Capítulo concluído! {next.Roman} — {next.Title} está em construção. Siga jogando livre."
+                : c.Level == "city" ? "Meta cumprida! Pegue a estrada do rancho: saída leste da cidade, de carro."
+                : $"Meta cumprida! Siga para {next.Roman} — {next.Title}.";
+        }
+        if (c.MaxBroken >= 0 && !sm.CanAdvance && sm.BrokenThisChapter > 0)
+            goal += $"\nCaixas quebradas: {sm.BrokenThisChapter}/{c.MaxBroken}";
         if (Professions.CurrentLevel != c.Level)
             goal = $"Este capítulo acontece em: {GameLevels.Get(c.Level).Name}.";
         _goal.Text = goal;
         if (_exitMarker != null)
-            _exitMarker.Visible = sm.CanAdvance;
+            _exitMarker.Visible = sm.CanAdvance && sm.NextChapterPlayable;
     }
 
     private void OnChapterReady(int chapter)
     {
         Refresh();
-        GameHud.Toast(this, "Meta do capítulo cumprida! A estrada do rancho está liberada (saída leste).", UiStyle.Phosphor, 6.0);
+        StoryDialog.Play(this, StoryChapters.Get(chapter).Outro);
+        GameHud.Toast(this, StoryManager.Instance?.NextChapterPlayable == true
+            ? "Meta do capítulo cumprida! A estrada do rancho está liberada (saída leste)."
+            : "Capítulo concluído! O próximo ainda está em construção.", UiStyle.Phosphor, 6.0);
+    }
+
+    private void OnGoalReset(int chapter)
+    {
+        StoryDialog.Play(this, StoryChapters.Get(chapter).TooManyBroken);
+        Refresh();
     }
 
     /// <summary>Saída leste: avenida em z = Period/2 até o muro do limite. A zona fica 70 m antes do muro.</summary>

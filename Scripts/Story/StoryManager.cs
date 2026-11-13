@@ -27,6 +27,20 @@ public partial class StoryManager : Node
     public event Action<int> ChapterChanged;
     /// <summary>O contador da meta mudou (HUD).</summary>
     public event Action ProgressChanged;
+    /// <summary>Quebrou mais caixas do que o capítulo permite: a contagem recomeçou.</summary>
+    public event Action<int> GoalReset;
+
+    /// <summary>Capítulos cujas falas de abertura já tocaram (não repetem a cada vez que a fase abre).</summary>
+    private readonly HashSet<int> _introSeen = new();
+    public bool IntroSeen(int chapter) => _introSeen.Contains(chapter);
+    public void MarkIntroSeen(int chapter)
+    {
+        if (_introSeen.Add(chapter))
+            SaveNow();
+    }
+
+    /// <summary>A próxima fase da campanha já existe (dá para viajar) ou o capítulo seguinte ainda está em construção.</summary>
+    public bool NextChapterPlayable => StoryChapters.Exists(CurrentChapter + 1) && StoryChapters.Get(CurrentChapter + 1).Ready;
 
     private readonly HashSet<int> _completed = new();
     private readonly Dictionary<string, int> _progress = new();
@@ -68,6 +82,7 @@ public partial class StoryManager : Node
         BrokenThisChapter = 0;
         _completed.Clear();
         _progress.Clear();
+        _introSeen.Clear();
         SaveNow();
     }
 
@@ -115,7 +130,18 @@ public partial class StoryManager : Node
     {
         if (!Active || !Offline)
             return;
+        if (CanAdvance || Professions.CurrentLevel != Chapter.Level)
+            return;
         BrokenThisChapter++;
+        int max = Chapter.MaxBroken;
+        if (max >= 0 && BrokenThisChapter > max)
+        {
+            // Passou do limite: a contagem do capítulo recomeça (o resto do jogo não muda).
+            BrokenThisChapter = 0;
+            _progress.Clear();
+            SaveNow();
+            GoalReset?.Invoke(CurrentChapter);
+        }
         ProgressChanged?.Invoke();
     }
 
@@ -123,8 +149,6 @@ public partial class StoryManager : Node
     {
         StoryChapters.Chapter c = Chapter;
         if (c.Goal <= 0 || GoalProgress < c.Goal)
-            return;
-        if (c.MaxBroken >= 0 && BrokenThisChapter > c.MaxBroken)
             return;
         CanAdvance = true;
         SaveNow();
@@ -139,7 +163,7 @@ public partial class StoryManager : Node
     public void AdvanceToChapter(int nextChapter)
     {
         _completed.Add(CurrentChapter);
-        CurrentChapter = StoryChapters.Exists(nextChapter) ? nextChapter : CurrentChapter;
+        CurrentChapter = StoryChapters.Exists(nextChapter) && StoryChapters.Get(nextChapter).Ready ? nextChapter : CurrentChapter;
         CanAdvance = false;
         BrokenThisChapter = 0;
         _progress.Clear();
@@ -150,6 +174,7 @@ public partial class StoryManager : Node
 
     /// <summary>Teste/depuração: simula uma tarefa paga (passa pelo mesmo caminho dos JobEvents).</summary>
     public void DebugTask(string job, string what, int payment) => JobEvents.RaiseTaskDone(job, what, payment);
+    public void DebugBroken() => JobEvents.RaiseCargoBroken("teste");
 
     /// <summary>Grava só o progresso da história no save (o resto é gravado pela cama, como sempre).</summary>
     private void SaveNow() => SaveManager.SaveStory(ToSave());
@@ -160,6 +185,7 @@ public partial class StoryManager : Node
         Chapter = CurrentChapter,
         CanAdvance = CanAdvance,
         Broken = BrokenThisChapter,
+        IntroSeen = new List<int>(_introSeen),
         Completed = new List<int>(_completed),
         Progress = new Dictionary<string, int>(_progress),
     };
@@ -173,6 +199,8 @@ public partial class StoryManager : Node
         BrokenThisChapter = s.Broken;
         _completed.Clear();
         _completed.UnionWith(s.Completed ?? new List<int>());
+        _introSeen.Clear();
+        _introSeen.UnionWith(s.IntroSeen ?? new List<int>());
         _progress.Clear();
         foreach (var kv in s.Progress ?? new Dictionary<string, int>())
             _progress[kv.Key] = kv.Value;
@@ -185,6 +213,7 @@ public class StorySave
     public int Chapter { get; set; } = 1;
     public bool CanAdvance { get; set; }
     public int Broken { get; set; }
+    public List<int> IntroSeen { get; set; } = new();
     public List<int> Completed { get; set; } = new();
     public Dictionary<string, int> Progress { get; set; } = new();
 }
