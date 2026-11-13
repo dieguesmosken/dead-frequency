@@ -20,6 +20,22 @@ public partial class CharacterModel : Node3D
     /// <summary>Brilho médio (linear) de camiseta, calça, pele e cabelo na textura de cada modelo.</summary>
     private static readonly Vector4 MeshyManRef = new(0.2048f, 0.092f, 0.3466f, 0.0236f);
     private static readonly Vector4 MeshyWomanRef = new(0.1703f, 0.0615f, 0.4567f, 0.0165f);
+
+    /// <summary>NPCs (v0.9.9): 3 homens e 3 mulheres do Meshy, recoloridos pela mesma máscara do jogador.</summary>
+    private static readonly string[] NpcMen = { "npc_senhor", "npc_rapaz", "npc_escritorio" };
+    private static readonly string[] NpcWomen = { "npc_moca", "npc_dona", "npc_senhora" };
+    /// <summary>Luminância média (linear) de camiseta, calça, pele e cabelo na textura original de cada NPC.</summary>
+    private static readonly Dictionary<string, Vector4> NpcRefs = new()
+    {
+        ["npc_senhor"] = new(0.3159f, 0.0492f, 0.3506f, 0.0481f),
+        ["npc_rapaz"] = new(0.2995f, 0.0562f, 0.4106f, 0.0181f),
+        ["npc_escritorio"] = new(0.2779f, 0.0702f, 0.4534f, 0.0532f),
+        ["npc_moca"] = new(0.258f, 0.0613f, 0.2616f, 0.0564f),
+        ["npc_dona"] = new(0.1835f, 0.0188f, 0.2052f, 0.044f),
+        ["npc_senhora"] = new(0.2325f, 0.0534f, 0.3622f, 0.1013f),
+    };
+    private int _variant;
+    private string _meshyName;
     /// <summary>Os modelos vêm com ~5,2 unidades de altura; 0,34 deixa com ~1,77 m.</summary>
     private const float ModelScale = 0.34f;
 
@@ -95,6 +111,7 @@ public partial class CharacterModel : Node3D
         Skin = skin;
         Vest = vest.A > 0f ? vest : null;
         IsWoman = variant % 2 == 1;
+        _variant = variant;
         Hair = HairColors[(variant / 2) % HairColors.Length];
         Build();
     }
@@ -115,8 +132,11 @@ public partial class CharacterModel : Node3D
         _equipmentRoot = new Node3D { Name = "Equipment" };
         AddChild(_equipmentRoot);
 
-        string meshyPath = IsWoman ? MeshyWomanPath : MeshyManPath;
-        _meshy = _player && ResourceLoader.Exists(meshyPath);
+        // Jogador: entregador(a). NPC: um dos 6 moradores (sorteado pela variante, sempre o mesmo para as mesmas cores).
+        string[] npcs = IsWoman ? NpcWomen : NpcMen;
+        _meshyName = _player ? (IsWoman ? "entregadora" : "entregador") : npcs[(_variant / 2) % npcs.Length];
+        string meshyPath = _player ? (IsWoman ? MeshyWomanPath : MeshyManPath) : $"res://Assets/Meshy/Characters/{_meshyName}.glb";
+        _meshy = ResourceLoader.Exists(meshyPath);
         if (LoadScene(_meshy ? meshyPath : IsWoman ? WomanPath : ManPath)?.Instantiate() is Node3D body)
         {
             body.Name = "Body";
@@ -181,7 +201,7 @@ public partial class CharacterModel : Node3D
     /// <summary>Modelo do Meshy: textura original + máscara; o shader pinta com as cores escolhidas.</summary>
     private void ApplyRecolor(Node3D body)
     {
-        string name = IsWoman ? "entregadora" : "entregador";
+        string name = _meshyName;
         _recolorShader ??= GD.Load<Shader>("res://Shaders/Characters/meshy_recolor.gdshader");
         var mat = new ShaderMaterial { Shader = _recolorShader };
         mat.SetShaderParameter("base_tex", GD.Load<Texture2D>($"res://Assets/Meshy/Characters/{name}_cor.png"));
@@ -190,7 +210,7 @@ public partial class CharacterModel : Node3D
         mat.SetShaderParameter("pants_color", Pants);
         mat.SetShaderParameter("skin_color", Skin);
         mat.SetShaderParameter("hair_color", Hair);
-        mat.SetShaderParameter("ref_lum", IsWoman ? MeshyWomanRef : MeshyManRef);
+        mat.SetShaderParameter("ref_lum", NpcRefs.TryGetValue(name, out Vector4 npcRef) ? npcRef : IsWoman ? MeshyWomanRef : MeshyManRef);
         foreach (Node n in body.FindChildren("*", "MeshInstance3D", true, false))
             ((MeshInstance3D)n).MaterialOverride = mat;
     }
@@ -244,6 +264,7 @@ public partial class CharacterModel : Node3D
                 case "Run_02": _run = a; break;
                 case "Chair_Sit_Idle_M" or "Chair_Sit_Idle_F": _sit = a; break;
                 case "Carry_Heavy_Object_Walk": _carry = a; break;
+                case "Talk_with_Hands_Open": _work ??= a; break; // NPCs: conversando com as mãos
                 case "Regular_Jump":
                     _jump = a;
                     continue; // pulo não repete
