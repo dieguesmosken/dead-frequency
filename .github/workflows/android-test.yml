@@ -99,13 +99,13 @@ jobs:
           mv build/android/DeadFrequency.apk "build/android/DeadFrequency-${{ steps.ver.outputs.name }}.apk"
           ls -lh build/android
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: DeadFrequency-${{ steps.ver.outputs.name }}-apk
           path: build/android/*.apk
           retention-days: 30
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: android-export-log
