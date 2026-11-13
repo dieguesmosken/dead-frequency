@@ -174,6 +174,7 @@ public partial class ProfessionManager : Node3D
         Professions.Def def = Professions.Get(Current);
         GameHud.Toast(this, $"{what}  +$ {payment}", def.Color, 3.5);
         PlayCash();
+        JobEvents.RaiseTaskDone(Current, what, payment);
     }
 
     private void PlayCash()

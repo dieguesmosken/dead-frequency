@@ -1,7 +1,10 @@
 # Arquitetura do Modo História
 
-> Status: **planejado**. Nada disto está no jogo ainda. Os modelos de código estão em `docs/templates/`
-> como `.cs.txt`. Ao implementar, copie para `Scripts/Story/` e renomeie para `.cs`.
+> Status: **primeira versão no jogo** (v0.10). Implementado: `JobEvents`, `StoryManager` (autoload), `StoryChapters`
+> (dados dos capítulos), `StoryDirector` (HUD da meta e saída da cidade), `ChapterBanner`, `ChapterTransitionZone`
+> e `VanController.SetAutoDrive`. Entrada pelo menu: Iniciar turno → "Modo História". O Modo História só roda
+> quando ligado pelo menu e offline; o turno livre e o online não mudam.
+> **Provisório:** a meta do capítulo I (5 entregas) e o capítulo II sem meta, até o Matheus decidir os capítulos.
 
 ## Visão geral
 

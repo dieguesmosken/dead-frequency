@@ -76,6 +76,9 @@ Entregador solitário dirigindo uma van utilitária anos 90 por uma zona perigos
    Shaders/Vehicle/crt_monitor.gdshader), DashboardButton, EngineSystem (partida, tanque, temperatura), ElectricalSystem (bateria,
    fusíveis, interferência da carga). VanController chama Tick() e aplica em faróis/rádio. Itens fusivel/galao = SHOP_PRICES no servidor.
    Falta: rádio com dial, bomba com mangueira, outros veículos e sincronizar no online (ver ROADMAP, Fase 3).
+   ✅ Modo História (v0.10, offline): Scripts/Jobs/JobEvents.cs, Scripts/Story/ (StoryManager autoload, StoryChapters,
+      StoryDirector, ChapterBanner, ChapterTransitionZone), VanController.SetAutoDrive, SaveData.Story. Capítulos = StoryChapters
+      (metas provisórias até o Matheus decidir). Entrada: menu Iniciar turno → Modo História.
 4. CargoBayManager + SaveManager (.tzn)
 5. Shaders PS1 + monitor CRT
 

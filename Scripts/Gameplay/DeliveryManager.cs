@@ -258,6 +258,7 @@ public partial class DeliveryManager : Node3D
         ShiftDelivered++;
         RemoveJob(job, freeCargo: true, playSound: true);
         EmitSignal(SignalName.DeliveryCompleted, job.CargoName, payment);
+        JobEvents.RaiseTaskDone(Professions.Entregador, job.CargoName, payment);
         CheckLocalShiftDone();
     }
 
@@ -524,6 +525,7 @@ public partial class DeliveryManager : Node3D
     {
         if (!_jobs.Contains(job))
             return;
+        JobEvents.RaiseCargoBroken(job.CargoName);
 
         if (NetworkMode)
         {

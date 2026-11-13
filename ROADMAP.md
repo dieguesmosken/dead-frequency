@@ -280,8 +280,9 @@ Documentação completa em [`docs/README_PARA_IAS.md`](docs/README_PARA_IAS.md).
 - [ ] **Fase 5 · Estrada da Serra (`Serra.tscn`):** subida sinuosa com neblina e teste de integridade da carga.
 
 ### Modo História (offline)
-- [ ] Progressão desacoplada (`StoryManager` + `JobEvents`), salva no `save.tzn`.
-- [ ] Piloto automático na `VanController` + `ChapterTransitionZone` (loading disfarçado na estrada, rádio ligado e banner retrô).
+- [x] Progressão desacoplada (`StoryManager` + `JobEvents`), salva no `save.tzn` (v0.10). Menu: Iniciar turno → **Modo História** (continuar / recomeçar). HUD com capítulo e meta (`StoryDirector`); linha no F3.
+- [x] Piloto automático na `VanController` + `ChapterTransitionZone` (loading disfarçado na estrada, rádio ligado e banner retrô). Cidade → Rancho pela saída leste, com feixe verde e placa "ESTRADA DO RANCHO" quando a meta é cumprida.
+- [ ] **Decidir os capítulos** (título, resumo e meta de cada um em `docs/lore/01_LORE_E_CAPITULOS.md`): hoje o capítulo I usa a meta de exemplo (5 entregas) e o II só chega ao rancho. Os dados ficam em `Scripts/Story/StoryChapters.cs`.
 - [ ] Campanha em 7 capítulos ligando Cidade, Rancho, Bananal, Gruta, Serra e Rádio 96.6 (capítulos a definir).
 
 ### Backlog opcional — vida urbana
