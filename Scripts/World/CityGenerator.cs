@@ -225,6 +225,7 @@ public partial class CityGenerator : Node3D
                 BuildBlockCore(chunk.Coordinate.X, chunk.Coordinate.Z, plan.Kind, plan);
 
             BuildChunkDecorations(chunk.Coordinate);
+            StaticBatcher.Merge(root);
             OptimizeVisibility(root);
             if (_chunkLightRoots.TryGetValue(chunk.Coordinate, out Node3D chunkLights) &&
                 GodotObject.IsInstanceValid(chunkLights))
@@ -366,6 +367,7 @@ public partial class CityGenerator : Node3D
             await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildNoParkingSignsForBlock(x, z));
             await RunChunkVisualStepAsync(chunk.Coordinate, root, chunkRandom, () => BuildCurbMarkingsForBlock(x, z));
 
+            StaticBatcher.Merge(root);
             OptimizeVisibility(root);
             if (_chunkLightRoots.TryGetValue(chunk.Coordinate, out Node3D chunkLights) &&
                 GodotObject.IsInstanceValid(chunkLights))
@@ -2058,6 +2060,7 @@ public partial class CityGenerator : Node3D
         // Mesma quantidade de sorteios de antes (a cidade não muda no online); o Fuska pega uma fatia.
         CarType type = roll < 0.3f ? CarType.Sedan : roll < 0.52f ? CarType.Hatch : roll < 0.7f ? CarType.Fusca : roll < 0.88f ? CarType.Pickup : CarType.Kombi;
         var car = new StaticBody3D { Position = groundPos, Rotation = new Vector3(0f, rotationY + (_rng.Randf() < 0.5f ? 0f : Mathf.Pi), 0f), CollisionLayer = 1, CollisionMask = 0 };
+        car.SetMeta(StaticBatcher.SkipMeta, true); // pode ser retirado depois (ForbidParking/KeepClear)
         Vector3 size = CarModels.Build(car, type, color);
         car.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(size.X, size.Y - 0.2f, size.Z) }, Position = new Vector3(0f, size.Y * 0.5f + 0.1f, 0f) });
         if (InNoParking(groundPos) || (curbOffset.HasValue && (!hasCurb || !HasWhiteCurbMarking(curbOffset.Value))))
@@ -2065,7 +2068,8 @@ public partial class CityGenerator : Node3D
             car.QueueFree();
             return;
         }
-        parent.AddChild(car);
+StaticBatcher.Merge(car, 170f); // o carro inteiro vira uma ou duas malhas (e some inteiro se for retirado)
+                parent.AddChild(car);
         _parkedCars.Add(car);
     }
 
@@ -2208,7 +2212,7 @@ public partial class CityGenerator : Node3D
 
         var beacon = new OmniLight3D { Position = basePos + new Vector3(0f, height + 0.5f, 0f), LightColor = new Color(1f, 0.1f, 0.05f), LightEnergy = 3f, OmniRange = 20f };
         _lightsRoot.AddChild(beacon);
-        Tween blink = CreateTween().SetLoops();
+        Tween blink = CreateTween().BindNode(beacon).SetLoops();
         blink.TweenProperty(beacon, "light_energy", 0.0, 0.6);
         blink.TweenProperty(beacon, "light_energy", 3.0, 0.1);
         blink.TweenInterval(0.6);

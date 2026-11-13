@@ -125,6 +125,7 @@ public partial class CityGenerator
             Position = new Vector3(0f, size.Y + 0.5f, 0f),
         });
         _dealer.GetParent().AddChild(car);
+        car.SetMeta(StaticBatcher.SkipMeta, true); // some quando o carro é comprado
         _dealerDisplay[model.Id] = car;
     }
 
