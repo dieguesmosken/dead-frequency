@@ -27,12 +27,12 @@ public partial class CharacterModel : Node3D
     /// <summary>Luminância média (linear) de camiseta, calça, pele e cabelo na textura original de cada NPC.</summary>
     private static readonly Dictionary<string, Vector4> NpcRefs = new()
     {
-        ["npc_senhor"] = new(0.3159f, 0.0492f, 0.3506f, 0.0481f),
-        ["npc_rapaz"] = new(0.2995f, 0.0562f, 0.4106f, 0.0181f),
-        ["npc_escritorio"] = new(0.2779f, 0.0702f, 0.4534f, 0.0532f),
-        ["npc_moca"] = new(0.258f, 0.0613f, 0.2616f, 0.0564f),
-        ["npc_dona"] = new(0.1835f, 0.0188f, 0.2052f, 0.044f),
-        ["npc_senhora"] = new(0.2325f, 0.0534f, 0.3622f, 0.1013f),
+        ["npc_senhor"] = new(0.3195f, 0.0492f, 0.3506f, 0.05f),
+        ["npc_rapaz"] = new(0.3f, 0.0621f, 0.4106f, 0.05f),
+        ["npc_escritorio"] = new(0.2779f, 0.0702f, 0.4534f, 0.05f),
+        ["npc_moca"] = new(0.258f, 0.0613f, 0.2616f, 0.05f),
+        ["npc_dona"] = new(0.1835f, 0.0275f, 0.2052f, 0.05f),
+        ["npc_senhora"] = new(0.2325f, 0.0534f, 0.3622f, 0.05f),
     };
     private int _variant;
     private string _meshyName;
