@@ -19,6 +19,9 @@ public partial class RadioPlayer : Node3D
     private double _checkTimer;
 
     public string NowPlaying => RadioStation.NowPlayingText();
+    /// <summary>Chiado por cima da música, de 0 a 1 (carga com interferência na caçamba da caminhonete).</summary>
+    public float Interference { get; set; }
+    private AudioStreamPlayer3D _hiss;
 
     public override void _Ready()
     {
@@ -36,6 +39,8 @@ public partial class RadioPlayer : Node3D
         _static.Stream = MakeStatic();
         AddChild(_static);
         _player.Finished += () => Resync(true);
+        _hiss = new AudioStreamPlayer3D { Bus = AudioManager.SfxBus, UnitSize = UnitSize, MaxDistance = MaxDistance, VolumeDb = -60f, Stream = MakeHiss() };
+        AddChild(_hiss);
     }
 
     public void Toggle() => SetOn(!On);
@@ -53,6 +58,7 @@ public partial class RadioPlayer : Node3D
         else
         {
             _player.Stop();
+            _hiss?.Stop();
             _index = -1;
         }
     }
@@ -62,7 +68,18 @@ public partial class RadioPlayer : Node3D
         if (!On)
             return;
         float radio = GameSettings.Instance?.RadioVolume ?? 1f;
-        _player.VolumeDb = VolumeDb + Mathf.LinearToDb(Mathf.Max(radio, 0.001f));
+        float hiss = Mathf.Clamp(Interference, 0f, 1f);
+        _player.VolumeDb = VolumeDb + Mathf.LinearToDb(Mathf.Max(radio, 0.001f)) - 9f * hiss;
+        if (hiss > 0.05f)
+        {
+            _hiss.VolumeDb = VolumeDb - 26f + 18f * hiss + Mathf.LinearToDb(Mathf.Max(radio, 0.001f));
+            if (!_hiss.Playing)
+                _hiss.Play();
+        }
+        else if (_hiss.Playing)
+        {
+            _hiss.Stop();
+        }
         _checkTimer -= delta;
         if (_checkTimer > 0)
             return;
@@ -97,6 +114,30 @@ public partial class RadioPlayer : Node3D
     }
 
     /// <summary>Meio segundo de chiado de sintonia (ruído filtrado), gerado na hora.</summary>
+    /// <summary>Um segundo de chiado em loop (interferência).</summary>
+    private static AudioStreamWav MakeHiss()
+    {
+        const int rate = 22050;
+        var data = new byte[rate * 2];
+        var rng = new RandomNumberGenerator { Seed = 1996 };
+        float last = 0f;
+        for (int i = 0; i < rate; i++)
+        {
+            last = Mathf.Lerp(last, rng.RandfRange(-1f, 1f), 0.6f);
+            float crackle = rng.Randf() > 0.997f ? rng.RandfRange(-0.8f, 0.8f) : 0f;
+            // As pontas se encontram (loop sem estalo).
+            float edge = Mathf.Min(1f, Mathf.Min(i, rate - 1 - i) / 400f);
+            short v = (short)(Mathf.Clamp((last * 0.45f + crackle) * edge, -1f, 1f) * 30000);
+            data[i * 2] = (byte)(v & 0xff);
+            data[i * 2 + 1] = (byte)((v >> 8) & 0xff);
+        }
+        return new AudioStreamWav
+        {
+            Format = AudioStreamWav.FormatEnum.Format16Bits, MixRate = rate, Data = data,
+            LoopMode = AudioStreamWav.LoopModeEnum.Forward, LoopBegin = 0, LoopEnd = rate,
+        };
+    }
+
     private static AudioStreamWav MakeStatic()
     {
         const int rate = 22050;

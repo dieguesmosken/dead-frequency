@@ -6,7 +6,7 @@ using Godot;
 namespace DeadFrequency;
 
 /// <summary>O que cada vendedor tem (v0.9.7): cada item só aparece em quem vende ele.</summary>
-public enum ShopStock { Ze, Churrasco, Market, Dealer, Utilidades, ConsertaTudo, AgroTudao }
+public enum ShopStock { Ze, Churrasco, Market, Dealer, Utilidades, ConsertaTudo, AgroTudao, Posto }
 
 public partial class ShopScreen : ModalScreen
 {
@@ -25,12 +25,14 @@ public partial class ShopScreen : ModalScreen
         ShopStock.Churrasco => def.Id is ItemCatalog.Skewer or ItemCatalog.Guarana,
         ShopStock.Market => TabOf(def) == Tab.Food && def.Id != ItemCatalog.Skewer || def.Id is ItemCatalog.DuctTape or ItemCatalog.Nail,
         // Lã de Aço 1001 Utilidades (v0.9.9): só miudeza de casa e de conserto.
-        ShopStock.Utilidades => def.Id is ItemCatalog.SteelWool or ItemCatalog.DuctTape or ItemCatalog.Nail,
+        ShopStock.Utilidades => def.Id is ItemCatalog.SteelWool or ItemCatalog.DuctTape or ItemCatalog.Nail or ItemCatalog.Fuse,
+        // Posto (Fase 3): galão de gasolina, fusível e o cafezinho da conveniência.
+        ShopStock.Posto => def.Id is ItemCatalog.JerryCan or ItemCatalog.Fuse or ItemCatalog.Coffee or ItemCatalog.Guarana or ItemCatalog.EnergyDrink,
         // Conserta-Tudo do Primo (v0.9.9): a lanterna forte e o básico de conserto.
-        ShopStock.ConsertaTudo => def.Id is ItemCatalog.StrongFlashlight or ItemCatalog.RepairKit or ItemCatalog.DuctTape or ItemCatalog.Nail,
+        ShopStock.ConsertaTudo => def.Id is ItemCatalog.StrongFlashlight or ItemCatalog.RepairKit or ItemCatalog.DuctTape or ItemCatalog.Nail or ItemCatalog.Fuse,
         // Agro-Tudão (v0.9.9): repelente, luva e o básico de conserto da roça.
-        ShopStock.AgroTudao => def.Id is ItemCatalog.Repellent or ItemCatalog.Gloves or ItemCatalog.RepairKit or ItemCatalog.DuctTape or ItemCatalog.Nail,
-        _ => def.Id is not (ItemCatalog.SteelWool or ItemCatalog.StrongFlashlight or ItemCatalog.Repellent) && (TabOf(def) != Tab.Food || def.Id == ItemCatalog.Guarana),
+        ShopStock.AgroTudao => def.Id is ItemCatalog.Repellent or ItemCatalog.Gloves or ItemCatalog.RepairKit or ItemCatalog.DuctTape or ItemCatalog.Nail or ItemCatalog.Fuse or ItemCatalog.JerryCan,
+        _ => def.Id is not (ItemCatalog.SteelWool or ItemCatalog.StrongFlashlight or ItemCatalog.Repellent or ItemCatalog.JerryCan) && (TabOf(def) != Tab.Food || def.Id == ItemCatalog.Guarana),
     };
 
     private ShopStock _stock;

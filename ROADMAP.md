@@ -158,10 +158,23 @@ streaming por chunks) estar na Internal.
 - **Ranking semanal** por profissão (Cloudflare D1).
 
 ## Fase 3 — Painel da caminhonete (Módulo 3 do plano original)
-- Combustível e bateria com ponteiros; abastecer nos postos (a vaga do frentista já existe).
-- Fusíveis físicos: carga com interferência (`EmInterference`) queima fusíveis e apaga faróis e rádio.
+
+✅ **Primeira versão pronta (painel diegético):**
+
+- **Mostradores no lugar do HUD:** velocímetro, conta-giros, gasolina, temperatura e luzes-espia (bateria, temperatura, reserva, fusível, farol) atrás do volante. Em primeira pessoa na caminhonete o "km/h" do HUD some; na câmera de trás ele continua.
+- **Monitor CRT verde** (`DashMonitor` + `Shaders/Vehicle/crt_monitor.gdshader`) com três telas trocadas no botão TELA: entregas do turno (distância e integridade), sistema (bateria, tanque, motor, fusíveis, interferência) e rádio.
+- **Botões físicos** (`DashboardButton`, mire e aperte E sentado): CHAVE, FAROL, LUZ (cabine), RÁDIO e TELA. A tecla da lanterna (e o botão LUZ do celular) vira o farol quando você está dirigindo.
+- **Motor** (`EngineSystem`): partida, tanque de 50 L, temperatura (pé no fundo em alta ferve e perde força até esfriar). Sem gasolina dá para ir devagar "no cheiro"; **galão de gasolina** nas bombas dos postos e no Agro-Tudão (meio tanque).
+- **Elétrica** (`ElectricalSystem`): bateria que arria se esquecer o farol ligado com o motor desligado (aí pega no tranco), alternador, quatro **fusíveis físicos** (faróis, rádio, painel, luz interna) na caixa do lado do carona, com 2 reservas; fusível avulso no Conserta-Tudo, Lã de Aço, Agro-Tudão e postos. Sem fusível, vale gambiarra com palha de aço (até dar curto).
+- **Interferência da carga** (`EmInterference`): gerador, peças de rádio e fitas na caçamba fazem o rádio chiar, os ponteiros tremerem e o monitor chuviscar; com o rádio ligado podem queimar o fusível dele. Batida forte também queima fusível.
+- Tanque e bateria da caminhonete da empresa ficam no save (`user://save.tzn`). No online cada jogador tem o seu estado (o servidor só conhece os preços: `fusivel`, `galao`).
+
+**Falta:**
+
 - **Rádio com dial:** sintonizar a 96.6 e estações piratas com chiado; a 96.6 interrompe para notícias da cidade (entregas feitas, apagões, eventos).
-- Velocímetro e alertas no painel em vez do HUD (UI diegética).
+- Abastecer direto na bomba com a mangueira (hoje é galão) e levar o painel para os outros veículos (moto, caminhões, carros).
+- Sincronizar tanque, bateria e fusíveis da caminhonete no online.
+- Esconder também o painel de entregas do HUD quando o monitor estiver ligado (opção nas Opções).
 
 ## Fase 4 — Mais profissões e tarefas
 | Profissão | Tarefa |

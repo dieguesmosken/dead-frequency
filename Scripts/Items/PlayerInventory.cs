@@ -277,6 +277,7 @@ public partial class PlayerInventory : Node
             ItemCatalog.Nail => FixSlippers(),
             ItemCatalog.SteelWool => VirtualTV.FixNearest(player),
             ItemCatalog.Repellent => Mosquitoes.Repel(300f),
+            ItemCatalog.JerryCan => VanController.RefuelNearest(player),
             _ => "",
         };
         if (!string.IsNullOrEmpty(result))

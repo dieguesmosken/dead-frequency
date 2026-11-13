@@ -27,6 +27,8 @@ public class DeliveryJob
 
 public partial class DeliveryManager : Node3D
 {
+    public const string GroupName = "delivery_manager";
+
     [Signal] public delegate void DeliveryCompletedEventHandler(string cargoName, int payment);
     [Signal] public delegate void CargoLostEventHandler(string cargoName);
     [Signal] public delegate void ShiftStartedEventHandler(int shift);
@@ -94,7 +96,7 @@ public partial class DeliveryManager : Node3D
     public override void _Ready()
     {
         _rng.Randomize();
-        AddToGroup("delivery_manager");
+        AddToGroup(GroupName);
         _beamMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/beacon_beam.gdshader") };
         _deliveredSound = new AudioStreamPlayer3D { Bus = AudioManager.SfxBus, UnitSize = 10f };
         if (ResourceLoader.Exists("res://Audio/SFX/delivery_ok.wav"))
