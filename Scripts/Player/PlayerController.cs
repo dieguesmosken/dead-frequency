@@ -296,6 +296,9 @@ public partial class PlayerController : CharacterBody3D
         float speed = new Vector2(Velocity.X, Velocity.Z).Length();
         bool bob = _headBob && State == PlayerState.Walking && IsOnFloor() && speed > 0.5f;
         Vector3 target = _cameraBase;
+        // Sentado num veículo: olhos na altura da cabine (carros baixos ficavam com a câmera acima do teto).
+        if ((State == PlayerState.Driving || State == PlayerState.Riding) && IsInstanceValid(CurrentVehicle))
+            target.Y += CurrentVehicle.EyeOffsetY;
         if (bob)
         {
             _bobTime += (float)delta * speed * 2.1f;

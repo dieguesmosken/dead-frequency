@@ -71,6 +71,36 @@ public static class CargoVisuals
         return mi;
     }
 
+    private static readonly System.Collections.Generic.Dictionary<string, StandardMaterial3D> Stickers = new();
+
+    /// <summary>Etiqueta colada (imagem de Assets/Textures/Depot/etq_*.png). Sem a imagem, cai no texto antigo.</summary>
+    private static void Sticker(Node3D p, string name, string fallback, Vector3 pos, float rotY, float width, Color color, float pixel = 0.0014f, bool flat = false)
+    {
+        if (!Stickers.TryGetValue(name, out StandardMaterial3D mat))
+        {
+            string path = $"res://Assets/Textures/Depot/etq_{name}.png";
+            mat = ResourceLoader.Exists(path)
+                ? new StandardMaterial3D { AlbedoTexture = GD.Load<Texture2D>(path), Roughness = 0.8f, TextureFilter = BaseMaterial3D.TextureFilterEnum.NearestWithMipmaps }
+                : null;
+            Stickers[name] = mat;
+        }
+        if (mat == null)
+        {
+            Text(p, fallback, pos, rotY, color, pixel);
+            if (flat)
+                p.GetChild<Label3D>(p.GetChildCount() - 1).Rotation = new Vector3(-Mathf.Pi * 0.5f, 0f, 0f);
+            return;
+        }
+        p.AddChild(new MeshInstance3D
+        {
+            Mesh = new QuadMesh { Size = new Vector2(width, width * 0.5f) },
+            Position = pos,
+            Rotation = flat ? new Vector3(-Mathf.Pi * 0.5f, 0f, 0f) : new Vector3(0f, rotY, 0f),
+            MaterialOverride = mat,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        });
+    }
+
     private static void Text(Node3D p, string text, Vector3 pos, float rotY, Color color, float pixel = 0.0016f)
     {
         p.AddChild(new Label3D
@@ -91,8 +121,7 @@ public static class CargoVisuals
         Box(r, new Vector3(0f, 0.12f, 0f), new Vector3(0.44f, 0.04f, 0.66f), raffia); // barriga cheia
         Box(r, new Vector3(0f, -0.02f, 0.37f), new Vector3(0.4f, 0.2f, 0.04f), raffia); // boca costurada
         Box(r, new Vector3(0f, 0.145f, -0.08f), new Vector3(0.445f, 0.006f, 0.24f), green);
-        Text(r, "AGRO-TUDÃO\nRAÇÃO 25 kg", new Vector3(0f, 0.15f, -0.08f), 0f, Colors.White, 0.0014f);
-        r.GetChild<Label3D>(r.GetChildCount() - 1).Rotation = new Vector3(-Mathf.Pi * 0.5f, 0f, 0f);
+        Sticker(r, "racao", "AGRO-TUDÃO\nRAÇÃO 25 kg", new Vector3(0f, 0.15f, -0.08f), 0f, 0.4f, Colors.White, 0.0014f, flat: true);
         return new Vector3(0.48f, 0.3f, 0.74f);
     }
 
@@ -101,8 +130,11 @@ public static class CargoVisuals
         Box(r, Vector3.Zero, new Vector3(0.5f, 0.5f, 0.5f), Cardboard);
         Box(r, new Vector3(0f, 0.251f, 0f), new Vector3(0.1f, 0.004f, 0.5f), Tape);
         Box(r, new Vector3(0f, 0f, 0.251f), new Vector3(0.1f, 0.5f, 0.004f), Tape);
-        Text(r, "FITAS MAGNÉTICAS\nVHS · K7", new Vector3(0f, 0.05f, 0.255f), 0f, new Color(0.15f, 0.1f, 0.05f));
-        Text(r, "FITAS MAGNÉTICAS\nVHS · K7", new Vector3(0f, 0.05f, -0.255f), Mathf.Pi, new Color(0.15f, 0.1f, 0.05f));
+        Sticker(r, "fitas", "FITAS MAGNÉTICAS\nVHS · K7", new Vector3(0f, 0.05f, 0.255f), 0f, 0.36f, new Color(0.15f, 0.1f, 0.05f), 0.0016f);
+        Sticker(r, "fitas", "FITAS MAGNÉTICAS\nVHS · K7", new Vector3(0f, 0.05f, -0.255f), Mathf.Pi, 0.36f, new Color(0.15f, 0.1f, 0.05f), 0.0016f);
+        // Fita de frágil nas laterais.
+        Sticker(r, "fragil", "FRÁGIL", new Vector3(0.252f, 0f, 0f), Mathf.Pi * 0.5f, 0.3f, new Color(0.7f, 0.05f, 0.05f));
+        Sticker(r, "fragil", "FRÁGIL", new Vector3(-0.252f, 0f, 0f), -Mathf.Pi * 0.5f, 0.3f, new Color(0.7f, 0.05f, 0.05f));
         // Fitas aparecendo por uma aba aberta.
         Box(r, new Vector3(0.12f, 0.27f, 0.08f), new Vector3(0.19f, 0.04f, 0.11f), Dark);
         return new Vector3(0.5f, 0.5f, 0.5f);
@@ -126,7 +158,7 @@ public static class CargoVisuals
         {
             Box(r, n * 0.252f, new Vector3(0.22f, 0.07f, 0.004f), Red);
             Box(r, n * 0.252f, new Vector3(0.07f, 0.22f, 0.004f), Red);
-            Text(r, "SUPRIMENTOS MÉDICOS", n * 0.254f + new Vector3(0f, -0.15f, 0f), rot, new Color(0.7f, 0.05f, 0.05f), 0.0012f);
+            Sticker(r, "suprimentos", "SUPRIMENTOS MÉDICOS", n * 0.254f + new Vector3(0f, -0.145f, 0f), rot, 0.2f, new Color(0.7f, 0.05f, 0.05f), 0.0012f);
         }
         Box(r, new Vector3(0f, 0.201f, 0f), new Vector3(0.22f, 0.004f, 0.07f), Red);
         Box(r, new Vector3(0f, 0.201f, 0f), new Vector3(0.07f, 0.004f, 0.22f), Red);
@@ -145,7 +177,8 @@ public static class CargoVisuals
             Box(r, new Vector3(0.235f, y, 0f), new Vector3(0.03f, 0.1f, 0.5f), Wood);
             Box(r, new Vector3(-0.235f, y, 0f), new Vector3(0.03f, 0.1f, 0.5f), Wood);
         }
-        Text(r, label, new Vector3(0f, 0f, 0.252f), 0f, tubes ? new Color(0.75f, 0.05f, 0.05f) : new Color(0.1f, 0.05f, 0.02f), 0.0014f);
+        Sticker(r, tubes ? "valvulas" : "pecas_radio", label, new Vector3(0f, 0f, 0.252f), 0f, 0.36f, tubes ? new Color(0.75f, 0.05f, 0.05f) : new Color(0.1f, 0.05f, 0.02f));
+        Sticker(r, tubes ? "fragil" : "lado_cima", "", new Vector3(0f, 0f, -0.252f), Mathf.Pi, 0.32f, new Color(0.1f, 0.05f, 0.02f));
         if (tubes)
         {
             var glow = new StandardMaterial3D { AlbedoColor = new Color(1f, 0.6f, 0.25f, 0.7f), Transparency = BaseMaterial3D.TransparencyEnum.Alpha, EmissionEnabled = true, Emission = new Color(1f, 0.45f, 0.1f), EmissionEnergyMultiplier = 0.8f };
@@ -167,7 +200,7 @@ public static class CargoVisuals
         Box(r, new Vector3(0f, 0.2f, 0f), new Vector3(0.14f, 0.03f, 0.03f), Dark); // alça
         foreach (float x in new[] { -0.15f, 0.15f })
             Box(r, new Vector3(x, 0.13f, 0.066f), new Vector3(0.04f, 0.03f, 0.01f), Yellow); // fechos
-        Text(r, "CONFIDENCIAL", new Vector3(0f, -0.06f, 0.067f), 0f, new Color(0.7f, 0.05f, 0.05f), 0.0012f);
+        Sticker(r, "confidencial", "CONFIDENCIAL", new Vector3(0f, -0.07f, 0.072f), 0f, 0.24f, new Color(0.7f, 0.05f, 0.05f), 0.0012f);
         return new Vector3(0.48f, 0.4f, 0.14f);
     }
 

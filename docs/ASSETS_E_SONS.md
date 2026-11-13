@@ -27,6 +27,8 @@ Antes de usar um arquivo: abrir a página, confirmar a licença e anotar autor +
 | Caminhonete de entregas (com calotas) e Fuska | [Meshy](https://www.meshy.ai) (plano pago do Matheus) | Nossos, distribuídos com o jogo (GPL v3) | `Assets/Meshy/Vehicles/` |
 | Barraca de vendedor (toldo recolorível), churrasquinho, caminhão dos bombeiros e viatura da polícia | [Meshy](https://www.meshy.ai) (plano pago do Matheus) | Nossos, distribuídos com o jogo (GPL v3) | `Assets/Meshy/Props/` |
 | Seis moradores (NPCs) com esqueleto e 4 animações | [Meshy](https://www.meshy.ai) (plano pago do Matheus) | Nossos, distribuídos com o jogo (GPL v3) | `Assets/Meshy/Characters/npc_*` |
+| Moto de entregas 125 cc e paleteira | [Meshy](https://www.meshy.ai) (plano pago do Matheus) | Nossos, distribuídos com o jogo (GPL v3) | `Assets/Meshy/Props/moto*`, `paleteira*` |
+| Texturas do depósito: caixas, etiquetas, muro, telha do galpão, quadros do escritório, logo e baú do DF Entregas | Desenhadas em código (`Assets/Textures/Depot/depot_textures.py.txt`, PIL) | Nossas (GPL v3) | `Assets/Textures/Depot/` |
 
 Como refazer: desenho em T-pose (`meshy_text_to_image`, nano-banana-pro) → `meshy_image_to_3d` (smart topology
 meshy-t2.5, ~4 mil triângulos, textura meshy-n1) → `meshy_rig` → `meshy_animate` com Idle, Casual Walk, Run 2,

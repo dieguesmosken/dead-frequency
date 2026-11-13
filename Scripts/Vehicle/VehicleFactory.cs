@@ -44,6 +44,39 @@ public static class VehicleFactory
         BuildCar(model.Id, ItemCatalog.Get(model.Id)?.Name ?? "carro", model.Type, model.Color,
             model.Type == CarType.Fusca ? 110f : model.Type == CarType.Sedan ? 140f : 125f);
 
+    /// <summary>Interior mínimo para a primeira pessoa nos carros: painel escuro, volante e forro do teto.
+    /// eye = posição dos olhos do motorista (local do veículo, frente +Z).</summary>
+    private static void BuildSimpleCabin(VanController v, Vector3 eye, Vector3 size)
+    {
+        var cabin = new Node3D { Name = "CabinSimple" };
+        v.AddChild(cabin);
+        CabinView.Attach(v, cabin);
+        var dark = new StandardMaterial3D { AlbedoColor = new Color(0.1f, 0.1f, 0.11f), Roughness = 0.9f };
+        var grey = new StandardMaterial3D { AlbedoColor = new Color(0.2f, 0.2f, 0.22f), Roughness = 0.8f };
+        float half = size.X * 0.5f - 0.08f;
+        void Box(Vector3 pos, Vector3 sz, Material m, float tiltX = 0f) =>
+            cabin.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = sz }, Position = pos, Rotation = new Vector3(tiltX, 0f, 0f), MaterialOverride = m,
+                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+        // Painel de lado a lado, abaixo da linha dos olhos.
+        Box(new Vector3(0f, eye.Y - 0.35f, eye.Z + 0.62f), new Vector3(half * 2f, 0.22f, 0.4f), dark);
+        Box(new Vector3(eye.X, eye.Y - 0.22f, eye.Z + 0.6f), new Vector3(0.42f, 0.1f, 0.3f), grey); // capela dos mostradores
+        // Forro do teto e colunas da frente (emolduram a vista como na caminhonete).
+        Box(new Vector3(0f, eye.Y + 0.24f, eye.Z + 0.05f), new Vector3(half * 2f, 0.04f, 1.5f), grey);
+        foreach (float x in new[] { -half, half })
+            Box(new Vector3(x, eye.Y - 0.04f, eye.Z + 0.78f), new Vector3(0.07f, 0.62f, 0.07f), dark, -0.45f);
+        // Volante.
+        cabin.AddChild(new MeshInstance3D
+        {
+            Name = "SteeringWheel",
+            Mesh = new TorusMesh { InnerRadius = 0.14f, OuterRadius = 0.18f, Rings = 12, RingSegments = 6 },
+            Position = new Vector3(eye.X, eye.Y - 0.29f, eye.Z + 0.42f),
+            Rotation = new Vector3(Mathf.DegToRad(68f), 0f, 0f),
+            MaterialOverride = dark,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        });
+        Box(new Vector3(eye.X, eye.Y - 0.33f, eye.Z + 0.52f), new Vector3(0.05f, 0.05f, 0.22f), dark, -0.38f); // coluna
+    }
+
     /// <summary>Táxi amarelo da cooperativa (v0.9.9): "Car 05" do pacote PSX Style Cars (GGBot, CC0),
     /// com o nome fictício da cooperativa e o adesivo do aplicativo "66". Só ele faz corridas.</summary>
     public static VanController BuildTaxi() =>
@@ -163,6 +196,10 @@ public static class VehicleFactory
         var exit = new Marker3D { Name = "ExitMarker", Position = new Vector3(size.X * 0.5f + 0.8f, 0f, seatPos.Z), Rotation = new Vector3(0f, Mathf.Pi * 0.5f, 0f) };
         v.AddChild(seat);
         v.AddChild(exit);
+        // Olhos uns 30 cm abaixo do teto, com um painel simples na frente (volante, painel e forro do teto).
+        float eyeY = size.Y - 0.3f;
+        v.EyeOffsetY = eyeY - (seatPos.Y + 1.6f);
+        BuildSimpleCabin(v, new Vector3(seatPos.X, eyeY, seatPos.Z), size);
         var door = new DriverSeatInteractable
         {
             Name = "DriverDoor",
@@ -226,7 +263,14 @@ public static class VehicleFactory
         v.AddChild(new CollisionShape3D { Name = "BodyShape", Shape = new BoxShape3D { Size = s.Body }, Position = new Vector3(0f, bodyY, 0f) });
 
         string path = AssetProps.Kenney + s.Model;
-        if (ResourceLoader.Exists(path) && GD.Load<PackedScene>(path)?.Instantiate() is Node3D model)
+        if (kind == VehicleKind.Moto && MeshyVehicles.HasProp("moto"))
+        {
+            // v0.10: moto de entregas 125 cc do Meshy (frente = +Z), no lugar da moto da Kenney.
+            var meshy = new Node3D { Name = "Model" };
+            v.AddChild(meshy);
+            MeshyVehicles.BuildProp(meshy, "moto", new Vector3(0.8f, 1.08f, 2.0f), 1);
+        }
+        else if (ResourceLoader.Exists(path) && GD.Load<PackedScene>(path)?.Instantiate() is Node3D model)
         {
             model.Name = "Model";
             model.Scale = Vector3.One * s.ModelScale;
@@ -259,6 +303,9 @@ public static class VehicleFactory
             });
         }
 
+        // Caminhões: olhos dentro da cabine (antes a câmera ficava acima do teto). A moto fica como está.
+        if (kind != VehicleKind.Moto)
+            v.EyeOffsetY = 1.72f - (s.Seat.Y + 1.6f);
         var seat = new Marker3D { Name = "SeatMarker", Position = s.Seat, Rotation = new Vector3(0f, Mathf.Pi, 0f) };
         var exit = new Marker3D { Name = "ExitMarker", Position = s.Exit, Rotation = new Vector3(0f, Mathf.Pi * 0.5f, 0f) };
         v.AddChild(seat);

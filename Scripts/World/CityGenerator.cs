@@ -1017,6 +1017,25 @@ public partial class CityGenerator : Node3D
         _leaves = Flat(new Color(0.08f, 0.17f, 0.09f));
         _trunk = Flat(new Color(0.22f, 0.15f, 0.1f));
         _warehouse = Flat(new Color(0.28f, 0.33f, 0.36f), 0.7f);
+        // v0.10: telha metálica no galpão e muro rebocado com barrado verde (texturas projetadas pelo mundo).
+        if (ResourceLoader.Exists("res://Assets/Textures/Depot/galpao.png"))
+        {
+            _warehouse.AlbedoColor = new Color(0.95f, 0.98f, 1f);
+            _warehouse.AlbedoTexture = GD.Load<Texture2D>("res://Assets/Textures/Depot/galpao.png");
+            _warehouse.Uv1Triplanar = true;
+            _warehouse.Uv1WorldTriplanar = true;
+            _warehouse.TextureFilter = BaseMaterial3D.TextureFilterEnum.NearestWithMipmaps;
+        }
+        _muro = Flat(new Color(0.38f, 0.37f, 0.35f));
+        if (ResourceLoader.Exists("res://Assets/Textures/Depot/muro.png"))
+        {
+            _muro.AlbedoColor = Colors.White;
+            _muro.AlbedoTexture = GD.Load<Texture2D>("res://Assets/Textures/Depot/muro.png");
+            _muro.Uv1Triplanar = true;
+            _muro.Uv1WorldTriplanar = true;
+            _muro.Uv1Scale = new Vector3(0.25f, 0.5f, 0.25f); // a imagem vale 4 m x 2 m; o barrado fica no pé do muro
+            _muro.TextureFilter = BaseMaterial3D.TextureFilterEnum.NearestWithMipmaps;
+        }
         _glass = Flat(new Color(0.05f, 0.07f, 0.08f), 0.2f);
         _stopRed = Flat(new Color(0.75f, 0.06f, 0.05f), 0.5f);
         _signBlue = Flat(new Color(0.1f, 0.25f, 0.65f), 0.5f);
@@ -1638,7 +1657,7 @@ public partial class CityGenerator : Node3D
         float wallH = farm ? 1.2f : 1.3f;
         float gate = 10f;
         float seg = (BlockSize - gate) * 0.5f;
-        Material wallMat = farm ? _trunk : _concrete;
+        Material wallMat = farm ? _trunk : _muro;
         (Vector3 c, Vector3 s)[] walls =
         {
             (new Vector3(0f, wallH * 0.5f, -half), new Vector3(BlockSize, wallH, 0.3f)),

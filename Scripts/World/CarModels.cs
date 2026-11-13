@@ -24,6 +24,9 @@ public static class CarModels
 {
     private static BoxMesh _box;
     private static CylinderMesh _wheel;
+    /// <summary>Nome dos vidros da estufa (o CabinView esconde em primeira pessoa).</summary>
+    public const string GlassName = "Glass";
+
     private static StandardMaterial3D _glass, _rubber, _chrome, _head, _tail, _plate, _interior, _grille, _blinker;
     private static readonly Dictionary<Color, StandardMaterial3D> Paint = new();
 
@@ -222,7 +225,7 @@ public static class CarModels
         Quad(bbr, btr, btl, bbl); // vidro traseiro
         Quad(fbl, bbl, btl, ftl); // lateral esquerda
         Quad(fbr, ftr, btr, bbr); // lateral direita
-        car.AddChild(new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = _glassDouble });
+        car.AddChild(new MeshInstance3D { Name = GlassName, Mesh = st.Commit(), MaterialOverride = _glassDouble });
         // Teto e colunas.
         float roofLen = zBT - zFT;
         Box(car, new Vector3(0f, yRoof + 0.035f, (zFT + zBT) * 0.5f), new Vector3(width - 0.08f, 0.07f, roofLen + 0.08f), paint);
