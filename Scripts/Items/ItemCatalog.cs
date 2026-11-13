@@ -57,6 +57,11 @@ public static class ItemCatalog
     public const string StrongFlashlight = "lanterna_forte";
     /// <summary>Repelente do Agro-Tudão (v0.9.9): 5 minutos sem pernilongo no sítio.</summary>
     public const string Repellent = "repelente";
+    // Painel diegético (Fase 3)
+    /// <summary>Fusível reserva da caminhonete: fica na mochila e entra na troca quando a caixa não tem mais.</summary>
+    public const string Fuse = "fusivel";
+    /// <summary>Galão de gasolina dos postos: meio tanque da caminhonete.</summary>
+    public const string JerryCan = "galao";
     public const string CarGou = "car_gou";
     public const string CarFusca = "car_fusca";
     public const string CarOpalinha = "car_opalinha";
@@ -97,6 +102,10 @@ public static class ItemCatalog
             Description = "Do Agro-Tudão. Passa no braço e os pernilongos do sítio somem por 5 minutos." },
         new ItemDef { Id = StrongFlashlight, Name = "Lanterna de longo alcance", Price = 120, Slot = ItemSlot.None, Color = new Color(0.95f, 0.85f, 0.4f),
             Description = "Do Conserta-Tudo do Primo. Basta levar na mochila: a lanterna (F) ilumina o dobro da distância, com o facho mais aberto." },
+        new ItemDef { Id = Fuse, Name = "Fusível de vidro", Price = 12, Slot = ItemSlot.None, Color = new Color(0.95f, 0.75f, 0.1f),
+            Description = "Reserva para a caixa de fusíveis da caminhonete. Leve na mochila: sentado no banco, mire no fusível queimado e aperte E." },
+        new ItemDef { Id = JerryCan, Name = "Galão de gasolina", Price = 45, Slot = ItemSlot.None, Color = new Color(0.85f, 0.15f, 0.1f),
+            Description = "Dos postos. Use perto da caminhonete de entregas: enche meio tanque (25 litros)." },
         // v0.9.7 — Auto Center Dois Mil (preço de lançamento; depois sobe).
         new ItemDef { Id = CarGou, Name = "Gou 1.0 quadrado", Price = 2000, Slot = ItemSlot.None, Color = new Color(0.35f, 0.55f, 0.95f), Car = true,
             Description = "Folksvagem 1.0, econômico e valente. Fica no pátio da concessionária para todo mundo da sala dirigir." },

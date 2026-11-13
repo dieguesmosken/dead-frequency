@@ -72,7 +72,10 @@ Entregador solitário dirigindo uma van utilitária anos 90 por uma zona perigos
       TaxiJob só aceita CityGenerator.Taxi), van de viagem (CarType.Van80, NetId "van_viagem" = CityGenerator.TravelVan),
       portão -X da central, grade nos muros (CityGenerator.Railing.cs), portãozinho da rádio, KeepClear (sem placa),
       céu procedural (Shaders/Sky/procedural_sky.gdshader, parâmetros pelo DayNightController). VEHICLES no servidor.
-3. Painel diegético: DashboardButton, ElectricalSystem, EngineSystem, fusíveis
+3. ✅ Painel diegético (só a caminhonete, Kind "van"): VanDashboard (mostradores, botões, caixa de fusíveis), DashMonitor (CRT verde,
+   Shaders/Vehicle/crt_monitor.gdshader), DashboardButton, EngineSystem (partida, tanque, temperatura), ElectricalSystem (bateria,
+   fusíveis, interferência da carga). VanController chama Tick() e aplica em faróis/rádio. Itens fusivel/galao = SHOP_PRICES no servidor.
+   Falta: rádio com dial, bomba com mangueira, outros veículos e sincronizar no online (ver ROADMAP, Fase 3).
 4. CargoBayManager + SaveManager (.tzn)
 5. Shaders PS1 + monitor CRT
 

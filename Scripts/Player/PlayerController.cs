@@ -352,7 +352,12 @@ public partial class PlayerController : CharacterBody3D
             return;
 
         // Polling em vez de eventos: funciona mesmo se algum Control da UI estiver com foco.
-        if (Input.IsActionJustPressed("flashlight"))
+        if (Input.IsActionJustPressed("flashlight") && State == PlayerState.Driving && CurrentVehicle?.Electrical != null)
+        {
+            // Dirigindo a caminhonete, a tecla da lanterna é o botão do farol.
+            CurrentVehicle.ToggleLights();
+        }
+        else if (Input.IsActionJustPressed("flashlight"))
         {
             _flashlight.Visible = !_flashlight.Visible;
             // Lanterna de longo alcance (Conserta-Tudo do Primo, v0.9.9): basta estar na mochila.

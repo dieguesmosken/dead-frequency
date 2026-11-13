@@ -211,6 +211,7 @@ public static class VanDetails
             van.AddChild(new Label3D
             {
                 Text = "DEAD FREQUENCY\nENTREGAS · 96.6",
+                DoubleSided = false, // de dentro da cabine o letreiro aparecia espelhado
                 FontSize = 44,
                 PixelSize = meshy ? 0.0034f : 0.0042f,
                 Modulate = new Color(0.1f, 0.42f, 0.2f),

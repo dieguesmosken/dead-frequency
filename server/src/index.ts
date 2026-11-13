@@ -153,6 +153,9 @@ const SHOP_PRICES: Record<string, number> = {
   // v0.9.9 — Conserta-Tudo do Primo
   lanterna_forte: 120,
   repelente: 18,
+  // Painel diegético (Fase 3)
+  fusivel: 12,
+  galao: 45,
   // v0.9.7 — Auto Center Dois Mil
   car_gou: 2000,
   car_fusca: 2000,

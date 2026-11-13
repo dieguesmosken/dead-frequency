@@ -543,7 +543,8 @@ public partial class GameHud : CanvasLayer
         }
 
         VanController van = Player.CurrentVehicle;
-        _speed.Visible = van != null;
+        // Painel diegético: em primeira pessoa na caminhonete, a velocidade está no velocímetro do painel.
+        _speed.Visible = van != null && (van.Dashboard == null || Player.IsThirdPerson);
         if (van != null)
             _speed.Text = GameSettings.Instance?.SpeedUnit == 1 ? $"{van.SpeedKmh * 0.621371f:000} mph" : $"{van.SpeedKmh:000} km/h";
 

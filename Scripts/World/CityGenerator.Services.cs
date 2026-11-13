@@ -212,6 +212,12 @@ public partial class CityGenerator
                 AddBox(st, new Vector3(x, 1.0f, z), new Vector3(0.7f, 1.6f, 0.45f), paint);
                 AddBox(st, new Vector3(x, 1.45f, z + 0.235f), new Vector3(0.5f, 0.3f, 0.02f), _storeWindow, false);
                 AddBox(st, new Vector3(x + 0.38f, 0.9f, z), new Vector3(0.06f, 0.5f, 0.12f), _darkMetal, false); // mangueira
+                // Fase 3 (painel): a bomba vende galão de gasolina, fusível e o cafezinho da conveniência.
+                string postoName = brand switch { "petrobraz" => "Posto Petrobraz", "ipiranguinha" => "Posto Ipiranguinha", _ => "Posto Shello" };
+                ActionArea.Create(st, new Vector3(x, 1.0f, z), new Vector3(0.9f, 1.7f, 0.7f),
+                    _ => $"[E] {postoName}: galão de gasolina e conveniência",
+                    _ => ShopScreen.Instance?.OpenFor(postoName, ShopStock.Posto),
+                    player => ShopScreen.Instance != null && !player.IsHolding && player.State == PlayerState.Walking);
                 st.AddChild(new Label3D
                 {
                     Text = brand == "petrobraz" ? "0,89" : brand == "ipiranguinha" ? "0,87" : "0,91",
