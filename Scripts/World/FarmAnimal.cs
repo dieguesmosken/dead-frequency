@@ -154,6 +154,8 @@ public partial class FarmAnimal : Node3D
         _body = body;
         AddChild(body);
         FitToSize();
+        if (IsDog)
+            CarameloLook.Apply(body); // vira-lata caramelo, não Shiba (v0.10)
         _anim = body.FindChild("AnimationPlayer", true, false) as AnimationPlayer;
         if (_anim != null)
         {

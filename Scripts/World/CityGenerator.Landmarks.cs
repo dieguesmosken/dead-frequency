@@ -449,6 +449,20 @@ public partial class CityGenerator
         truck.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(2.5f, 3f, 8.4f) }, Position = new Vector3(0f, 1.6f, 0f) });
         parent.AddChild(truck);
 
+        StandardMaterial3D beacon = Emissive(new Color(1f, 0.1f, 0.05f), lightsOn ? 4f : 0.4f);
+        if (MeshyVehicles.HasProp("bombeiros"))
+        {
+            // Modelo do Meshy (v0.9.9): as luzes azuis do teto viram vermelhas pela máscara.
+            MeshyVehicles.BuildProp(truck, "bombeiros", new Vector3(2.5f, 3.2f, 8.4f), 1, new Color(0.95f, 0.08f, 0.05f), 0.0632f);
+            if (lightsOn)
+            {
+                var light = new OmniLight3D { Position = new Vector3(0f, 3.5f, 2.6f), LightColor = new Color(1f, 0.1f, 0.05f), LightEnergy = 3f, OmniRange = 12f };
+                truck.AddChild(light);
+                Blink(light, beacon, 3f, 0.35f);
+            }
+            return;
+        }
+
         AddBox(truck, new Vector3(0f, 1.6f, 2.95f), new Vector3(2.5f, 2.3f, 2.3f), _fireRed, false);           // cabine
         AddBox(truck, new Vector3(0f, 2.15f, 4.12f), new Vector3(2.2f, 0.9f, 0.05f), _glass, false);          // para-brisa
         AddBox(truck, new Vector3(0f, 1.65f, -1.25f), new Vector3(2.5f, 2.4f, 6.0f), _fireRed, false);         // baú
@@ -468,7 +482,6 @@ public partial class CityGenerator
                 wheel.Rotation = new Vector3(0f, 0f, Mathf.Pi * 0.5f);
             }
         // Giroflex.
-        StandardMaterial3D beacon = Emissive(new Color(1f, 0.1f, 0.05f), lightsOn ? 4f : 0.4f);
         AddBox(truck, new Vector3(0f, 2.85f, 3.2f), new Vector3(1.8f, 0.18f, 0.35f), beacon, false);
         if (lightsOn)
         {
@@ -585,10 +598,14 @@ public partial class CityGenerator
         StandardMaterial3D red = Emissive(new Color(1f, 0.08f, 0.05f), lightsOn ? 4f : 0.3f);
         StandardMaterial3D blue = Emissive(new Color(0.15f, 0.35f, 1f), lightsOn ? 4f : 0.3f);
         // Viatura da Quaternius (Realistic Car Pack, frente em +Z: gira de volta).
-        bool model = AssetProps.Spawn(car, "res://Assets/Quaternius/Vehicles/Cop.fbx", Vector3.Zero, Mathf.Pi, 1.05f) != null;
+        // Modelo do Meshy (v0.9.9, frente em -Z como o CarModels); sem ele, a viatura da Quaternius.
+        bool meshy = MeshyVehicles.HasProp("policia");
+        bool model = meshy
+            ? MeshyVehicles.BuildProp(car, "policia", new Vector3(1.85f, 1.55f, 4.4f), -1) != Vector3.Zero
+            : AssetProps.Spawn(car, "res://Assets/Quaternius/Vehicles/Cop.fbx", Vector3.Zero, Mathf.Pi, 1.05f) != null;
         if (model)
         {
-            car.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(1.85f, 1.1f, 3.9f) }, Position = new Vector3(0f, 0.65f, 0f) });
+            car.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(1.85f, 1.1f, meshy ? 4.4f : 3.9f) }, Position = new Vector3(0f, 0.65f, 0f) });
             // O modelo já tem a barra de luz (giroflex): só as luzes piscando (sem desenhar outra por cima).
         }
         else

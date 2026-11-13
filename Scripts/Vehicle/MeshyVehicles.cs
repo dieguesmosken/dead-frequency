@@ -20,6 +20,58 @@ public static class MeshyVehicles
     private static Shader _recolor;
 
     public static bool HasFuska => ResourceLoader.Exists(FuskaPath);
+
+    /// <summary>Objetos do Meshy em Assets/Meshy/Props (barraca, churrasco, bombeiros, polícia).</summary>
+    public static bool HasProp(string name) => ResourceLoader.Exists($"res://Assets/Meshy/Props/{name}.glb");
+
+    private static readonly System.Collections.Generic.Dictionary<string, Mesh> PropMeshes = new();
+
+    /// <summary>
+    /// Monta um objeto do Meshy com o tamanho exato (largura X, altura Y, comprimento Z) e a frente para frontZ.
+    /// tint: cor que substitui a região da máscara (ex.: toldo da barraca); null = textura original.
+    /// </summary>
+    public static Vector3 BuildProp(Node3D parent, string name, Vector3 size, int frontZ, Color? tint = null, float tintRef = 0.12f)
+    {
+        if (!PropMeshes.TryGetValue(name, out Mesh mesh))
+        {
+            mesh = LoadMesh($"res://Assets/Meshy/Props/{name}.glb");
+            PropMeshes[name] = mesh;
+        }
+        if (mesh == null)
+            return Vector3.Zero;
+        var tex = GD.Load<Texture2D>($"res://Assets/Meshy/Props/{name}_cor.png");
+        string maskPath = $"res://Assets/Meshy/Props/{name}_mascara.png";
+        Material mat;
+        if (tint != null && ResourceLoader.Exists(maskPath))
+        {
+            _recolor ??= GD.Load<Shader>("res://Shaders/Characters/meshy_recolor.gdshader");
+            var sm = new ShaderMaterial { Shader = _recolor };
+            sm.SetShaderParameter("base_tex", tex);
+            sm.SetShaderParameter("mask_tex", GD.Load<Texture2D>(maskPath));
+            sm.SetShaderParameter("shirt_color", tint.Value);
+            sm.SetShaderParameter("ref_lum", new Vector4(tintRef, 1f, 1f, 1f));
+            mat = sm;
+        }
+        else
+        {
+            mat = new StandardMaterial3D { AlbedoTexture = tex, TextureFilter = BaseMaterial3D.TextureFilterEnum.Nearest, Roughness = 0.8f };
+        }
+        Aabb box = mesh.GetAabb();
+        // Comprimento (frente-trás) = eixo X do modelo; largura = Z; altura = Y.
+        var scale = new Vector3(size.Z / box.Size.X, size.Y / box.Size.Y, size.X / box.Size.Z);
+        float yaw = frontZ < 0 ? -Mathf.Pi * 0.5f : Mathf.Pi * 0.5f;
+        Vector3 center = new Basis(Vector3.Up, yaw) * (box.GetCenter() * scale);
+        parent.AddChild(new MeshInstance3D
+        {
+            Name = "Meshy_" + name,
+            Mesh = mesh,
+            MaterialOverride = mat,
+            Rotation = new Vector3(0f, yaw, 0f),
+            Scale = scale,
+            Position = new Vector3(-center.X, -box.Position.Y * scale.Y, -center.Z),
+        });
+        return size;
+    }
     public static bool HasTruck => ResourceLoader.Exists(TruckPath);
 
     private static Mesh LoadMesh(string path)
