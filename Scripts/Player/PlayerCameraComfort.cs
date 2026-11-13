@@ -140,6 +140,8 @@ public partial class PlayerController
         float speed = State == PlayerState.Walking
             ? new Vector2(Velocity.X, Velocity.Z).Length()
             : (CurrentVehicle != null ? CurrentVehicle.LinearVelocity.Length() : 0f);
+        _localCharacter.Carrying = IsHolding;
+        _localCharacter.Airborne = State == PlayerState.Walking && !IsOnFloor() && Velocity.Y > 0.5f;
         _localCharacter.Animate(delta, State == PlayerState.Walking ? speed : 0f);
         _localCharacter.SetHeadPitch(_head.Rotation.X);
         _localCharacter.SetSeated(State == PlayerState.Driving || State == PlayerState.Riding);

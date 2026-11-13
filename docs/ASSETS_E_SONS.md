@@ -19,6 +19,18 @@ os arquivos soltos, o que conflita com um repositório público.
 Antes de usar um arquivo: abrir a página, confirmar a licença e anotar autor + link. Pacote sem licença
 (sem arquivo nem página que diga) não entra.
 
+## Gerados por nós com IA
+
+| Asset | Ferramenta | Licença | Onde |
+|---|---|---|---|
+| Entregador e entregadora (modelo 3D, esqueleto e 6 animações) | [Meshy](https://www.meshy.ai) (plano pago do Matheus: os modelos gerados pertencem a ele) | Nossos, distribuídos com o jogo (GPL v3) | `Assets/Meshy/Characters/` |
+
+Como refazer: desenho em T-pose (`meshy_text_to_image`, nano-banana-pro) → `meshy_image_to_3d` (smart topology
+meshy-t2.5, ~4 mil triângulos, textura meshy-n1) → `meshy_rig` → `meshy_animate` com Idle, Casual Walk, Run 2,
+Chair Sit Idle M/F, Regular Jump e Carry Heavy Object Walk. A máscara de cores (`*_mascara.png`: R camiseta,
+G calça, B pele, A cabelo só na cabeça) e a textura de 512 px saem de um script Python a partir do GLB; no
+`.import` da máscara, `process/fix_alpha_border` precisa ficar **false** (senão ele apaga os outros canais).
+
 ## Onde publicamos os nossos sons e o jogo
 
 Os sons gerados por código no projeto (`Audio/*.py.txt`: trilha, efeitos e as músicas da Rádio 96.6)
