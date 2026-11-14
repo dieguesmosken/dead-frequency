@@ -1,6 +1,52 @@
 {
- "version": "0.9.9",
+ "version": "0.10.0",
  "changelog": [
+  {
+   "version": "0.10.0",
+   "date": "13/11/2026",
+   "title": "Modo História",
+   "changes": [
+    "Modo História (Iniciar turno > Modo História): a campanha \"Dead Frequency\" conta como o vale tenta salvar a Rádio 96.6, cujo sinal piora porque as válvulas da Repetidora Landell, lá na serra, estão no fim.",
+    "Capítulos I e II jogáveis: Primeiro Turno na cidade, com a Dona Lurdes da DF Entregas, e Asfalto e Barro no rancho, com o Seu Tonho do Agro-Tudão. Cada capítulo tem meta no canto da tela e limite de caixas quebradas; meta cumprida libera a viagem de caminhonete no piloto automático até o rancho. O progresso fica salvo e dá para continuar ou recomeçar.",
+    "Os locutores falam de verdade: Seu Waldir, Kátia, Toninho, a Dona Lurdes e os comunicados da prefeitura têm voz. A 96.6 agora faz intervalo depois de cada música, com comerciais das lojas, eventos, avisos da cidade e vinhetas, igual para todo mundo no online.",
+    "Carro de som: uma Kombi amarela roda devagar pela cidade anunciando as lojas. De vez em quando aparece o carro do ovo, com o alto-falante chamando a freguesia.",
+    "Direção: os carros não capotam mais à toa nas curvas e se desviram sozinhos se ficarem de lado. Sair do carro encostado no muro não joga mais você para dentro da parede ou para baixo do chão.",
+    "Opções contra enjoo (Opções > Jogo > Conforto): reduzir movimento, câmera estável no carro, vinheta nas bordas em alta velocidade e ponto fixo no meio da tela.",
+    "Primeira pessoa dentro dos carros com painel, volante e teto, sem a imagem cortada em cima; os vidros somem por dentro.",
+    "Central de entregas renovada: moto de entregas e baú térmico com o logo da DF Entregas, paleteira, caixas com textura e etiquetas FRÁGIL, muro rebocado, galpão de telha e quadros de verdade no escritório. Cabelo dos moradores corrigido.",
+    "Mais leve: a cidade junta os objetos parados em poucas malhas (até três vezes menos trabalho para a placa de vídeo), o que ajuda em PC fraco e no celular."
+   ],
+   "shots": [
+    {
+     "src": "assets/shots/v0.10.0/historia_waldir.jpg",
+     "caption": "Modo História: o Seu Waldir pede ajuda pela 96.6 quando a meta do capítulo I é cumprida"
+    },
+    {
+     "src": "assets/shots/v0.10.0/historia_estrada.jpg",
+     "caption": "Capítulo I concluído: a caminhonete pega a estrada do rancho pela saída leste"
+    },
+    {
+     "src": "assets/shots/v0.10.0/historia_rancho.jpg",
+     "caption": "Capítulo II, Asfalto e Barro: entregas no rancho para o Seu Tonho"
+    },
+    {
+     "src": "assets/shots/v0.10.0/carro_de_som.jpg",
+     "caption": "Carro de som da Kombi amarela anunciando as lojas da cidade"
+    },
+    {
+     "src": "assets/shots/v0.10.0/central.jpg",
+     "caption": "Central da DF Entregas com galpão de telha, muro rebocado e a caminhonete"
+    },
+    {
+     "src": "assets/shots/v0.10.0/paleteira.jpg",
+     "caption": "Paleteira nova e caixas com etiquetas no galpão"
+    },
+    {
+     "src": "assets/shots/v0.10.0/caixas.jpg",
+     "caption": "Caixas com textura e etiquetas FRÁGIL coladas"
+    }
+   ]
+  },
   {
    "version": "0.9.9",
    "date": "12/11/2026",
@@ -632,6 +678,22 @@
    "caption": "Menu principal com as novidades da versão"
   },
   {
+   "src": "assets/shots/v0.10.0/historia_waldir.jpg",
+   "caption": "Modo História: o Seu Waldir pede ajuda pela 96.6 quando a meta do capítulo I é cumprida"
+  },
+  {
+   "src": "assets/shots/v0.10.0/historia_estrada.jpg",
+   "caption": "Capítulo I concluído: a caminhonete pega a estrada do rancho pela saída leste"
+  },
+  {
+   "src": "assets/shots/v0.10.0/historia_rancho.jpg",
+   "caption": "Capítulo II, Asfalto e Barro: entregas no rancho para o Seu Tonho"
+  },
+  {
+   "src": "assets/shots/v0.10.0/carro_de_som.jpg",
+   "caption": "Carro de som da Kombi amarela anunciando as lojas da cidade"
+  },
+  {
    "src": "assets/shots/v0.9.9/taxi.jpg",
    "caption": "Táxi da Rádio Táxi Sintonia no pátio da central"
   },
@@ -678,22 +740,6 @@
   {
    "src": "assets/shots/v0.9.6/menu.jpg",
    "caption": "Etiqueta ALPHA ao lado da versão"
-  },
-  {
-   "src": "assets/shots/v0.9.5/churrasquinho_noite.jpg",
-   "caption": "Churrasquinho do Duvidoso à noite: fumaça, freguesia e o caramelo seguindo"
-  },
-  {
-   "src": "assets/shots/v0.9.5/balao.jpg",
-   "caption": "Diálogos de calçada: balões estilo PS1"
-  },
-  {
-   "src": "assets/shots/v0.9.5/loja_churrasco.jpg",
-   "caption": "A barraca só vende comida: guaraná, café, marmitex e espetinho"
-  },
-  {
-   "src": "assets/shots/v0.9.5/inventario.jpg",
-   "caption": "Novo slot de pés: Chinelos Legítimas"
   }
  ],
  "pix": "00020126700014br.gov.bcb.pix0124contato@badwolf3d.com.br0220Apoio Dead Frequency5204000053039865802BR5914DEAD FREQUENCY6006BRASIL62120508DEADFREQ6304D998"

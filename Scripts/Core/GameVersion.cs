@@ -7,13 +7,25 @@ namespace DeadFrequency;
 
 public static class GameVersion
 {
-    public const string Current = "0.9.9";
+    public const string Current = "0.10.0";
     public const string Display = Current;
 
     public readonly record struct Release(string Version, string Date, string Title, string[] Changes);
 
     public static readonly Release[] Changelog =
     {
+        new("0.10.0", "13/11/2026", "Modo História", new[]
+        {
+            "Modo História (Iniciar turno > Modo História): a campanha \"Dead Frequency\" conta como o vale tenta salvar a Rádio 96.6, cujo sinal piora porque as válvulas da Repetidora Landell, lá na serra, estão no fim.",
+            "Capítulos I e II jogáveis: Primeiro Turno na cidade, com a Dona Lurdes da DF Entregas, e Asfalto e Barro no rancho, com o Seu Tonho do Agro-Tudão. Cada capítulo tem meta no canto da tela e limite de caixas quebradas; meta cumprida libera a viagem de caminhonete no piloto automático até o rancho. O progresso fica salvo e dá para continuar ou recomeçar.",
+            "Os locutores falam de verdade: Seu Waldir, Kátia, Toninho, a Dona Lurdes e os comunicados da prefeitura têm voz. A 96.6 agora faz intervalo depois de cada música, com comerciais das lojas, eventos, avisos da cidade e vinhetas, igual para todo mundo no online.",
+            "Carro de som: uma Kombi amarela roda devagar pela cidade anunciando as lojas. De vez em quando aparece o carro do ovo, com o alto-falante chamando a freguesia.",
+            "Direção: os carros não capotam mais à toa nas curvas e se desviram sozinhos se ficarem de lado. Sair do carro encostado no muro não joga mais você para dentro da parede ou para baixo do chão.",
+            "Opções contra enjoo (Opções > Jogo > Conforto): reduzir movimento, câmera estável no carro, vinheta nas bordas em alta velocidade e ponto fixo no meio da tela.",
+            "Primeira pessoa dentro dos carros com painel, volante e teto, sem a imagem cortada em cima; os vidros somem por dentro.",
+            "Central de entregas renovada: moto de entregas e baú térmico com o logo da DF Entregas, paleteira, caixas com textura e etiquetas FRÁGIL, muro rebocado, galpão de telha e quadros de verdade no escritório. Cabelo dos moradores corrigido.",
+            "Mais leve: a cidade junta os objetos parados em poucas malhas (até três vezes menos trabalho para a placa de vídeo), o que ajuda em PC fraco e no celular.",
+        }),
         new("0.9.9", "12/11/2026", "Lojas de verdade", new[]
         {
             "Táxi amarelo da cooperativa Rádio Táxi Sintonia no pátio da central (com o adesivo do app 66): o taxista agora faz as corridas com ele, e o passageiro só embarca no táxi.",
