@@ -1,10 +1,12 @@
 // Histórico público de Releases: versões estáveis e pré-releases Internal.
+// Fonte principal: data/builds.json (histórico completo, inclusive as internas já removidas da página de Releases,
+// gravado pelos workflows na branch "historico"). Sem ele, cai na API do GitHub (só o que ainda está publicado).
 const REPO="dieguesmosken/dead-frequency",API="https://api.github.com/repos/dieguesmosken/dead-frequency";
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const date=s=>s?new Date(s).toLocaleDateString("pt-BR"):"Data não informada";
 const privateRelease=r=>/SITE_VISIBILITY\s*:\s*PRIVATE/i.test(r.body||"")||/\[SITE_PRIVATE\]/i.test(r.body||"");
-const isInternal=r=>/^internal-v/i.test(r.tag_name||"")||/^v[\d.]+-pre$/i.test(r.tag_name||"")||/internal/i.test(r.name||"");
+const isInternal=r=>r.prerelease===true||/^internal-v/i.test(r.tag_name||"")||/^v[\d.]+-pre$/i.test(r.tag_name||"")||/internal/i.test(r.name||"");
 let releases=[],selected="stable";
 function safeMarkdown(text){
  const lines=String(text||"").split(/\r?\n/);let out="",inList=false;
@@ -14,18 +16,33 @@ function safeMarkdown(text){
  else if(/^---+$/.test(t))out+="<hr>";else if(!/^<img\b/i.test(t))out+="<p>"+inline(t)+"</p>";}
  if(inList)out+="</ul>";return out;
 }
+// Entrada do builds.json → mesmo formato de uma release da API (+ estado e "incluída em").
+function fromHistory(b){
+ return {tag_name:b.tag,name:b.titulo,body:b.notas,prerelease:b.canal==="interna",published_at:b.data,html_url:b.estado==="removida"?"https://github.com/"+REPO+"/tree/"+encodeURIComponent(b.tag):b.url,
+  target_commitish:b.commit,assets:b.estado==="removida"?[]:(b.downloads||[]).map(a=>({name:a.nome,browser_download_url:a.url,size:a.tamanho})),
+  _estado:b.estado,_removida:b.removida_em,_incluida:b.incluida_em,_pr:b.pr,_historico:b.historico||[]};
+}
+function stateLine(r){
+ if(!r._estado)return "";
+ const bits=[];
+ if(r._pr&&r._pr.numero)bits.push('<a href="https://github.com/'+REPO+'/pull/'+r._pr.numero+'" target="_blank" rel="noopener">PR #'+r._pr.numero+(r._pr.titulo?" · "+esc(r._pr.titulo):"")+" ↗</a>");
+ if(r._incluida)bits.push('<span class="release-kind">mesclada · entrou na '+esc(r._incluida)+"</span>");
+ if(r._estado==="removida")bits.push('<span class="release-kind internal">removida da página em '+esc(date(r._removida))+" · tag mantida</span>");
+ const hist=r._historico.map(h=>"<li>"+esc(date(h.quando))+" — "+esc(h.evento)+"</li>").join("");
+ return '<div class="release-meta">'+bits.join(" ")+'</div>'+(hist?'<details class="small dim"><summary>Histórico desta build</summary><ul>'+hist+"</ul></details>":"");
+}
 function card(r,list,index){
  const internal=isInternal(r),previous=list[index+1],kind=internal?"Internal · Pré-alpha":"Versão pública";
  const compare=previous?"https://github.com/"+REPO+"/compare/"+encodeURIComponent(previous.tag_name)+"..."+encodeURIComponent(r.tag_name):"https://github.com/"+REPO+"/tree/"+encodeURIComponent(r.target_commitish||"main");
  const assets=(r.assets||[]).filter(a=>a.name),downloads=assets.map(a=>'<a href="'+esc(a.browser_download_url)+'" target="_blank" rel="noopener">'+esc(a.name)+" ("+(a.size/1048576).toFixed(1)+" MB)</a>").join("");
  const notes=(r.body||"").replace(/<!--\s*SITE_VISIBILITY\s*:\s*PRIVATE\s*-->/ig,"").replace(/\[SITE_PRIVATE\]/ig,"").trim();
- return '<details class="release" '+(index===0?"open":"")+'><summary><span class="ver">'+esc(r.name||r.tag_name)+'</span><span class="title">'+esc(r.tag_name)+'</span><span class="date">'+esc(date(r.published_at||r.created_at))+'</span></summary><div class="body"><div class="release-meta"><span class="release-kind '+(internal?"internal":"")+'">'+kind+'</span></div><div class="release-body">'+(notes?safeMarkdown(notes):'<p class="dim">Esta publicação não possui notas detalhadas.</p>')+'</div><div class="release-links"><a href="'+esc(r.html_url)+'" target="_blank" rel="noopener">Release no GitHub ↗</a><a href="'+compare+'" target="_blank" rel="noopener">Commits e arquivos desta versão ↗</a>'+downloads+'</div><button class="btn small-btn ghost commits-toggle" type="button" data-tag="'+esc(r.tag_name)+'" data-base="'+esc(previous?.tag_name||"")+'">Ver commits individuais</button><div class="commit-list" hidden></div></div></details>';
+ return '<details class="release" '+(index===0?"open":"")+'><summary><span class="ver">'+esc(r.name||r.tag_name)+'</span><span class="title">'+esc(r.tag_name)+'</span><span class="date">'+esc(date(r.published_at||r.created_at))+'</span></summary><div class="body"><div class="release-meta"><span class="release-kind '+(internal?"internal":"")+'">'+kind+'</span></div>'+stateLine(r)+'<div class="release-body">'+(notes?safeMarkdown(notes):'<p class="dim">Esta publicação não possui notas detalhadas.</p>')+'</div><div class="release-links"><a href="'+esc(r.html_url)+'" target="_blank" rel="noopener">Release no GitHub ↗</a><a href="'+compare+'" target="_blank" rel="noopener">Commits e arquivos desta versão ↗</a>'+downloads+'</div><button class="btn small-btn ghost commits-toggle" type="button" data-tag="'+esc(r.tag_name)+'" data-base="'+esc(previous?.tag_name||"")+'">Ver commits individuais</button><div class="commit-list" hidden></div></div></details>';
 }
 function render(){
  const list=releases.filter(r=>!privateRelease(r)&&(selected==="internal"?isInternal(r):!isInternal(r)&&!r.prerelease));
  $("#release-list").hidden=selected==="roadmap";$("#roadmap").hidden=selected!=="roadmap";$("#release-status").hidden=selected==="roadmap";
  if(selected==="roadmap")return;
- $("#release-status").textContent=list.length?list.length+" atualização(ões) · histórico sincronizado com GitHub":"Nenhuma atualização pública encontrada nesta categoria.";
+ $("#release-status").textContent=list.length?list.length+" atualização(ões) · histórico completo":"Nenhuma atualização pública encontrada nesta categoria.";
  $("#release-list").innerHTML=list.length?list.map((r,i)=>card(r,list,i)).join(""):'<div class="updates-empty">Ainda não há versões publicadas nesta categoria.</div>';
  $("#release-list").querySelectorAll(".commits-toggle").forEach(btn=>btn.addEventListener("click",()=>loadCommits(btn)));
 }
@@ -55,8 +72,10 @@ function setBrand(v){if(v)document.querySelectorAll(".brand-version").forEach(e=
 fetch("data/site.json",{cache:"no-cache"}).then(r=>r.json()).then(d=>setBrand(d.version)).catch(()=>{});
 async function init(){
  try{
-  const res=await fetch(API+"/releases?per_page=100",{headers:{"Accept":"application/vnd.github+json"},cache:"no-cache"});if(!res.ok)throw new Error("A API do GitHub está indisponível ou atingiu o limite de consultas.");
-  releases=(await res.json()).filter(r=>!r.draft).sort((a,b)=>new Date(b.published_at||b.created_at)-new Date(a.published_at||a.created_at));
+  let hist=null;try{const h=await fetch("data/builds.json",{cache:"no-cache"});if(h.ok)hist=await h.json();}catch(_){}
+  if(hist&&hist.builds&&hist.builds.length){releases=hist.builds.map(fromHistory);}
+  else{const res=await fetch(API+"/releases?per_page=100",{headers:{"Accept":"application/vnd.github+json"},cache:"no-cache"});if(!res.ok)throw new Error("A API do GitHub está indisponível ou atingiu o limite de consultas.");releases=(await res.json()).filter(r=>!r.draft);}
+  releases=releases.sort((a,b)=>new Date(b.published_at||b.created_at)-new Date(a.published_at||a.created_at));
   const stable=releases.find(r=>!r.prerelease);if(stable)setBrand(stable.tag_name);
   if(location.hash==="#internal")selected="internal";if(location.hash==="#roadmap"){selected="roadmap";$("#roadmap-content").dataset.loaded="1";loadRoadmap();}
   const tab=document.querySelector('.update-tab[data-tab="'+selected+'"]');if(tab)document.querySelectorAll(".update-tab").forEach(t=>{const active=t===tab;t.classList.toggle("active",active);t.setAttribute("aria-selected",String(active));});
