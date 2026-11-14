@@ -64,6 +64,7 @@ public partial class CharacterModel : Node3D
 
     // Modelo animado
     private Skeleton3D _skeleton;
+    private BreathModifier _breath;
     private AnimationPlayer _anim;
     private string _idle, _walk, _run, _work, _jump, _carry;
     /// <summary>Modelo do Meshy (jogador): já vem na altura certa e de tênis.</summary>
@@ -159,6 +160,9 @@ public partial class CharacterModel : Node3D
                 _boneSpine = _skeleton.FindBone(_meshy ? "Spine" : "Spine2");
                 _boneFootL = _skeleton.FindBone("LeftFoot");
                 _boneFootR = _skeleton.FindBone("RightFoot");
+                // Idle respirando (v0.10.1): primeiro modificador do esqueleto, antes do IK.
+                _breath = new BreathModifier { Name = "Breath" };
+                _skeleton.AddChild(_breath);
             }
         }
         else
@@ -321,6 +325,8 @@ public partial class CharacterModel : Node3D
         }
         if (_anim == null)
             return;
+        if (_breath != null)
+            _breath.Resting = _seated || (speed < 0.25f && !Airborne && _current != _work);
         if (_seated)
             return;
         if (Airborne && _jump != null)
