@@ -131,7 +131,7 @@ public partial class CityGenerator
             (new Vector3(-9f, muroH * 0.5f, 14.5f), new Vector3(11f, muroH, 0.2f)),
             (new Vector3(7f, muroH * 0.5f, 14.5f), new Vector3(15f, muroH, 0.2f)),
         })
-            WallWithRailing(st, p, s, wall, 1.0f);
+            WallWithRailing(st, p, s, _muro ?? wall, 1.0f); // mesmo muro rebocado da central (textura)
         BuildPedestrianGate(st, new Vector3(14.5f, 0f, gateZ), gateW, muroH + 1.0f);
         RegisterObstacle(st.Position + new Vector3(-6.2f, 0f, 15f));
         Poster(st, new Vector3(-12f, 0.7f, 14.55f), 0f, 0.9f);

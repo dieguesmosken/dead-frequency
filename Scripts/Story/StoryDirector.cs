@@ -70,6 +70,13 @@ public partial class StoryDirector : Node
         }
     }
 
+    public override void _Process(double delta)
+    {
+        // A tecla H (GameHud) esconde o quadro lateral e a faixa do capítulo juntos.
+        if (_hud != null)
+            _hud.Visible = !GameHud.SidePanelsHidden;
+    }
+
     private void Refresh()
     {
         StoryManager sm = StoryManager.Instance;
