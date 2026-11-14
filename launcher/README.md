@@ -28,3 +28,13 @@ godot --headless --path launcher/app --export-release "Linux" ../../out/DeadFreq
 ```
 
 O GitHub Actions (`.github/workflows/release.yml`) já faz isso e anexa os dois no release.
+
+## Autoatualização do launcher
+
+- Cada release publica `launcher-version.txt` (o `LAUNCHER_VERSION` do `launcher.gd`).
+- Ao abrir, se o número da release for maior que o do launcher, ele baixa o executável novo, confere o SHA256
+  no `SHA256SUMS.txt`, troca o próprio arquivo (o antigo vira `.old` e é apagado na próxima abertura) e reabre.
+  Se a pasta não deixar gravar, avisa e segue com o atual.
+- **Mudou o launcher? Suba `LAUNCHER_VERSION`.** Sem mudança, o CI (release e pré-release) reaproveita os
+  executáveis do launcher da release anterior, sem recompilar nem reassinar.
+- Os launchers antigos (antes da versão 2) não têm isso: quem estiver com um deles precisa baixar o novo uma última vez.

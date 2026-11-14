@@ -91,8 +91,32 @@ jobs:
           "$GODOT" --headless --path . --export-release "Linux" build/linux/DeadFrequency.x86_64
           chmod +x build/linux/DeadFrequency.x86_64
 
-      - name: Compilar o launcher (Godot padrão, só GDScript)
+      - name: Launcher mudou? (sem mudança, reaproveita o da release anterior)
+        id: lr
         if: steps.ver.outputs.exists == 'false'
+        run: |
+          set -e
+          LV=$(grep -oP 'const LAUNCHER_VERSION := \K[0-9]+' launcher/app/launcher.gd)
+          echo "$LV" > launcher-version.txt
+          REUSE=false
+          # A release mais recente que tem launcher-version.txt: se o número for o mesmo, baixa os launchers dela.
+          for T in $(gh release list --limit 40 --json tagName --jq '.[].tagName'); do
+            if gh release download "$T" -p launcher-version.txt -O prev-launcher-version.txt --clobber 2>/dev/null; then
+              if [ "$(tr -d '[:space:]' < prev-launcher-version.txt)" = "$LV" ] \
+                && gh release download "$T" -p 'DeadFrequencyLauncher-*' --clobber; then
+                REUSE=true
+                chmod +x DeadFrequencyLauncher-linux
+                echo "Launcher v$LV reaproveitado de $T"
+              fi
+              break
+            fi
+          done
+          echo "reuse=$REUSE" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Compilar o launcher (Godot padrão, só GDScript)
+        if: steps.ver.outputs.exists == 'false' && steps.lr.outputs.reuse != 'true'
         run: |
           set -e
           TAG="${GODOT_VERSION}-${GODOT_STATUS}"
@@ -127,7 +151,8 @@ jobs:
         run: |
           mkdir -p unsigned
           cp build/windows/DeadFrequency.exe unsigned/
-          cp DeadFrequencyLauncher-windows.exe unsigned/
+          # Launcher reaproveitado já veio assinado da release anterior.
+          if [ "${{ steps.lr.outputs.reuse }}" != "true" ]; then cp DeadFrequencyLauncher-windows.exe unsigned/; fi
       - name: Enviar para o SignPath
         id: upload-unsigned
         if: steps.unsigned.outcome == 'success'
@@ -151,7 +176,7 @@ jobs:
         if: steps.unsigned.outcome == 'success'
         run: |
           cp signed/DeadFrequency.exe build/windows/DeadFrequency.exe
-          cp signed/DeadFrequencyLauncher-windows.exe DeadFrequencyLauncher-windows.exe
+          if [ -f signed/DeadFrequencyLauncher-windows.exe ]; then cp signed/DeadFrequencyLauncher-windows.exe DeadFrequencyLauncher-windows.exe; fi
 
       - name: Empacotar, SHA256SUMS
         if: steps.ver.outputs.exists == 'false'
@@ -160,7 +185,7 @@ jobs:
           VER=${{ steps.ver.outputs.version }}
           (cd build/windows && zip -qr "../../DeadFrequency-v${VER}-windows.zip" .)
           (cd build/linux && zip -qr "../../DeadFrequency-v${VER}-linux.zip" .)
-          sha256sum DeadFrequency-v${VER}-windows.zip DeadFrequency-v${VER}-linux.zip DeadFrequencyLauncher-windows.exe DeadFrequencyLauncher-linux > SHA256SUMS.txt
+          sha256sum DeadFrequency-v${VER}-windows.zip DeadFrequency-v${VER}-linux.zip DeadFrequencyLauncher-windows.exe DeadFrequencyLauncher-linux launcher-version.txt > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Atestado de build (prova que os arquivos saíram deste repositório)
@@ -179,7 +204,7 @@ jobs:
           VER=${{ steps.ver.outputs.version }}
           python3 site/release_notes.py "$VER" main > notes.md
           gh release create "v$VER" DeadFrequency-v${VER}-windows.zip DeadFrequency-v${VER}-linux.zip \
-            DeadFrequencyLauncher-windows.exe DeadFrequencyLauncher-linux SHA256SUMS.txt \
+            DeadFrequencyLauncher-windows.exe DeadFrequencyLauncher-linux launcher-version.txt SHA256SUMS.txt \
             --title "v$VER — ${{ steps.ver.outputs.title }}" --notes-file notes.md --target "$GITHUB_SHA"
         env:
           GH_TOKEN: ${{ github.token }}
