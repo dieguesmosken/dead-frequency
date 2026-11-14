@@ -34,16 +34,25 @@ from xml.sax.saxutils import escape
 RAIZ = Path(__file__).resolve().parents[2]
 PLANILHAS = [RAIZ / "docs/radio/anuncios_966.csv", RAIZ / "docs/radio/carros_de_rua.csv"]
 
-# Locutor da planilha -> (voz, motor preferido, velocidade em %). Se o motor preferido falhar, tenta o "neural".
-# Vozes pt-BR do Polly: generativas Camila, Carolina, Leo; neurais Camila, Vitória, Thiago; padrão Ricardo.
+# Locutor da planilha -> (voz, motor preferido, velocidade em %, tom em semitons). Se o motor falhar, tenta o "neural".
+# Vozes pt-BR do Polly: generativas Camila, Carolina, Leo (as mais naturais); neurais Camila, Vitória, Thiago;
+# padrão Ricardo. Todo mundo usa o motor generativo. Ele aceita só velocidade e volume no <prosody>, sem "pitch";
+# então o tom de cada personagem é ajustado depois, no ffmpeg (Leo mais grave para o Seu Waldir, mais agudo
+# para o Toninho), e o mesmo Leo vira três locutores diferentes.
 VOZES = {
-    "waldir": ("Leo", "generative", 92),        # locutor veterano, mais pausado
-    "katia": ("Camila", "generative", 108),     # varejo animado
-    "prefeitura": ("Vitoria", "neural", 100),   # aviso oficial, neutro
-    "toninho": ("Thiago", "neural", 104),       # humor
-    "ovo": ("Leo", "generative", 110),          # carro do ovo, empolgado
+    "waldir": ("Leo", "generative", 92, -1.5),       # locutor veterano, grave e pausado
+    "katia": ("Camila", "generative", 108, 0.0),     # varejo animado
+    "prefeitura": ("Carolina", "generative", 98, 0.0),  # aviso oficial, voz diferente da Kátia
+    "toninho": ("Leo", "generative", 106, 1.5),      # humor, mais leve
+    "ovo": ("Leo", "generative", 110, 0.5),          # carro do ovo, empolgado
+    "locutor": ("Leo", "generative", 100, -0.5),     # locutor genérico da rádio
 }
-RESERVA = {"Leo": "Thiago", "Carolina": "Camila"}  # vozes generativas sem versão neural
+RESERVA = {"Leo": "Thiago", "Carolina": "Vitoria"}  # vozes generativas sem versão neural
+
+# Planilhas tocadas no alto-falante de um carro: ganham o filtro de "corneta" (sem graves e sem agudos).
+MEGAFONE = {"carros_de_rua.csv"}
+FILTRO_MEGAFONE = "highpass=f=350,lowpass=f=3400,acompressor=threshold=-18dB:ratio=4:attack=5:release=80"
+TAXA_POLLY = 24000  # Hz do áudio que o Polly devolve (o máximo das vozes generativas)
 
 # Como falar alguns nomes (docs/radio/ANUNCIOS_966.md, "Dicas de pronúncia").
 PRONUNCIA = {
@@ -65,6 +74,7 @@ def ler_roteiros() -> list[dict]:
         with planilha.open(encoding="utf-8", newline="") as f:
             for row in csv.DictReader(f):
                 if row.get("id") and row.get("texto") and row.get("arquivo"):
+                    row["_megafone"] = planilha.name in MEGAFONE
                     linhas.append(row)
     return linhas
 
@@ -109,7 +119,19 @@ def sintetizar(polly, texto: str, voz: str, motor: str, velocidade: int) -> byte
     raise RuntimeError(f"Polly recusou {voz}/{motor}: {erro}")
 
 
-def finalizar(bruto: bytes, destino: Path) -> None:
+def filtros(semitons: float, megafone: bool) -> str:
+    """Cadeia do ffmpeg: tom (sem mudar a duração), corneta opcional e volume igual ao das músicas."""
+    partes = []
+    if semitons:
+        fator = 2 ** (semitons / 12)
+        partes += [f"asetrate={TAXA_POLLY * fator:.0f}", f"aresample={TAXA_POLLY}", f"atempo={1 / fator:.4f}"]
+    if megafone:
+        partes.append(FILTRO_MEGAFONE)
+    partes.append("loudnorm=I=-16:TP=-1.5:LRA=11")
+    return ",".join(partes)
+
+
+def finalizar(bruto: bytes, destino: Path, semitons: float = 0.0, megafone: bool = False) -> None:
     destino.parent.mkdir(parents=True, exist_ok=True)
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
@@ -119,7 +141,7 @@ def finalizar(bruto: bytes, destino: Path) -> None:
         entrada = Path(tmp) / "polly.ogg"
         entrada.write_bytes(bruto)
         cmd = [ffmpeg, "-y", "-loglevel", "error", "-i", str(entrada),
-               "-af", "loudnorm=I=-16:TP=-1.5:LRA=11", "-ac", "1", "-ar", "44100",
+               "-af", filtros(semitons, megafone), "-ac", "1", "-ar", "44100",
                "-c:a", "libvorbis", "-q:a", "5", str(destino)]
         if subprocess.run(cmd).returncode != 0:
             destino.write_bytes(bruto)  # se o ffmpeg falhar, fica o arquivo do Polly mesmo
@@ -143,14 +165,15 @@ def main() -> int:
         if destino.exists() and not a.refazer:
             continue
         locutor = row.get("locutor", "waldir").strip().lower()
-        voz, motor, vel = VOZES.get(locutor, VOZES["waldir"])
-        pendentes.append((row, destino, voz, motor, vel, preparar_texto(row["texto"])))
+        voz, motor, vel, tom = VOZES.get(locutor, VOZES["waldir"])
+        pendentes.append((row, destino, voz, motor, vel, preparar_texto(row["texto"]), tom))
 
     total = sum(len(p[5]) for p in pendentes)
     custo = sum(len(p[5]) / 1e6 * PRECO_POR_MILHAO[p[3]] for p in pendentes)
     print(f"{len(pendentes)} áudio(s) para gerar · {total} caracteres · no máximo US$ {custo:.2f} dos créditos")
-    for row, destino, voz, motor, vel, texto in pendentes:
-        print(f"  {row['id']:<28} {voz}/{motor} {vel}%  -> {destino.relative_to(RAIZ)}")
+    for row, destino, voz, motor, vel, texto, tom in pendentes:
+        extra = (f" tom {tom:+.1f}" if tom else "") + (" megafone" if row["_megafone"] else "")
+        print(f"  {row['id']:<28} {voz}/{motor} {vel}%{extra}  -> {destino.relative_to(RAIZ)}")
     if not pendentes or a.simular:
         return 0
     if total > a.limite:
@@ -168,10 +191,10 @@ def main() -> int:
         print("Aviso: ffmpeg não encontrado; os arquivos ficam sem normalizar o volume.")
 
     falhas = 0
-    for i, (row, destino, voz, motor, vel, texto) in enumerate(pendentes, 1):
+    for i, (row, destino, voz, motor, vel, texto, tom) in enumerate(pendentes, 1):
         print(f"[{i}/{len(pendentes)}] {row['id']}")
         try:
-            finalizar(sintetizar(polly, texto, voz, motor, vel), destino)
+            finalizar(sintetizar(polly, texto, voz, motor, vel), destino, tom, row["_megafone"])
         except Exception as e:  # segue para o próximo e mostra no fim
             falhas += 1
             print(f"    ERRO: {e}")

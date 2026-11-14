@@ -58,3 +58,12 @@ python tools/tts/gerar_audios.py --perfil dead-frequency-tts
 
 Para trocar voz ou velocidade, edite `VOZES` no começo do script. Para trocar a pronúncia de um nome, edite
 `PRONUNCIA`. Depois de ouvir, anote em `docs/ASSETS_E_SONS.md` que as vozes vieram do Amazon Polly.
+
+## Como as vozes estão configuradas
+
+- Todo mundo usa o **motor generativo** do Polly, o mais natural em pt-BR: Leo (masculina), Camila e Carolina (femininas).
+- O generativo não aceita mudar o tom pelo SSML (só velocidade e volume), então o tom é ajustado no ffmpeg depois:
+  Seu Waldir é o Leo 1,5 semitom mais grave e mais lento; Toninho é o Leo 1,5 semitom mais agudo; o carro do ovo é o Leo empolgado.
+- As falas da planilha `carros_de_rua.csv` ganham um filtro de **megafone** (corta graves e agudos e comprime), como alto-falante de carro.
+- Se o generativo falhar numa voz, o script tenta a versão neural (Leo → Thiago, Carolina → Vitória).
+- Para mudar uma voz, edite `VOZES` no começo do `gerar_audios.py` (voz, motor, velocidade em %, tom em semitons).
