@@ -29,7 +29,7 @@ jobs:
     env:
       SIGNPATH_ON: ${{ secrets.SIGNPATH_API_TOKEN != '' && 'true' || 'false' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           lfs: false
 
@@ -52,7 +52,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         if: steps.ver.outputs.exists == 'false'
         with:
           # 9.0 é para o APK: o template Android da Godot 4.7 não aceita net10.0.
@@ -60,7 +60,7 @@ jobs:
             9.0.x
             10.0.x
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         if: steps.ver.outputs.exists == 'false'
         with:
           distribution: temurin
@@ -230,7 +230,7 @@ jobs:
 
       - name: Atestado de build (prova que os arquivos saíram deste repositório)
         if: steps.ver.outputs.exists == 'false'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             DeadFrequency-${{ steps.ver.outputs.tag }}-windows.zip
