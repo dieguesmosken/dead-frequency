@@ -1358,7 +1358,7 @@ export class GameRoom extends DurableObject<Env> {
       p: position,
       ry: num(msg.ry),
       hp: num(msg.hp),
-      st: msg.st === 1 ? 1 : msg.st === 2 ? 2 : 0,
+      st: msg.st === 1 ? 1 : msg.st === 2 ? 2 : msg.st === 3 ? 3 : 0,
       held: typeof msg.held === "string" ? msg.held.slice(0, 24) : null,
       eq: equipment,
       lk: typeof msg.lk === "string" ? msg.lk.replace(/[^mw0-9,]/g, "").slice(0, 24) : "",

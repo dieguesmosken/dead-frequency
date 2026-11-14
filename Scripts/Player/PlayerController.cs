@@ -336,7 +336,9 @@ public partial class PlayerController : CharacterBody3D
     {
         float dt = (float)delta;
 
-        if (State == PlayerState.Walking && !_inTransition)
+        if (State == PlayerState.Walking && !_inTransition && IsClimbing)
+            ProcessClimb(dt);
+        else if (State == PlayerState.Walking && !_inTransition)
             ProcessMovement(dt);
         else
             UpdateNeeds(dt, false);
@@ -375,7 +377,7 @@ public partial class PlayerController : CharacterBody3D
                 SetNightVision(!NightVisionOn);
         }
 
-        if (Input.IsActionJustPressed("interact"))
+        if (Input.IsActionJustPressed("interact") && !IsClimbing)
             HandleInteract();
 
         for (int i = 0; i < 4; i++)

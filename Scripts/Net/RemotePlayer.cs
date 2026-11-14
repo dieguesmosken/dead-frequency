@@ -37,6 +37,7 @@ public partial class RemotePlayer : Node3D, IInteractable
         _color = color;
         _model = CharacterModel.Create(color.Darkened(0.55f), new Color(0.12f, 0.13f, 0.18f), new Color(0.76f, 0.58f, 0.44f), color);
         AddChild(_model);
+        _model.FootGrounding = true;
 
         _nameLabel = new Label3D
         {
@@ -89,6 +90,7 @@ public partial class RemotePlayer : Node3D, IInteractable
             _model?.QueueFree();
             _model = l.Build();
             AddChild(_model);
+        _model.FootGrounding = true;
             _model.SetEquipment(eq);
         }
 
@@ -130,7 +132,9 @@ public partial class RemotePlayer : Node3D, IInteractable
         _lastPosition = GlobalPosition;
         float speed = dt > 0f ? moved.Length() / dt : 0f;
         // Sentado (motorista ou carona): aparece no banco, sem andar (v0.9.6 — antes sumia).
-        _model.SetSeated(_seat != 0);
+        // st=3: subindo escada (v0.10.1) — mãos e pés nos degraus pelo IK.
+        _model.SetSeated(_seat == 1 || _seat == 2);
+        _model.SetClimbing(_seat == 3, GlobalPosition.Y);
         _model.Animate(dt, _seat != 0 ? 0f : speed);
     }
 }

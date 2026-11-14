@@ -89,8 +89,14 @@ public partial class Cyclist : Node3D
     public static Vector3 FrameSize = new(0.55f, 0.95f, 1.6f);
     public static float FrameLift = 0.2f;
     public static float BikeScale = 0.76f;
-    public static Vector3 RiderPos = new(0f, 0.15f, -0.24f);
+    public static Vector3 RiderPos = new(0f, -0.05f, 0.24f);
     public static float RiderScale = 0.95f;
+    public static float RiderLean = 0.12f;
+    /// <summary>Pontos do IK no quadro (sem escala): manopla direita, centro do pedivela e o tamanho do pedivela.</summary>
+    public static Vector3 GripPos = new(0.22f, 1.1f, -0.52f);
+    public static Vector3 CrankPos = new(0f, 0.42f, 0.02f);
+    public static float CrankRadius = 0.2f, PedalSide = 0.14f;
+    private Node3D _crank;
 
     private void BuildBicycle()
     {
@@ -142,8 +148,23 @@ public partial class Cyclist : Node3D
         _rider.Name = "Ciclista";
         _rider.Position = RiderPos;
         _rider.Scale = Vector3.One * RiderScale;
+        _rider.Rotation = new Vector3(-RiderLean, 0f, 0f); // corpo inclinado para o guidão
         root.AddChild(_rider);
-        _rider.SetSeated(true); // sentado no selim em vez de "andando" em cima da bicicleta
+        // Pose parada (idle) com o quadril no selim; braços e pernas vêm do IK (guidão e pedais).
+
+        // IK (v0.10.1): mãos no guidão e pés nos pedais, que giram com o pedivela.
+        var gripL = new Node3D { Name = "ManoplaE", Position = GripPos with { X = -GripPos.X } };
+        var gripR = new Node3D { Name = "ManoplaD", Position = GripPos };
+        bike.AddChild(gripL);
+        bike.AddChild(gripR);
+        _crank = new Node3D { Name = "Pedivela", Position = CrankPos };
+        bike.AddChild(_crank);
+        var pedalL = new Node3D { Name = "PedalE", Position = new Vector3(-PedalSide, CrankRadius, 0f) };
+        var pedalR = new Node3D { Name = "PedalD", Position = new Vector3(PedalSide, -CrankRadius, 0f) };
+        _crank.AddChild(pedalL);
+        _crank.AddChild(pedalR);
+        _rider.SetHandTargets(gripL, gripR);
+        _rider.SetFootTargets(pedalL, pedalR);
 
         _bell = new AudioStreamPlayer3D
         {
@@ -218,7 +239,9 @@ public partial class Cyclist : Node3D
         float spin = Mathf.PosMod((float)(time * Speed / (0.45 * BikeScale) % Mathf.Tau), Mathf.Tau);
         foreach (Node3D wheel in _wheels)
             wheel.Rotation = new Vector3(spin, 0f, 0f);
-        _rider.Animate(dt, 1.8f);
+        if (_crank != null)
+            _crank.Rotation = new Vector3(Mathf.PosMod((float)(time * Speed / (0.45 * BikeScale) * 0.4 % Mathf.Tau), Mathf.Tau), 0f, 0f); // pedala mais devagar que a roda (marcha)
+        _rider.Animate(dt, 0f);
         CheckPlayerAhead(delta);
     }
 

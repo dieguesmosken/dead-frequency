@@ -27,6 +27,22 @@ para olhar o jogador.
 - NPCs longe do jogador ficam sem IK (desliga o modificador além de ~20 m): é custo por osso, por quadro.
 - No online o IK é só visual e local: cada cliente calcula para os bonecos que vê. Nada vai pela rede.
 
+### O que já existe (v0.10.1)
+
+- `Scripts/Characters/CharacterModel.IK.cs`: um `TwoBoneIK3D` para os braços e outro para as pernas (2 settings cada),
+  um `LookAtModifier3D` na cabeça e entrada/saída suave pela `Influence`. API: `SetHandTargets`, `SetFootTargets`,
+  `SetClimbing(bool, fase)`, `FootGrounding`, `LookTarget`.
+- `Scripts/Characters/FootPlacer.cs`: `SkeletonModifier3D` antes do IK das pernas. Raio para o chão embaixo de cada pé
+  (camada World), pé na altura do degrau e quadril abaixado quando um pé fica mais baixo. Ligado no boneco do jogador
+  (terceira pessoa) e nos jogadores remotos.
+- Ciclista: pose parada + IK, mãos nas manoplas e pés nos pedais que giram com o pedivela (`Cyclist`).
+- Escada de marinheiro da caixa d'água: `PlayerController.StartClimb` (W sobe, S desce, E solta); o boneco põe mãos e pés
+  nos degraus. No online vai só o estado `st=3` (servidor e `LocalServer` aceitam), o IK é calculado em cada cliente.
+- NPCs que conversam (`Chatty`) viram a cabeça para o jogador a até ~5 m.
+- Achados ao montar: os modelos do Meshy têm o esqueleto em escala 0,01 (o IK funciona mesmo assim); o eixo "frente"
+  do osso `Head` é **+Y**; a animação de sentar (`Chair_Sit_Idle`) atrapalha o IK dos braços, então a ciclista usa a
+  pose parada com o quadril no selim. `TwoBoneIK3D` precisa de nó de polo para dobrar certo.
+
 ## Otimização de cenário
 
 Regra geral: **coisa que se repete vira `MultiMeshInstance3D`**.

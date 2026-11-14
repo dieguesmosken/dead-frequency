@@ -411,14 +411,21 @@ public partial class CityGenerator
         Vector3 foot = new(0f, 1f, meshy ? 4.6f : walk * 0.5f + 0.6f);
         Vector3 top = new(0f, legH + 0.1f, meshy ? 4.2f : walk * 0.5f - 0.7f);
         Vector3 bottom = foot + new Vector3(0f, -0.9f, 0.4f);
+        // A escada é subida de verdade (PlayerController.StartClimb): o corpo encosta nela e sobe degrau por degrau.
+        float ladderZ = meshy ? 4.25f : walk * 0.5f + 0.15f;
+        Vector3 climbBottom = new(0f, 0.05f, ladderZ + 0.4f);
+        Vector3 climbTop = new(0f, legH - 1.2f, ladderZ + 0.4f);
+        void Climb(PlayerController player, bool fromTop) => player.StartClimb(
+            plaza.ToGlobal(climbBottom), plaza.ToGlobal(climbTop), plaza.GlobalRotation.Y,
+            plaza.ToGlobal(top), plaza.GlobalRotation.Y + Mathf.Pi, plaza.ToGlobal(bottom), plaza.GlobalRotation.Y + Mathf.Pi, fromTop);
         ActionArea.Create(plaza, foot, new Vector3(1.4f, 2f, 1.2f),
-            _ => "[E] subir na caixa d'água",
-            player => player.Teleport(plaza.ToGlobal(top), 0f),
-            player => player.State == PlayerState.Walking && !player.IsHolding);
+            _ => "[E] subir na caixa d'água (W sobe, S desce)",
+            player => Climb(player, false),
+            player => player.State == PlayerState.Walking && !player.IsHolding && !player.IsClimbing);
         ActionArea.Create(plaza, top + new Vector3(0f, 0.9f, 0f), new Vector3(1.4f, 2f, 1.2f),
             _ => "[E] descer a escada",
-            player => player.Teleport(plaza.ToGlobal(bottom), Mathf.Pi),
-            player => player.State == PlayerState.Walking && !player.IsHolding);
+            player => Climb(player, true),
+            player => player.State == PlayerState.Walking && !player.IsHolding && !player.IsClimbing);
         AddBox(plaza, new Vector3(0f, legH + tankH + (meshy ? 0.3f : 2.6f), 0f), new Vector3(0.5f, 0.5f, 0.5f), _redBeacon, false);
         var beacon = new OmniLight3D { Position = plaza.Position + new Vector3(0f, legH + tankH + 3f, 0f), LightColor = new Color(1f, 0.1f, 0.05f), LightEnergy = 2.5f, OmniRange = 14f };
         ActiveLightsRoot.AddChild(beacon);
