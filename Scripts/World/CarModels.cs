@@ -68,26 +68,44 @@ public static class CarModels
         return mesh;
     }
 
-    private static void Wheel(Node3D parent, Vector3 pos, float radius, float width)
+    private static void Wheel(Node3D parent, Vector3 pos, float radius, float width) => AddWheel(parent, pos, radius, width);
+
+    /// <summary>
+    /// Roda que gira (v0.10.1): um pivô no eixo com pneu, calota e uma barra escura na calota (para ver o giro).
+    /// O pivô tem o meta WheelSpin.RadiusMeta; o WheelSpin do carro gira ele conforme o carro anda.
+    /// Os filhos não têm nome próprio, então carros parados continuam juntados pelo StaticBatcher.
+    /// </summary>
+    public static Node3D AddWheel(Node3D parent, Vector3 pos, float radius, float width)
     {
-        var tire = new MeshInstance3D
+        EnsureResources();
+        var pivot = new Node3D { Position = pos };
+        pivot.SetMeta(WheelSpin.RadiusMeta, radius);
+        parent.AddChild(pivot);
+        pivot.AddChild(new MeshInstance3D
         {
             Mesh = _wheel,
-            Position = pos,
             Scale = new Vector3(radius * 2f, width, radius * 2f),
             Rotation = new Vector3(0f, 0f, Mathf.Pi * 0.5f),
             MaterialOverride = _rubber,
-        };
-        parent.AddChild(tire);
-        var hub = new MeshInstance3D
+        });
+        float side = pos.X == 0f ? 1f : Mathf.Sign(pos.X);
+        pivot.AddChild(new MeshInstance3D
         {
             Mesh = _wheel,
-            Position = pos + new Vector3(Mathf.Sign(pos.X) * width * 0.52f, 0f, 0f),
+            Position = new Vector3(side * width * 0.52f, 0f, 0f),
             Scale = new Vector3(radius * 1.1f, 0.02f, radius * 1.1f),
             Rotation = new Vector3(0f, 0f, Mathf.Pi * 0.5f),
             MaterialOverride = _chrome,
-        };
-        parent.AddChild(hub);
+        });
+        // Barra da calota: sem ela a roda gira mas parece parada (cilindro liso).
+        pivot.AddChild(new MeshInstance3D
+        {
+            Mesh = _box,
+            Position = new Vector3(side * (width * 0.52f + 0.012f), 0f, 0f),
+            Scale = new Vector3(0.01f, radius * 1.0f, radius * 0.22f),
+            MaterialOverride = _rubber,
+        });
+        return pivot;
     }
 
     /// <summary>Faróis, lanternas, para-choques, grade e placa, comuns a todos.
@@ -337,6 +355,9 @@ public static class CarModels
     private static string _plateCode = "";
 
     /// <summary>Monta o carro. plate = código da placa; sem ele, a cidade sorteia na ordem de geração.</summary>
+    /// <summary>Ligado pelo VehicleFactory: carro dirigível usa o modelo de blocos (tem cabine por dentro e vidros que somem).</summary>
+    public static bool ForDriving;
+
     public static Vector3 Build(Node3D parent, CarType type, Color color, string plate = null)
     {
         _plateCode = plate ?? Plates.Next($"{type}{color.ToHtml()}");
@@ -348,6 +369,14 @@ public static class CarModels
         EnsureResources();
         _glassDouble ??= new StandardMaterial3D { AlbedoColor = new Color(0.08f, 0.11f, 0.13f), Roughness = 0.1f, Metallic = 0.25f, CullMode = BaseMaterial3D.CullModeEnum.Disabled };
         StandardMaterial3D paint = PaintFor(color);
+        // v0.10.1: sedã de cenário do Meshy (carroceria sem rodas + rodas que giram), pintado na cor pedida.
+        if (type == CarType.Sedan && !ForDriving && MeshyVehicles.HasProp("sedan"))
+        {
+            Vector3 meshy = MeshyVehicles.BuildWheeledProp(parent, "sedan", new Vector3(1.72f, 1.05f, 4.4f), -1, 0.24f, 0.32f, 0.2f,
+                new[] { -0.31f, 0.31f }, 0.08f, color);
+            if (meshy != Vector3.Zero)
+                return meshy;
+        }
         switch (type)
         {
             case CarType.Hatch: // "Gou" quadrado (Folksvagem)

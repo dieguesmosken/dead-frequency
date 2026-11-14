@@ -82,6 +82,38 @@ public static class MeshyVehicles
         });
         return size;
     }
+    /// <summary>
+    /// Carroceria do Meshy feita SEM rodas (v0.10.1) mais rodas de verdade que giram (CarModels.AddWheel + WheelSpin).
+    /// size = (largura, altura da carroceria, comprimento); lift = altura do chão até o fundo da carroceria;
+    /// axles = posição dos eixos em fração do comprimento (frente = -Z, ex.: -0.33 e 0.33).
+    /// Devolve o tamanho total (largura, altura com as rodas, comprimento).
+    /// </summary>
+    public static Vector3 BuildWheeledProp(Node3D parent, string name, Vector3 size, int frontZ, float lift,
+        float wheelRadius, float wheelWidth, float[] axles, float trackInset = 0.1f, Color? paint = null, bool spin = false)
+    {
+        var body = new Node3D { Name = "Body", Position = new Vector3(0f, lift, 0f) };
+        parent.AddChild(body);
+        if (BuildProp(body, name, size, frontZ) == Vector3.Zero)
+        {
+            body.QueueFree();
+            return Vector3.Zero;
+        }
+        if (paint != null && body.GetChildCount() > 0 && body.GetChild(0) is MeshInstance3D mi && mi.MaterialOverride is ShaderMaterial sm)
+        {
+            var tinted = (ShaderMaterial)sm.Duplicate();
+            Color c = paint.Value.Lerp(Colors.White, 0.3f) * 1.3f;
+            tinted.SetShaderParameter("tint", new Vector3(c.R, c.G, c.B));
+            mi.MaterialOverride = tinted;
+        }
+        float x = size.X * 0.5f - trackInset - wheelWidth * 0.5f;
+        foreach (float a in axles)
+            foreach (float side in new[] { -1f, 1f })
+                CarModels.AddWheel(parent, new Vector3(side * x, wheelRadius, a * size.Z), wheelRadius, wheelWidth);
+        if (spin)
+            WheelSpin.Attach(parent);
+        return new Vector3(size.X, size.Y + lift, size.Z);
+    }
+
     public static bool HasTruck => ResourceLoader.Exists(TruckPath);
 
     private static Mesh LoadMesh(string path)
