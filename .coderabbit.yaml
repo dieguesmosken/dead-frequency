@@ -17,12 +17,17 @@ reviews:
   related_prs: false
   collapse_walkthrough: true
   review_status: true
+  # Sem marca de status no PR: os PRs para a Internal são mesclados sozinhos (auto-merge) antes de a revisão
+  # terminar, e o CodeRabbit marcava "Review failed: the pull request is closed" (3/4 em vermelho).
+  commit_status: false
+  fail_commit_status: false
   auto_review:
     enabled: true
     drafts: false
     auto_incremental_review: true
+    # Só revisa os PRs da Internal para a main (os da Internal entram por auto-merge e fechariam no meio da revisão).
+    # Para revisar um PR da Internal, comente "@coderabbitai review" antes de mesclar.
     base_branches:
-      - "^Internal$"
       - "^main$"
     # Os PRs do Dependabot não gastam a cota de revisões.
     ignore_usernames:
