@@ -399,7 +399,15 @@ public partial class MainMenu : Control
         // Pequena pausa para o som de início tocar antes de trocar de cena.
         _levelPanel.Visible = false;
         _profPanel.Visible = false;
-        GetTree().CreateTimer(0.35).Timeout += () => GetTree().ChangeSceneToFile(scene);
+        SceneTree tree = GetTree();
+        string header = null, title = null;
+        if (story && StoryManager.Instance != null)
+        {
+            StoryChapters.Chapter c = StoryManager.Instance.Chapter;
+            header = "MODO HISTÓRIA · " + GameLevels.Get(c.Level).Name;
+            title = string.IsNullOrEmpty(c.Title) ? c.Roman : $"{c.Roman} — {c.Title}";
+        }
+        tree.CreateTimer(0.35).Timeout += () => SceneLoader.Go(tree, scene, header, title);
     }
 
     private void ShowOptions()
