@@ -15,7 +15,6 @@ public partial class RadioPlayer : Node3D
     private AudioStreamPlayer3D _player;
     private AudioStreamPlayer3D _static;
     private int _index = -1;
-    private bool _jingle;
     private double _checkTimer;
 
     public string NowPlaying => RadioStation.NowPlayingText();
@@ -84,8 +83,8 @@ public partial class RadioPlayer : Node3D
         if (_checkTimer > 0)
             return;
         _checkTimer = 1.0;
-        (int i, bool jingle, float _) = RadioStation.Now();
-        if (!_player.Playing || i != _index || jingle != _jingle)
+        (int i, RadioStation.Segment _, float _) = RadioStation.Now();
+        if (!_player.Playing || i != _index)
             Resync(false);
     }
 
@@ -93,12 +92,13 @@ public partial class RadioPlayer : Node3D
     {
         if (!On || _player == null)
             return;
-        (int i, bool jingle, float offset) = RadioStation.Now();
-        if (!force && _player.Playing && i == _index && jingle == _jingle)
+        (int i, RadioStation.Segment seg, float offset) = RadioStation.Now();
+        if (!force && _player.Playing && i == _index)
             return;
-        string path = jingle ? RadioStation.JinglePath : RadioStation.Playlist[i].Path;
-        if (!ResourceLoader.Exists(path))
-            return;
+        string path = seg.Path;
+        _index = i;
+        if (!ResourceLoader.Exists(path) || offset >= seg.Length - 0.45f)
+            return; // fim do trecho (o respiro depois de um comercial): espera o próximo
         if (GD.Load<AudioStream>(path) is AudioStreamOggVorbis ogg)
         {
             ogg.Loop = false;
@@ -108,8 +108,6 @@ public partial class RadioPlayer : Node3D
         {
             _player.Stream = GD.Load<AudioStream>(path);
         }
-        _index = i;
-        _jingle = jingle;
         _player.Play(offset);
     }
 
