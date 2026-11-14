@@ -5,8 +5,8 @@
 //  - Carro do ovo: evento de vez em quando (alguns minutos a cada tanto), no anel 1, oferecendo ovo.
 // Como o ônibus, a posição vem do relógio do sistema: online todo mundo vê o carro no mesmo lugar, sem rede.
 //
-// Som: ainda sem áudio. Quando os arquivos existirem, basta colocá-los em Audio/Street/<id>.ogg (o id de cada
-// anúncio está em Ads/EggLines abaixo); enquanto não existem, a fala aparece num balão em cima do carro.
+// Som: os áudios saem do tools/tts/gerar_audios.py (Amazon Polly). Os comerciais usam Audio/Radio/Ads/<id>.ogg
+// (os mesmos da 96.6) e o carro do ovo usa Audio/Street/ovo_*.ogg; enquanto não existem, a fala aparece num balão.
 using System.Collections.Generic;
 using Godot;
 
@@ -32,6 +32,8 @@ public partial class AnnouncerCar : Node3D
     [Export] public float LineInterval { get; set; } = 9f;
 
     public const string AudioFolder = "res://Audio/Street/";
+    /// <summary>Os comerciais são os mesmos da 96.6: se não houver versão própria do carro, usa o áudio da rádio.</summary>
+    public const string RadioAdsFolder = "res://Audio/Radio/Ads/";
 
     /// <summary>Comerciais do carro de som: id (= nome do áudio e do roteiro da 96.6) e o texto curto do balão.</summary>
     public static readonly (string Id, string Text)[] Ads =
@@ -351,6 +353,8 @@ public partial class AnnouncerCar : Node3D
         (string id, string text) = Lines[_lineIndex % Lines.Length];
         _lineIndex++;
         string audio = AudioFolder + id + ".ogg";
+        if (!ResourceLoader.Exists(audio))
+            audio = RadioAdsFolder + id + ".ogg";
         if (ResourceLoader.Exists(audio))
         {
             _voice.Stream = GD.Load<AudioStream>(audio);
