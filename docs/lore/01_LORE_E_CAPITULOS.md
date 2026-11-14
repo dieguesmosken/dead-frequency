@@ -14,6 +14,12 @@
   (homenagem ao padre Landell de Moura, pioneiro brasileiro do rádio, que também dá nome a uma avenida).
   O cabo da repetidora desce pela **Gruta da Estática**, uma caverna de calcário com veios do minério.
 - As ruas têm nomes de rádio (Rua das Antenas, Rua do Chiado, Av. Marconi, Av. Hertz, Av. Landell...).
+- **Ambientação do vale** (inspirada no sul do interior paulista, mas **o jogo nunca cita o nome de uma região real**):
+  Mata Atlântica fechada subindo a serra, rios largos e barrentos cortando o vale, cavernas de calcário
+  (a Gruta da Estática), bananais e palmito nos sítios, chuva frequente e neblina de manhã. Bichos do vale:
+  capivaras na beira do rio, guarás vermelhos nos alagados e, raramente, o cão-vinagre na mata (tímido, foge de gente).
+- **Marcas e órgãos sempre paródia:** nada de marca, empresa ou órgão público real no jogo (posto de saúde municipal
+  de Sintonia, Conjunto Habitacional Sintonia, lojas e postos com nomes inventados).
 - Quem joga é um trabalhador novo na cidade. Mora no **Edifício Sintonia** e começa na **DF Entregas**
   ("chega inteiro"), a central de entregas do quarteirão do depósito.
 

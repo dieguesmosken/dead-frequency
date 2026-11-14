@@ -1,6 +1,6 @@
 # Dead Frequency — roadmap da cidade simulada
 
-Atualizado em 12/11/2026 (v0.9.8 lançada). A partir da v0.9 o jogo deixa de ser só "entregas" e vira uma
+Atualizado em 13/11/2026 (v0.10 na Internal; ideias novas do documento "Roadmap Dead Frequency"). A partir da v0.9 o jogo deixa de ser só "entregas" e vira uma
 **cidade simulada na zona morta**: cada jogador escolhe uma profissão, ganha um apartamento, ouve a
 rádio 96.6 e ajuda a cidade a funcionar. Ordem sugerida: de cima para baixo; cada fase deixa o jogo jogável.
 
@@ -127,14 +127,27 @@ streaming por chunks) estar na Internal.
 | ✅ **Carro do ovo (evento)** | Picape com bandejas de ovo e placa "OVO! 30 por R$ 5" que aparece alguns minutos a cada 15 (aviso na tela quando chega), dando a volta no anel do centro no sentido contrário ao ônibus. Também só com balão por enquanto. |
 | ✅ **Dirigibilidade** | Carros bem mais difíceis de capotar: centro de massa mais baixo, estabilizador em código (barra estabilizadora "de jogo"), limite de rolagem/arfagem, menos esterço em alta velocidade e desvirar sozinho se ficar de lado parado. No teste de curva fechada a 94 km/h, Fusca e táxi capotavam; agora inclinam no máximo 7°. **Saída do carro:** o jogador procura um lugar livre com chão (porta, outro lado, atrás, frente, por cima) em vez de aparecer dentro do muro ou abaixo do chão. |
 | ✅ **Conforto (enjoo)** | Opções > Jogo > Conforto: **Reduzir movimento** (liga tudo de uma vez), câmera estável no carro, vinheta nas bordas com o carro rápido e ponto fixo no meio da tela. O balanço da câmera já vinha desligado. Baseado nas Game Accessibility Guidelines e Xbox Accessibility Guidelines. |
-| 🚧 **Áudio dos carros anunciantes e da 96.6** | `tools/tts/gerar_audios.py` gera tudo com o Amazon Polly (créditos da conta nova da AWS, plano gratuito): lê `docs/radio/anuncios_966.csv` e `docs/radio/carros_de_rua.csv` e grava `Audio/Radio/Ads/<id>.ogg` e `Audio/Street/ovo_*.ogg`, com o volume das músicas se tiver ffmpeg. Passo a passo em `tools/tts/LEIA-ME.md`. Falta: o Matheus rodar no PC, ouvir e ligar os comerciais na grade da 96.6. Depois: vender ovo de verdade (item novo + preço no servidor). |
+| ✅ **Vozes da 96.6, dos carros e do Modo História** | 49 falas geradas com o Gemini 3.8 Flash TTS (AI Studio): 34 intervalos da 96.6 (comerciais, eventos, comunicados, vinhetas) tocando entre as músicas, ainda sincronizados pelo relógio; 4 falas do carro do ovo com filtro de megafone; 11 falas dos capítulos I e II, que a caixa de diálogo toca. Vozes e estilos em `docs/radio/VOZES.md`. Falta: 6 falas do capítulo II (limite diário do AI Studio). O `tools/tts/gerar_audios.py` (Amazon Polly) fica de reserva. Depois: vender ovo de verdade (item novo + preço no servidor). |
 | **Online entre PC e celular** | Mesmo servidor e protocolo (WebSocket): sem mudança no `server/`. Testar sala com PC e celular juntos. |
 | 🚧 **Distribuição** | O prerelease da Internal (`vX.Y.Z.N-pre`) traz o `DeadFrequency-…-android.apk`. **Atualizador no próprio jogo** (`AppUpdater`): no celular o menu confere o GitHub, mostra "Nova versão", baixa o APK com progresso e abre o instalador do Android (se não abrir, usa o navegador). Quem tem build da Internal recebe os `-pre`; quem tem o público, só os públicos. O CI grava o build exato em `application/config/version` (`GameVersion.Build`). Instalar por cima precisa da chave do Matheus (segredos `ANDROID_KEYSTORE_*`); com chave de debug, desinstale antes. Link no site e Play Store ficam para depois. |
+
+### v0.10.x — Praça Central
+| Ideia | Como funciona no jogo |
+|---|---|
+| **Praça Central** | Coreto (conservação a definir), estatuinha como ponto de referência, bancos de praça e parquinho infantil. **Sem chafariz**: elementos mais contidos. É o palco do capítulo VII (Show da Frequência). |
+| **Painel de mapa** | Painel na praça que desenha o mapa da cidade a partir da seed carregada (reaproveita o radar/minimapa). Depois o mesmo painel vai para a rodoviária, a prefeitura e totens. |
+| **Bichos do vale** | Capivaras na beira do rio e guarás no rancho, só ambientação (`FarmAnimal`). |
 
 ### v0.11 — Carreira
 | Ideia | Como funciona no jogo |
 |---|---|
 | **Níveis de profissão** | Cada tarefa dá experiência na profissão. A cada nível: bônus em dinheiro por tarefa e itens de presente (ex.: luvas no nível 3 de entregador, café grátis para o taxista da madrugada). Salvo no save e conferido pelo servidor no online. |
+
+### v0.11 — Centro da cidade
+| Ideia | Como funciona no jogo |
+|---|---|
+| **Prefeitura** | Fachada de concreto gasta, placa oficial antiga e torre central de inspiração europeia com **relógio analógico funcionando** (ponteiros pelo mesmo relógio do `DayNightController`, iguais para todos no online). Saguão com balcão de atendimento, salas com arquivos e auditório antigo. No Modo História: documentos da época da Repetidora Landell. |
+| **Rodoviária** | Plataforma de embarque de um lado (terminal do ônibus 966 e das linhas intermunicipais) e rua de táxis do outro (ponto do táxi da cooperativa), com passagem central ligando as duas como atalho. Ala esquerda: lojas e barzinho; ala direita: lojinha, lanchonete e banheiros. Horários de ônibus antigos na parede, guichê com vidro, bancos de espera gastos, bancos e lixeiras de concreto, muro de tijolinho, dispenser de preservativos perto do banheiro masculino (só cenário). Painel de mapa da seed. |
 
 ### v0.11.x — Trânsito de verdade
 | Ideia | Como funciona no jogo |
@@ -225,11 +238,12 @@ Cada profissão nova = um `JobBase` em `Scripts/Jobs/` + a regra em `PROFESSIONS
 
 As fases abaixo são propostas de planejamento; a ordem pode mudar conforme testes, dependências e escopo das builds.
 
-### v0.12 — Bairros e infraestrutura urbana
-- **Área residencial simplificada:** bairro de casas térreas, sem prédios altos, inspirado em conjuntos habitacionais como CDHU ou em um condomínio simples. Avaliar como uma área separada/mapa para manter a cidade principal mais leve.
-- **Praça e parque:** área de convivência com bancos, árvores, iluminação e eventos comunitários.
-- **Playground:** parquinho próximo ao bairro residencial.
-- **Prefeitura e Boulevard:** rua de paralelepípedo, mão única e prédio da prefeitura, formando uma área cívica/comercial característica.
+### v0.12 — Bairros, saúde e chuva
+- **Clima com chuva:** chuva visual e sonora, asfalto molhado e poças, a caminhonete derrapando um pouco; quem anda na chuva sem guarda-chuva perde fôlego/ânimo (`PlayerController.Needs`). Item **guarda-chuva** (pegar e guardar).
+- **Posto de Saúde Municipal:** suporte de guarda-chuva na entrada; recepção com balcão, cartazes e propagandas de saúde (campanhas fictícias) e caixinha de preservativos (só cenário). Recupera as necessidades do personagem e salva o jogo.
+- **Área residencial simplificada:** bairro de casas térreas, sem prédios altos, inspirado em conjuntos habitacionais populares ou em um condomínio simples (nome fictício: Conjunto Habitacional Sintonia), com a van do conjunto circulando pelo bairro. Avaliar como uma área separada/mapa para manter a cidade principal mais leve.
+- **Parque do bairro:** área de convivência com árvores e iluminação; parque com fiação elétrica e de fibra abandonada. (A Praça Central foi para a v0.10.x.)
+- **Boulevard:** rua de paralelepípedo, mão única, ligando a prefeitura (v0.11) ao comércio, com restaurantes.
 - **Correios (Correrios):** reformar a agência com entrada clara, balcão de atendimento, caixas de correspondência e uma van amarela inspirada na Fiat Scudo estacionada na entrada.
 - **Canteiros de obras permanentes:** construções inacabadas que fazem parte da paisagem e mudam conforme a cidade evolui.
 - **Obras viárias:** cones, cavaletes, máquinas e desvios temporários ou permanentes, com sinalização coerente.
@@ -239,17 +253,18 @@ As fases abaixo são propostas de planejamento; a ordem pode mudar conforme test
 - **Infraestrutura de internet:** cabos ADSL antigos abandonados e fibra óptica chegando às casas.
 - **Antenas e parabólicas:** modelos de 60 cm convencionais; antenas clandestinas de TV a cabo ("gato Net") com identidade visual fictícia; marcas fictícias inspiradas em operadoras populares (Céu, Escuro, Antena da Tchau e Antena da Morto); parabólica amarela Centauro de 150 cm; modelos rurais de tela/grade Centauro de 200 e 340 cm.
 
-### v0.13 — Zona rural, água e pesca
+### v0.13 — Zona rural, água, pesca e natureza do vale
+- **Mata Atlântica e rios do vale:** mata densa e rios como limites naturais do mapa (bloqueiam a visão e o caminho), com trechos navegáveis.
+- **Fauna:** capivaras e guarás espalhados; **cão-vinagre** como encontro raro na mata, tímido e sem perigo (foge do jogador; dá para ver ou fotografar).
 - **Rios e lagos rurais:** corpos d'água distribuídos pelo mapa rural, com margens e vegetação próprias.
 - **Pontos de pesca:** locais acessíveis nas margens, com áreas apropriadas para pescar.
-- **Sistema de pesca:** varas, iscas, espera/ fisgada e diferentes espécies de peixes, com raridades e valores distintos.
+- **Sistema de pesca:** varas, iscas, espera/ fisgada e diferentes espécies de peixes, com raridades e valores distintos; peixe vira item para vender ou entregar (pesqueiro Lambari Feliz, que já anuncia na 96.6).
 - **Agricultura:** plantações e áreas cultivadas, ampliando as atividades do sítio e as entregas rurais.
 
 ### v0.14 — Comércio, indústria e energia
-- **Rodoviária/terminal de ônibus:** terminal como origem e ponto de organização das linhas intermunicipais/urbanas.
 - **Restaurantes:** estabelecimentos com identidade própria, salão, balcão e refeições.
 - **Área industrial:** galpões, pátios de carga e circulação de veículos de serviço.
-- **Usinas de energia:** instalações solares e eólicas como marcos visuais da região.
+- **Usinas de energia:** instalações solares e eólicas como marcos visuais da região; depois, geração de energia como mecânica (sítio e cidade).
 - **Data centers:** complexo técnico com geradores, refrigeração e infraestrutura de rede, como parte do cenário e de possíveis tarefas/eventos.
 
 ### Rádio 96.6 — publicidade local e agenda de eventos
@@ -265,6 +280,8 @@ A rádio deve anunciar os próprios estabelecimentos e acontecimentos do mundo d
 - **Licenciamento:** confirmar que o plano e os termos do serviço TTS permitem distribuir comercialmente os áudios gerados junto com o jogo.
 
 ### Outras prioridades de mundo (a distribuir entre as fases)
+- Antenas variadas, demarcações especiais no asfalto e grades cinzas pela cidade.
+- **Marcas sempre paródia:** nada de marca ou órgão real no jogo (ex.: posto de saúde municipal fictício em vez de SUS, conjunto habitacional fictício em vez de CDHU).
 - Farmácias e escolas como edifícios reconhecíveis, com fachadas e interiores quando fizer sentido para as atividades.
 - Mais restaurantes e serviços de bairro, evitando concentrar todo o comércio em prédios genéricos.
 - Revisar a malha viária e a sinalização sempre que novos bairros, obras ou rotas forem adicionados.
