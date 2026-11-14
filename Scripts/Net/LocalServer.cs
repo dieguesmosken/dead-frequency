@@ -348,7 +348,7 @@ public partial class LocalServer : Node
         me.Equipment = eq;
         me.Held = held;
         int st = (int)Num(msg, "st");
-        me.Seat = st is 1 or 2 ? st : 0;
+        me.Seat = st is 1 or 2 or 3 ? st : 0; // 3 = subindo escada (v0.10.1)
         string lk = new string(Str(msg, "lk").Where(c => c == 'm' || c == 'w' || c == ',' || char.IsDigit(c)).ToArray());
         me.Snapshot = new Dictionary<string, object>
         {

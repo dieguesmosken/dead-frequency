@@ -19,6 +19,7 @@ public partial class PlayerController
         _localCharacter.Name = "LocalCharacter";
         AddChild(_localCharacter);
         _localCharacter.Visible = _thirdPerson;
+        _localCharacter.FootGrounding = true; // IK: pés no degrau/meio-fio (v0.10.1)
 
         _comfortSpring = new SpringArm3D
         {
@@ -142,7 +143,8 @@ public partial class PlayerController
             : (CurrentVehicle != null ? CurrentVehicle.LinearVelocity.Length() : 0f);
         _localCharacter.Carrying = IsHolding;
         _localCharacter.Airborne = State == PlayerState.Walking && !IsOnFloor() && Velocity.Y > 0.5f;
-        _localCharacter.Animate(delta, State == PlayerState.Walking ? speed : 0f);
+        _localCharacter.SetClimbing(IsClimbing, ClimbPhase);
+        _localCharacter.Animate(delta, State == PlayerState.Walking && !IsClimbing ? speed : 0f);
         _localCharacter.SetHeadPitch(_head.Rotation.X);
         _localCharacter.SetSeated(State == PlayerState.Driving || State == PlayerState.Riding);
     }

@@ -362,6 +362,7 @@ public partial class CharacterModel : Node3D
 
     public override void _Process(double delta)
     {
+        UpdateIK((float)delta);
         if (Chatty)
             UpdateTalk((float)delta);
         if (!_boxModel && (_equipment.Count > 0 || _leftFoot != null || !_mountsReady))
