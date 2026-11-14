@@ -18,11 +18,15 @@ public partial class DashMonitor : Node
     private Label _title, _body, _footer;
     private DeliveryManager _delivery;
 
+    /// <summary>v0.10.1: o dobro da resolução (era 256x192) com letras maiores e mais grossas, para ler dirigindo.</summary>
+    private static readonly Vector2I Res = new(512, 384);
+    private const float K = 2f;
+
     public override void _Ready()
     {
         Viewport = new SubViewport
         {
-            Size = new Vector2I(256, 192),
+            Size = new Vector2I(Res.X, Res.Y),
             TransparentBg = false,
             Disable3D = true,
             RenderTargetUpdateMode = SubViewport.UpdateMode.Disabled,
@@ -35,20 +39,22 @@ public partial class DashMonitor : Node
         var bg = new ColorRect { Color = new Color(0.01f, 0.035f, 0.015f) };
         bg.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         root.AddChild(bg);
-        _title = Line(root, 3, 17, Colors.White);
-        var rule = new ColorRect { Color = new Color(0.7f, 0.7f, 0.7f), Position = new Vector2(6, 25), Size = new Vector2(244, 1) };
+        _title = Line(root, 3 * K, (int)(17 * K), Colors.White);
+        var rule = new ColorRect { Color = new Color(0.7f, 0.7f, 0.7f), Position = new Vector2(6 * K, 25 * K), Size = new Vector2(244 * K, 2) };
         root.AddChild(rule);
-        _body = Line(root, 28, 16, Colors.White);
-        _footer = Line(root, 173, 13, new Color(0.6f, 0.6f, 0.6f));
+        _body = Line(root, 28 * K, (int)(16 * K), Colors.White);
+        _footer = Line(root, 172 * K, (int)(13 * K), new Color(0.75f, 0.75f, 0.75f));
     }
 
     private static Label Line(Control root, float y, int size, Color color)
     {
-        var label = new Label { Position = new Vector2(8, y), Size = new Vector2(240, 20) };
+        var label = new Label { Position = new Vector2(8 * K, y), Size = new Vector2(240 * K, 20 * K) };
         label.AddThemeFontSizeOverride("font_size", size);
         label.AddThemeColorOverride("font_color", color);
-        label.AddThemeConstantOverride("outline_size", 0);
-        label.AddThemeConstantOverride("line_spacing", -1);
+        // Contorno da mesma cor engrossa o traço: o texto não some nas linhas de varredura do CRT.
+        label.AddThemeConstantOverride("outline_size", 3);
+        label.AddThemeColorOverride("font_outline_color", color);
+        label.AddThemeConstantOverride("line_spacing", -2);
         root.AddChild(label);
         return label;
     }

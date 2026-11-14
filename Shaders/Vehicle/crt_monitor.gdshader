@@ -3,7 +3,8 @@
 shader_type spatial;
 render_mode unshaded, cull_back;
 
-uniform sampler2D screen : source_color, filter_nearest;
+// v0.10.1: filtro linear (o texto em 512x384 não serrilha de longe) e varredura/vinheta mais fracas para ler melhor.
+uniform sampler2D screen : source_color, filter_linear;
 uniform float power = 1.0;
 uniform float interference = 0.0;
 
@@ -12,7 +13,7 @@ float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.545
 void fragment() {
 	// Tubo levemente abaulado.
 	vec2 c = UV - 0.5;
-	vec2 uv = UV + c * dot(c, c) * 0.18;
+	vec2 uv = UV + c * dot(c, c) * 0.1;
 	float row = floor(uv.y * 96.0);
 	float t = floor(TIME * 14.0);
 	// Interferência: algumas linhas escorregam de lado e a imagem dá uns pulos.
@@ -23,11 +24,11 @@ void fragment() {
 		col = texture(screen, uv).rgb;
 	float lum = max(col.r, max(col.g, col.b));
 	vec3 phosphor = vec3(0.22, 1.0, 0.38) * lum;
-	float scan = 0.72 + 0.28 * sin(uv.y * 192.0 * 3.14159);
+	float scan = 0.86 + 0.14 * sin(uv.y * 192.0 * 3.14159);
 	float snow = hash(floor(uv * vec2(128.0, 96.0)) + t) * interference * 0.35;
-	float vignette = 1.0 - smoothstep(0.38, 0.75, length(c));
+	float vignette = 1.0 - 0.6 * smoothstep(0.45, 0.8, length(c));
 	vec3 lit = (phosphor * scan + vec3(0.05, 0.3, 0.1) * snow + vec3(0.008, 0.03, 0.012)) * vignette;
 	// Desligado: vidro escuro com um reflexo fraco.
 	vec3 off = vec3(0.012, 0.02, 0.016) + vec3(0.03) * smoothstep(0.5, 0.0, length(UV - vec2(0.3, 0.25)));
-	ALBEDO = mix(off, lit * 1.25, clamp(power, 0.0, 1.0));
+	ALBEDO = mix(off, lit * 1.4, clamp(power, 0.0, 1.0));
 }
