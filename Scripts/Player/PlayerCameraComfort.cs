@@ -133,6 +133,8 @@ public partial class PlayerController
             _camera.MakeCurrent();
     }
 
+    private VanController _poseVehicle;
+
     private void UpdateLocalCharacter(float delta)
     {
         if (_localCharacter == null || !IsInstanceValid(_localCharacter))
@@ -147,5 +149,15 @@ public partial class PlayerController
         _localCharacter.Animate(delta, State == PlayerState.Walking && !IsClimbing ? speed : 0f);
         _localCharacter.SetHeadPitch(_head.Rotation.X);
         _localCharacter.SetSeated(State == PlayerState.Driving || State == PlayerState.Riding);
+        // Pose do veículo (IK: mãos no volante/guidão, pés na pedaleira da moto).
+        VanController poseVehicle = State == PlayerState.Driving ? CurrentVehicle : null;
+        if (poseVehicle != _poseVehicle)
+        {
+            if (poseVehicle != null)
+                poseVehicle.ApplyRiderPose(_localCharacter);
+            else
+                VanController.ClearRiderPose(_localCharacter);
+            _poseVehicle = poseVehicle;
+        }
     }
 }

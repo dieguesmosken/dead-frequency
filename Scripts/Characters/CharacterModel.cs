@@ -64,6 +64,7 @@ public partial class CharacterModel : Node3D
 
     // Modelo animado
     private Skeleton3D _skeleton;
+    private BreathModifier _breath;
     private AnimationPlayer _anim;
     private string _idle, _walk, _run, _work, _jump, _carry;
     /// <summary>Modelo do Meshy (jogador): já vem na altura certa e de tênis.</summary>
@@ -159,6 +160,9 @@ public partial class CharacterModel : Node3D
                 _boneSpine = _skeleton.FindBone(_meshy ? "Spine" : "Spine2");
                 _boneFootL = _skeleton.FindBone("LeftFoot");
                 _boneFootR = _skeleton.FindBone("RightFoot");
+                // Idle respirando (v0.10.1): primeiro modificador do esqueleto, antes do IK.
+                _breath = new BreathModifier { Name = "Breath" };
+                _skeleton.AddChild(_breath);
             }
         }
         else
@@ -291,6 +295,28 @@ public partial class CharacterModel : Node3D
 
     private bool _seated;
     private string _sit;
+    private Vector3 _seatOffset;
+
+    /// <summary>Ajuste do corpo sentado para o banco de cada veículo (VanController.RiderSeatOffset).</summary>
+    public Vector3 SeatOffset
+    {
+        get => _seatOffset;
+        set
+        {
+            if (_seatOffset == value)
+                return;
+            _seatOffset = value;
+            ApplySeatPosition();
+        }
+    }
+
+    private void ApplySeatPosition()
+    {
+        if (GetNodeOrNull<Node3D>("Body") is not Node3D body)
+            return;
+        Vector3 basePos = _straddle ? Vector3.Zero : new(0f, _seated && _sit == null ? -0.45f : (_seated ? 0.05f : 0f), _seated ? 0.1f : 0f);
+        body.Position = basePos + (_seated ? _seatOffset : Vector3.Zero);
+    }
 
     /// <summary>Sentado num banco (motorista/carona): pose de sentado ou, sem ela, o corpo afunda no banco.</summary>
     public void SetSeated(bool seated)
@@ -298,11 +324,36 @@ public partial class CharacterModel : Node3D
         if (_seated == seated)
             return;
         _seated = seated;
-        if (GetNodeOrNull<Node3D>("Body") is Node3D body)
-            body.Position = new Vector3(0f, seated && _sit == null ? -0.45f : (seated ? 0.05f : 0f), seated ? 0.1f : 0f);
-        if (seated && _sit != null)
+        ApplySeatPosition();
+        PlaySeatPose();
+    }
+
+    private bool _straddle;
+
+    /// <summary>
+    /// Montado (moto): em vez da pose de cadeira (que atrapalha o IK dos braços), usa a pose parada com o
+    /// quadril no banco; braços e pernas vêm do IK (manoplas e pedaleiras).
+    /// </summary>
+    public bool Straddle
+    {
+        get => _straddle;
+        set
+        {
+            if (_straddle == value)
+                return;
+            _straddle = value;
+            ApplySeatPosition();
+            PlaySeatPose();
+        }
+    }
+
+    private void PlaySeatPose()
+    {
+        if (_seated && _straddle)
+            Play(_idle, 0.2f);
+        else if (_seated && _sit != null)
             Play(_sit, 0.2f);
-        else if (!seated)
+        else if (!_seated)
             Play(_idle, 0.2f);
     }
 
@@ -321,6 +372,8 @@ public partial class CharacterModel : Node3D
         }
         if (_anim == null)
             return;
+        if (_breath != null)
+            _breath.Resting = _seated || (speed < 0.25f && !Airborne && _current != _work);
         if (_seated)
             return;
         if (Airborne && _jump != null)
