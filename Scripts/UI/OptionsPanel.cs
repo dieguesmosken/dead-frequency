@@ -123,7 +123,12 @@ public partial class OptionsPanel : VBoxContainer
         s.ResetToDefaults();
         s.Apply();
         s.Save();
-        // Remonta as abas com os valores padrão.
+        Rebuild();
+    }
+
+    /// <summary>Remonta as abas com os valores atuais (depois de restaurar o padrão ou de um preset).</summary>
+    private void Rebuild()
+    {
         int tab = _lastTab;
         foreach (Node c in GetChildren())
             c.QueueFree();
@@ -268,7 +273,13 @@ public partial class OptionsPanel : VBoxContainer
         Slider(p, "Duração do dia", 6, 60, 1, s.DayLengthMinutes, v => s.DayLengthMinutes = (float)v, v => $"{v:0} min", "Minutos reais para 24 horas no jogo.");
         Section(p, "PARTIDA");
         Toggle(p, "Pausar ao trocar de janela", s.PauseOnFocusLoss, b => s.PauseOnFocusLoss = b, "Só no solo; no online o mundo continua.");
+        Section(p, "CONFORTO (ENJOO)");
+        Toggle(p, "Reduzir movimento", s.ReduceMotion, b => { s.SetReduceMotion(b); CallDeferred(MethodName.Rebuild); },
+            "Liga tudo de uma vez: sem balanço da câmera, horizonte estável no carro, vinheta nas bordas em velocidade, ponto no meio da tela e sem tremor PS1.");
         Toggle(p, "Câmera estável no carro", s.StableVehicleCamera, b => s.StableVehicleCamera = b, "O horizonte não balança com a carroceria (evita enjoo/vertigem).");
+        Toggle(p, "Vinheta de conforto no carro", s.ComfortVignette, b => s.ComfortVignette = b, "Escurece as bordas da tela quando o carro passa de uns 40 km/h. Menos movimento no canto do olho = menos enjoo.");
+        Toggle(p, "Ponto no meio da tela", s.CenterDot, b => s.CenterDot = b, "Um ponto fixo sempre visível, também dirigindo: dá uma referência para os olhos.");
+        p.AddChild(Hint("Também ajudam: campo de visão maior (Gráficos), FPS estável e o Visual PS1 em Desligado ou Leve."));
         Toggle(p, "Procurar atualizações ao abrir", s.CheckUpdates, b => s.CheckUpdates = b, "Pergunta ao GitHub se saiu versão nova (nenhum dado seu é enviado).");
         SaveData save = SaveManager.Load();
         p.AddChild(Hint(save == null ? "Ainda não há save: durma na cama do seu apartamento (Edifício Sintonia) para salvar."

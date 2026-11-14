@@ -47,6 +47,61 @@ public partial class GameSettings : Node
     public int CharPants { get; set; }
     /// <summary>Câmera estabilizada no carro: o horizonte não balança com a carroceria (contra enjoo).</summary>
     public bool StableVehicleCamera { get; set; } = true;
+    /// <summary>Conforto (v0.10): escurece as bordas da tela com o carro rápido (menos enjoo).</summary>
+    public bool ComfortVignette { get; set; }
+    /// <summary>Conforto: ponto fixo no meio da tela também dentro do veículo (referência para os olhos).</summary>
+    public bool CenterDot { get; set; }
+    /// <summary>Preset "Reduzir movimento": liga tudo de conforto de uma vez (cada item continua editável).</summary>
+    public bool ReduceMotion { get; set; }
+
+    /// <summary>Aplica o preset "Reduzir movimento": sem balanço, câmera estável, vinheta, ponto central e sem tremor PS1.</summary>
+    public void SetReduceMotion(bool on)
+    {
+        ReduceMotion = on;
+        if (!on)
+            return;
+        HeadBob = false;
+        StableVehicleCamera = true;
+        ComfortVignette = true;
+        CenterDot = true;
+        ShowCrosshair = true;
+        if (Ps1Mode == 2)
+            Ps1Mode = 1; // o tremor de vértices do modo Completo mexe a imagem toda
+    }
+
+    public override void _Process(double delta) => UpdateComfortVignette((float)delta);
+
+    private CanvasLayer _vignetteLayer;
+    private ShaderMaterial _vignetteMaterial;
+    private float _vignette;
+
+    /// <summary>Vinheta de conforto: acompanha a velocidade do veículo do jogador local.</summary>
+    private void UpdateComfortVignette(float dt)
+    {
+        PlayerController p = PlayerController.Local;
+        float target = 0f;
+        if (ComfortVignette && p != null && IsInstanceValid(p) && IsInstanceValid(p.CurrentVehicle) &&
+            p.State is PlayerState.Driving or PlayerState.Riding && !p.IsThirdPerson)
+            target = Mathf.Clamp((p.CurrentVehicle.SpeedKmh - 35f) / 45f, 0f, 1f) * 0.6f;
+        _vignette = Mathf.MoveToward(_vignette, target, dt * 0.8f);
+        if (_vignette <= 0.001f)
+        {
+            if (_vignetteLayer != null)
+                _vignetteLayer.Visible = false;
+            return;
+        }
+        if (_vignetteLayer == null)
+        {
+            _vignetteMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://Shaders/comfort_vignette.gdshader") };
+            _vignetteLayer = new CanvasLayer { Name = "ComfortVignette", Layer = -40 };
+            var rect = new ColorRect { Material = _vignetteMaterial, MouseFilter = Control.MouseFilterEnum.Ignore };
+            rect.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+            _vignetteLayer.AddChild(rect);
+            AddChild(_vignetteLayer);
+        }
+        _vignetteLayer.Visible = true;
+        _vignetteMaterial.SetShaderParameter("strength", _vignette);
+    }
 
     // ---------------- v0.9.2: opções completas (abas) ----------------
     /// <summary>0 = janela, 1 = tela cheia (sem borda), 2 = tela cheia exclusiva, 3 = janela maximizada.</summary>
@@ -324,6 +379,9 @@ public partial class GameSettings : Node
         cfg.SetValue("character", "shirt", CharShirt);
         cfg.SetValue("character", "pants", CharPants);
         cfg.SetValue("game", "stable_vehicle_camera", StableVehicleCamera);
+        cfg.SetValue("comfort", "vignette", ComfortVignette);
+        cfg.SetValue("comfort", "center_dot", CenterDot);
+        cfg.SetValue("comfort", "reduce_motion", ReduceMotion);
         cfg.SetValue("video", "window_mode", WindowMode);
         cfg.SetValue("video", "render_scale", RenderScale);
         cfg.SetValue("video", "ps1_mode", Ps1Mode);
@@ -403,6 +461,9 @@ public partial class GameSettings : Node
         CharShirt = cfg.GetValue("character", "shirt", CharShirt).AsInt32();
         CharPants = cfg.GetValue("character", "pants", CharPants).AsInt32();
         StableVehicleCamera = cfg.GetValue("game", "stable_vehicle_camera", StableVehicleCamera).AsBool();
+        ComfortVignette = cfg.GetValue("comfort", "vignette", ComfortVignette).AsBool();
+        CenterDot = cfg.GetValue("comfort", "center_dot", CenterDot).AsBool();
+        ReduceMotion = cfg.GetValue("comfort", "reduce_motion", ReduceMotion).AsBool();
         WindowMode = cfg.GetValue("video", "window_mode", Fullscreen ? 1 : 0).AsInt32();
         RenderScale = cfg.GetValue("video", "render_scale", RenderScale).AsSingle();
         Ps1Mode = cfg.GetValue("video", "ps1_mode", Ps1Mode).AsInt32();
@@ -448,7 +509,7 @@ public partial class GameSettings : Node
         MouseSensitivity = d.MouseSensitivity; InvertY = d.InvertY; Fov = d.Fov;
         MasterVolume = d.MasterVolume; MusicVolume = d.MusicVolume; SfxVolume = d.SfxVolume; UiVolume = d.UiVolume; RadioVolume = d.RadioVolume;
         WindowMode = d.WindowMode; RenderScale = d.RenderScale; MaxFps = d.MaxFps; Quality = d.Quality; AntiAliasing = d.AntiAliasing;
-        Brightness = d.Brightness; Contrast = d.Contrast; VSync = d.VSync; MuteOnFocusLoss = d.MuteOnFocusLoss; PauseOnFocusLoss = d.PauseOnFocusLoss; CheckUpdates = d.CheckUpdates; StableVehicleCamera = d.StableVehicleCamera;
+        Brightness = d.Brightness; Contrast = d.Contrast; VSync = d.VSync; MuteOnFocusLoss = d.MuteOnFocusLoss; PauseOnFocusLoss = d.PauseOnFocusLoss; CheckUpdates = d.CheckUpdates; StableVehicleCamera = d.StableVehicleCamera; ComfortVignette = d.ComfortVignette; CenterDot = d.CenterDot; ReduceMotion = d.ReduceMotion;
         VehicleSensitivity = d.VehicleSensitivity; HeadBob = d.HeadBob; TouchMode = d.TouchMode; TouchScale = d.TouchScale; ShowFps = d.ShowFps; UiScale = d.UiScale; Scanlines = d.Scanlines; Ps1Mode = d.Ps1Mode;
         ShowCrosshair = d.ShowCrosshair; ShowKeyHints = d.ShowKeyHints; ShowCompass = d.ShowCompass; ToastDuration = d.ToastDuration;
         SpeedUnit = d.SpeedUnit; Clock24h = d.Clock24h; TimeMode = d.TimeMode; DayLengthMinutes = d.DayLengthMinutes;

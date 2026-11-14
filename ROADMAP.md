@@ -1,6 +1,6 @@
 # Dead Frequency — roadmap da cidade simulada
 
-Atualizado em 12/11/2026 (v0.9.8 lançada). A partir da v0.9 o jogo deixa de ser só "entregas" e vira uma
+Atualizado em 13/11/2026 (v0.10.0 "Modo História" lançada; ideias novas do documento "Roadmap Dead Frequency"). A partir da v0.9 o jogo deixa de ser só "entregas" e vira uma
 **cidade simulada na zona morta**: cada jogador escolhe uma profissão, ganha um apartamento, ouve a
 rádio 96.6 e ajuda a cidade a funcionar. Ordem sugerida: de cima para baixo; cada fase deixa o jogo jogável.
 
@@ -104,7 +104,9 @@ Ideias para depois (pesquisa de 12/11 sobre as regras do CTB):
 | ✅ **Conserta-Tudo do Primo** | Barraca em frente ao depósito. O gari acha sucata na rua (rádio velho, cano, roda) e vende ao Primo pelo mesmo valor do saco; o Primo vende a lanterna de longo alcance (dobro do alcance, basta estar na mochila), kit de reparo, fita e prego. Pilhas para a visão noturna ficaram de fora: ela não gasta bateria hoje. |
 | ✅ **Lã de Aço 1001 Utilidades** | Balcão no Shopping Marconi (no lugar das Lojas Marcianas) com palha de aço Brilhaço, fita e prego. Na TV do apartamento, a palha de aço na antena acaba com o chuvisco. O repositor às vezes repõe fardos de palha de aço (carga leve). |
 
-### v0.10 — Dead Frequency no celular (Android)
+### v0.10 — Modo História inicial e Dead Frequency no celular (Android) ✅
+**Lançada em 13/11/2026 como v0.10.0 "Modo História"** (público, `main`). O APK do Android continua nos pré-releases da
+Internal até a chave de release e os testes nos aparelhos. Escopo: **Modo História inicial + versão Android inicial + carros anunciantes**.
 Planejado em 12/11/2026 (antes a v0.10 era a Carreira, que passou para a v0.11). Objetivo: jogar e testar no
 celular, nos dois aparelhos do Matheus e em outros. Depende da otimização para PC fraco (`hotfix/pc-fraco`,
 streaming por chunks) estar na Internal.
@@ -114,17 +116,38 @@ streaming por chunks) estar na Internal.
 | 🚧 **Exportar para Android** | Preset "Android" no `export_presets.cfg` (C#/.NET, arm64, sem gradle) e workflow `android-test.yml`, que gera um APK debug como artefato (botão Run workflow ou push em `android/**` / `feat/android-*`). No celular o renderizador é o Compatibility, com texturas ETC2/ASTC. Falta: chave de release (segredo do Matheus), APK no prerelease da Internal e testar nos aparelhos. |
 | ✅ **Controles de toque** | `Scripts/UI/TouchControls.cs` (autoload, desenhado em código): joystick que nasce onde o dedo encosta, arrastar à direita mexe a câmera, botões USAR, PULAR/FREIO, ITEM/JOGAR, SOLTAR, CORRER e, no canto de cima, PAUSA, MOCHILA, LUZ, VISÃO e RÁDIO/ESTAÇÃO na van. Com tela aberta só aparece o VOLTAR. Tudo vira ação do Input Map. Opções > Controles > Toque: automático/sempre/nunca e tamanho dos botões. |
 | 🚧 **Modo gráfico leve** | Primeira vez no celular (`GameSettings.ApplyMobileDefaults`): qualidade Baixa (sem sombras nem brilho), resolução 3D 70%, sem antisserrilhado, 30 fps; câmera enxerga até 160 m e a neblina fica 2,2x mais densa para esconder o corte. Começa em primeira pessoa. Falta medir nos aparelhos e ajustar o raio dos pedaços da cidade. |
+| ✅ **Menos chamadas de desenho** | `StaticBatcher`: quando um quarteirão fica pronto, as caixinhas e cilindros estáticos viram poucas malhas (cores lisas viram cor de vértice; cada carro estacionado vira uma ou duas malhas). Medido na fase de teste em modo celular: avenida de 5.829 para 1.757 chamadas por quadro, central de 3.381 para 1.357, praça de 1.043 para 483. Colisões e aparência não mudam; `--no-batch` desliga para comparar. Ainda dá para juntar: letreiros (`Label3D`), pintura de guia, semáforos de pedestre e orelhões. |
 | ✅ **Menus e HUD para tela pequena** | Tela cheia sempre (modo imersivo, sem barra de notificação nem de gestos). Interface 1,6x; menu inicial com layout próprio (`MainMenu.Mobile.cs`: botões grandes em duas colunas, telas que rolam com o dedo); HUD do jogo encolhido para ~1,1x; dicas de teclado escondidas; botão CÂMERA nos controles de toque. Para testar no PC: rodar com `-- --mobile`. |
 | ✅ **Personagem do jogador novo** | Entregador e entregadora feitos no Meshy (low-poly ~4 mil triângulos, textura 512 px sem filtro) com esqueleto e 6 animações: parado, andar, correr, sentado (dirigir/carona), pulo e carregando caixa. As cores do menu Personagem continuam valendo: um shader pinta camiseta, calça, pele e cabelo por máscara, mantendo as sombras. Vale para você, para os outros jogadores no online, para o menu e para a mochila; NPCs e vendedores ganham modelos novos depois. |
 | ✅ **Caminhonete e Fuska novos** | Modelos do Meshy (~5–6 mil triângulos, textura 512 px sem filtro). Caminhonete de entregas com calotas: só a carroceria muda, interior, volante animado, rádio e colisões da caçamba continuam. Fuska pintado por máscara (cada um com a sua cor: estacionados, concessionária e o comprado). **Placas** cinzas dos anos 90 ("SINTONIA · SP" + ABC-1234) diferentes em cada carro (`Plates`, pelo NetId ou pela ordem de geração); a da empresa é DFQ-1996. |
 | ✅ **Moradores, barracas e viaturas novos** | Seis moradores do Meshy (senhor, rapaz, homem de escritório, moça, dona e senhora) com parado, andar, sentado e conversar gesticulando, pintados por máscara com as cores de cada pedestre (dá dezenas de combinações). Barracas dos vendedores com o toldo na cor de cada um, churrasquinho do Duvidoso completo (guarda-sol, churrasqueira, isopor) com brasa e fumaça, caminhão dos bombeiros e viatura da polícia novos. O caramelo agora é caramelo de verdade (pelagem caramelo e creme, orelha caída). |
+| ✅ **Revisão visual da central** | Moto de entregas 125 cc nova (Meshy) com baú térmico do **DF Entregas** (logo nos três lados); paleteira nova; caixas do galpão com textura (fita, setas, taça) e etiquetas em imagem (FRÁGIL, ESTE LADO PARA CIMA, lojas) coladas na caixa; etiquetas em imagem também nas caixas das entregas; quadro de avisos, funcionário do mês e paisagem do vale como quadros de verdade; muro da central rebocado com barrado verde e rachaduras; galpão de telha metálica. Moradores: cabelo e lenço ficam como no modelo (a máscara pintava em pedaços). **Primeira pessoa nos carros:** olhos dentro da cabine (antes ficavam acima do teto), painel, volante e forro simples, e os vidros opacos somem para quem está dentro. |
+| ✅ **Modo História inicial** | Menu Iniciar turno → Modo História (offline). Capítulo I na cidade com meta no HUD; meta cumprida libera a saída leste e a viagem no piloto automático até o rancho (capítulo II "Asfalto e Barro"). Metas e títulos definitivos: a decidir pelo Matheus (`Scripts/Story/StoryChapters.cs`). Detalhes na seção "Modo História e novas fases". |
+| ✅ **Carro de som** | Kombi amarela com cornetas no teto rodando devagar (~15 km/h) pelo anel 2 da cidade, o tempo todo, anunciando as lojas e eventos paródia da cidade (os mesmos roteiros da 96.6). Posição pelo relógio, igual ao ônibus: online todo mundo vê no mesmo lugar. Fala com a voz dos comerciais da 96.6 (balão em cima do carro se o áudio faltar). |
+| ✅ **Carro do ovo (evento)** | Picape com bandejas de ovo e placa "OVO! 30 por R$ 5" que aparece alguns minutos a cada 15 (aviso na tela quando chega), dando a volta no anel do centro no sentido contrário ao ônibus. Com voz e filtro de alto-falante. |
+| ✅ **Dirigibilidade** | Carros bem mais difíceis de capotar: centro de massa mais baixo, estabilizador em código (barra estabilizadora "de jogo"), limite de rolagem/arfagem, menos esterço em alta velocidade e desvirar sozinho se ficar de lado parado. No teste de curva fechada a 94 km/h, Fusca e táxi capotavam; agora inclinam no máximo 7°. **Saída do carro:** o jogador procura um lugar livre com chão (porta, outro lado, atrás, frente, por cima) em vez de aparecer dentro do muro ou abaixo do chão. |
+| ✅ **Conforto (enjoo)** | Opções > Jogo > Conforto: **Reduzir movimento** (liga tudo de uma vez), câmera estável no carro, vinheta nas bordas com o carro rápido e ponto fixo no meio da tela. O balanço da câmera já vinha desligado. Baseado nas Game Accessibility Guidelines e Xbox Accessibility Guidelines. |
+| ✅ **Vozes da 96.6, dos carros e do Modo História** | 49 falas geradas com o Gemini 3.8 Flash TTS (AI Studio): 34 intervalos da 96.6 (comerciais, eventos, comunicados, vinhetas) tocando entre as músicas, ainda sincronizados pelo relógio; 4 falas do carro do ovo com filtro de megafone; 11 falas dos capítulos I e II, que a caixa de diálogo toca. Vozes e estilos em `docs/radio/VOZES.md`. Falta: 6 falas do capítulo II (limite diário do AI Studio). O `tools/tts/gerar_audios.py` (Amazon Polly) fica de reserva. Depois: vender ovo de verdade (item novo + preço no servidor). |
 | **Online entre PC e celular** | Mesmo servidor e protocolo (WebSocket): sem mudança no `server/`. Testar sala com PC e celular juntos. |
 | 🚧 **Distribuição** | O prerelease da Internal (`vX.Y.Z.N-pre`) traz o `DeadFrequency-…-android.apk`. **Atualizador no próprio jogo** (`AppUpdater`): no celular o menu confere o GitHub, mostra "Nova versão", baixa o APK com progresso e abre o instalador do Android (se não abrir, usa o navegador). Quem tem build da Internal recebe os `-pre`; quem tem o público, só os públicos. O CI grava o build exato em `application/config/version` (`GameVersion.Build`). Instalar por cima precisa da chave do Matheus (segredos `ANDROID_KEYSTORE_*`); com chave de debug, desinstale antes. Link no site e Play Store ficam para depois. |
+
+### v0.10.x — Praça Central
+| Ideia | Como funciona no jogo |
+|---|---|
+| **Praça Central** | Coreto (conservação a definir), estatuinha como ponto de referência, bancos de praça e parquinho infantil. **Sem chafariz**: elementos mais contidos. É o palco do capítulo VII (Show da Frequência). |
+| **Painel de mapa** | Painel na praça que desenha o mapa da cidade a partir da seed carregada (reaproveita o radar/minimapa). Depois o mesmo painel vai para a rodoviária, a prefeitura e totens. |
+| **Bichos do vale** | Capivaras na beira do rio e guarás no rancho, só ambientação (`FarmAnimal`). |
 
 ### v0.11 — Carreira
 | Ideia | Como funciona no jogo |
 |---|---|
 | **Níveis de profissão** | Cada tarefa dá experiência na profissão. A cada nível: bônus em dinheiro por tarefa e itens de presente (ex.: luvas no nível 3 de entregador, café grátis para o taxista da madrugada). Salvo no save e conferido pelo servidor no online. |
+
+### v0.11 — Centro da cidade
+| Ideia | Como funciona no jogo |
+|---|---|
+| **Prefeitura** | Fachada de concreto gasta, placa oficial antiga e torre central de inspiração europeia com **relógio analógico funcionando** (ponteiros pelo mesmo relógio do `DayNightController`, iguais para todos no online). Saguão com balcão de atendimento, salas com arquivos e auditório antigo. No Modo História: documentos da época da Repetidora Landell. |
+| **Rodoviária** | Plataforma de embarque de um lado (terminal do ônibus 966 e das linhas intermunicipais) e rua de táxis do outro (ponto do táxi da cooperativa), com passagem central ligando as duas como atalho. Ala esquerda: lojas e barzinho; ala direita: lojinha, lanchonete e banheiros. Horários de ônibus antigos na parede, guichê com vidro, bancos de espera gastos, bancos e lixeiras de concreto, muro de tijolinho, dispenser de preservativos perto do banheiro masculino (só cenário). Painel de mapa da seed. |
 
 ### v0.11.x — Trânsito de verdade
 | Ideia | Como funciona no jogo |
@@ -215,11 +238,12 @@ Cada profissão nova = um `JobBase` em `Scripts/Jobs/` + a regra em `PROFESSIONS
 
 As fases abaixo são propostas de planejamento; a ordem pode mudar conforme testes, dependências e escopo das builds.
 
-### v0.12 — Bairros e infraestrutura urbana
-- **Área residencial simplificada:** bairro de casas térreas, sem prédios altos, inspirado em conjuntos habitacionais como CDHU ou em um condomínio simples. Avaliar como uma área separada/mapa para manter a cidade principal mais leve.
-- **Praça e parque:** área de convivência com bancos, árvores, iluminação e eventos comunitários.
-- **Playground:** parquinho próximo ao bairro residencial.
-- **Prefeitura e Boulevard:** rua de paralelepípedo, mão única e prédio da prefeitura, formando uma área cívica/comercial característica.
+### v0.12 — Bairros, saúde e chuva
+- **Clima com chuva:** chuva visual e sonora, asfalto molhado e poças, a caminhonete derrapando um pouco; quem anda na chuva sem guarda-chuva perde fôlego/ânimo (`PlayerController.Needs`). Item **guarda-chuva** (pegar e guardar).
+- **Posto de Saúde Municipal:** suporte de guarda-chuva na entrada; recepção com balcão, cartazes e propagandas de saúde (campanhas fictícias) e caixinha de preservativos (só cenário). Recupera as necessidades do personagem e salva o jogo.
+- **Área residencial simplificada:** bairro de casas térreas, sem prédios altos, inspirado em conjuntos habitacionais populares ou em um condomínio simples (nome fictício: Conjunto Habitacional Sintonia), com a van do conjunto circulando pelo bairro. Avaliar como uma área separada/mapa para manter a cidade principal mais leve.
+- **Parque do bairro:** área de convivência com árvores e iluminação; parque com fiação elétrica e de fibra abandonada. (A Praça Central foi para a v0.10.x.)
+- **Boulevard:** rua de paralelepípedo, mão única, ligando a prefeitura (v0.11) ao comércio, com restaurantes.
 - **Correios (Correrios):** reformar a agência com entrada clara, balcão de atendimento, caixas de correspondência e uma van amarela inspirada na Fiat Scudo estacionada na entrada.
 - **Canteiros de obras permanentes:** construções inacabadas que fazem parte da paisagem e mudam conforme a cidade evolui.
 - **Obras viárias:** cones, cavaletes, máquinas e desvios temporários ou permanentes, com sinalização coerente.
@@ -229,17 +253,18 @@ As fases abaixo são propostas de planejamento; a ordem pode mudar conforme test
 - **Infraestrutura de internet:** cabos ADSL antigos abandonados e fibra óptica chegando às casas.
 - **Antenas e parabólicas:** modelos de 60 cm convencionais; antenas clandestinas de TV a cabo ("gato Net") com identidade visual fictícia; marcas fictícias inspiradas em operadoras populares (Céu, Escuro, Antena da Tchau e Antena da Morto); parabólica amarela Centauro de 150 cm; modelos rurais de tela/grade Centauro de 200 e 340 cm.
 
-### v0.13 — Zona rural, água e pesca
+### v0.13 — Zona rural, água, pesca e natureza do vale
+- **Mata Atlântica e rios do vale:** mata densa e rios como limites naturais do mapa (bloqueiam a visão e o caminho), com trechos navegáveis.
+- **Fauna:** capivaras e guarás espalhados; **cão-vinagre** como encontro raro na mata, tímido e sem perigo (foge do jogador; dá para ver ou fotografar).
 - **Rios e lagos rurais:** corpos d'água distribuídos pelo mapa rural, com margens e vegetação próprias.
 - **Pontos de pesca:** locais acessíveis nas margens, com áreas apropriadas para pescar.
-- **Sistema de pesca:** varas, iscas, espera/ fisgada e diferentes espécies de peixes, com raridades e valores distintos.
+- **Sistema de pesca:** varas, iscas, espera/ fisgada e diferentes espécies de peixes, com raridades e valores distintos; peixe vira item para vender ou entregar (pesqueiro Lambari Feliz, que já anuncia na 96.6).
 - **Agricultura:** plantações e áreas cultivadas, ampliando as atividades do sítio e as entregas rurais.
 
 ### v0.14 — Comércio, indústria e energia
-- **Rodoviária/terminal de ônibus:** terminal como origem e ponto de organização das linhas intermunicipais/urbanas.
 - **Restaurantes:** estabelecimentos com identidade própria, salão, balcão e refeições.
 - **Área industrial:** galpões, pátios de carga e circulação de veículos de serviço.
-- **Usinas de energia:** instalações solares e eólicas como marcos visuais da região.
+- **Usinas de energia:** instalações solares e eólicas como marcos visuais da região; depois, geração de energia como mecânica (sítio e cidade).
 - **Data centers:** complexo técnico com geradores, refrigeração e infraestrutura de rede, como parte do cenário e de possíveis tarefas/eventos.
 
 ### Rádio 96.6 — publicidade local e agenda de eventos
@@ -255,6 +280,8 @@ A rádio deve anunciar os próprios estabelecimentos e acontecimentos do mundo d
 - **Licenciamento:** confirmar que o plano e os termos do serviço TTS permitem distribuir comercialmente os áudios gerados junto com o jogo.
 
 ### Outras prioridades de mundo (a distribuir entre as fases)
+- Antenas variadas, demarcações especiais no asfalto e grades cinzas pela cidade.
+- **Marcas sempre paródia:** nada de marca ou órgão real no jogo (ex.: posto de saúde municipal fictício em vez de SUS, conjunto habitacional fictício em vez de CDHU).
 - Farmácias e escolas como edifícios reconhecíveis, com fachadas e interiores quando fizer sentido para as atividades.
 - Mais restaurantes e serviços de bairro, evitando concentrar todo o comércio em prédios genéricos.
 - Revisar a malha viária e a sinalização sempre que novos bairros, obras ou rotas forem adicionados.
@@ -278,9 +305,11 @@ Documentação completa em [`docs/README_PARA_IAS.md`](docs/README_PARA_IAS.md).
 - [ ] **Fase 5 · Estrada da Serra (`Serra.tscn`):** subida sinuosa com neblina e teste de integridade da carga.
 
 ### Modo História (offline)
-- [ ] Progressão desacoplada (`StoryManager` + `JobEvents`), salva no `save.tzn`.
-- [ ] Piloto automático na `VanController` + `ChapterTransitionZone` (loading disfarçado na estrada, rádio ligado e banner retrô).
-- [ ] Campanha em 7 capítulos ligando Cidade, Rancho, Bananal, Gruta, Serra e Rádio 96.6 (capítulos a definir).
+- [x] Progressão desacoplada (`StoryManager` + `JobEvents`), salva no `save.tzn` (v0.10). Menu: Iniciar turno → **Modo História** (continuar / recomeçar). HUD com capítulo e meta (`StoryDirector`); linha no F3.
+- [x] Piloto automático na `VanController` + `ChapterTransitionZone` (loading disfarçado na estrada, rádio ligado e banner retrô). Cidade → Rancho pela saída leste, com feixe verde e placa "ESTRADA DO RANCHO" quando a meta é cumprida.
+- [x] **Campanha escrita** (13/11/2026, `docs/lore/01_LORE_E_CAPITULOS.md`): "Dead Frequency", 7 capítulos sobre salvar a Repetidora Landell, que leva o sinal da 96.6 ao vale. I Primeiro Turno (Cidade) · II Asfalto e Barro (Rancho) · III Sinal no Bananal · IV A Gruta da Estática · V Neblina na Serra · VI Fora do Ar (Cidade/Rádio) · VII Show da Frequência (praça). Personagens: Seu Waldir, Kátia, Toninho, Dona Lurdes (gerente da DF Entregas, nova), o Primo, Dona Cida, Seu Tonho, o Duvidoso.
+- [x] Capítulos I e II jogáveis com falas pelo rádio (`StoryDialog`), metas e limite de caixas quebradas (passou do limite, a contagem recomeça).
+- [ ] Capítulos III a V: dependem das fases Bananal, Gruta e Serra. VI e VII acontecem na cidade, mas precisam de tarefas novas (avisos no estúdio sem a rádio, recados de porta em porta, equipamento do show).
 
 ### Backlog opcional — vida urbana
 - [ ] Praça da Matriz à noite com barracas de pastel/lanche e carro de som anunciando eventos.

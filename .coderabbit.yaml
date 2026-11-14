@@ -1,0 +1,102 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Configuração do CodeRabbit (revisão automática de PRs). Gratuito para repositório público.
+# Com menos de 10 estrelas no repositório a revisão só roda quando alguém comenta "@coderabbitai review" no PR.
+# O CLAUDE.md da raiz já é lido sozinho como guia de código (não precisa listar aqui).
+language: pt-BR
+tone_instructions: "Seja direto e objetivo, em português do Brasil. Priorize bugs, segurança e desempenho; evite picuinha de estilo."
+early_access: false
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  in_progress_fortune: false
+  sequence_diagrams: false
+  estimate_code_review_effort: false
+  suggested_reviewers: false
+  related_prs: false
+  collapse_walkthrough: true
+  review_status: true
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    base_branches:
+      - "^Internal$"
+      - "^main$"
+    # Os PRs do Dependabot não gastam a cota de revisões.
+    ignore_usernames:
+      - "dependabot[bot]"
+      - "github-actions[bot]"
+    labels:
+      - "!no-review"
+  # Arquivos gerados, binários e de importação da Godot ficam fora da revisão.
+  path_filters:
+    - "!**/*.import"
+    - "!**/*.uid"
+    - "!**/*.glb"
+    - "!**/*.gltf"
+    - "!**/*.fbx"
+    - "!**/*.obj"
+    - "!**/*.png"
+    - "!**/*.jpg"
+    - "!**/*.svg"
+    - "!**/*.ogg"
+    - "!**/*.wav"
+    - "!**/*.ttf"
+    - "!**/*.tres"
+    - "!.godot/**"
+    - "!Assets/**"
+    - "!site/data/site.json"
+    - "!site/assets/**"
+    - "!CHANGELOG.md"
+    - "!**/package-lock.json"
+  path_instructions:
+    - path: "Scripts/**/*.cs"
+      instructions: |
+        Godot 4.7 .NET (C#). Siga as "Regras de código" do CLAUDE.md. Verifique principalmente:
+        - Física só em _PhysicsProcess; nada de mover corpo físico em _Process.
+        - GetNode<T>() no _Ready() com a referência guardada em campo; nunca GetParent().GetParent().
+        - Eventos C# (+=) e sinais desassinados em _ExitTree (eventos estáticos como JobEvents seguram referência).
+        - IsInstanceValid antes de usar nó que pode ter sido liberado; QueueFree em vez de Free.
+        - Reparent e troca de pai adiados (CallDeferred) quando vêm de callback de física.
+        - Evitar alocação por quadro (LINQ, new List, concatenação de string) em _Process/_PhysicsProcess.
+        - Regras de jogo que existem no servidor (preços, profissões, veículos) precisam bater com server/src.
+        - O Modo História não pode colocar lógica dentro das profissões: só escuta JobEvents.
+    - path: "server/**/*.ts"
+      instructions: |
+        Cloudflare Worker + Durable Object (TypeScript). O servidor manda nas regras. Verifique:
+        - Toda mensagem do cliente é validada (tipo, faixa, dono do objeto) antes de mudar o estado da sala.
+        - Dinheiro, preços e pagamentos nunca confiam no valor enviado pelo cliente.
+        - Nenhum segredo no código (ADMIN_TOKEN vem de env/secret); erros não vazam stack trace.
+        - Sem API do Node que não existe no runtime dos Workers.
+        - Mudança de protocolo precisa do teste em server/test/smoke.mjs.
+    - path: ".github/workflows/**"
+      instructions: |
+        Menor privilégio em `permissions:`. Segredos (keystore do Android, SignPath) só em jobs que precisam
+        e nunca impressos no log. Nada de checkout do código do PR em pull_request_target.
+  tools:
+    actionlint:
+      enabled: true
+    yamllint:
+      enabled: true
+    markdownlint:
+      enabled: false
+    eslint:
+      enabled: true
+    gitleaks:
+      enabled: true
+    osvScanner:
+      enabled: true
+    languagetool:
+      enabled: false
+chat:
+  auto_reply: true
+  art: false
+knowledge_base:
+  opt_out: false
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "docs/README_PARA_IAS.md"
+      - "docs/tech/*.md"

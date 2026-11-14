@@ -646,7 +646,8 @@ public partial class CityGenerator
     {
         float on = startOn ? energy : 0f, off = startOn ? 0f : energy;
         float matOn = startOn ? 4f : 0.3f, matOff = startOn ? 0.3f : 4f;
-        Tween tween = CreateTween().SetLoops();
+        // O tween é da própria luz: quando o quarteirão descarrega, ele acaba junto (antes ficava dando erro sem parar).
+        Tween tween = CreateTween().BindNode(light).SetLoops();
         tween.TweenCallback(Callable.From(() => { light.LightEnergy = on; material.EmissionEnergyMultiplier = matOn; }));
         tween.TweenInterval(period);
         tween.TweenCallback(Callable.From(() => { light.LightEnergy = off; material.EmissionEnergyMultiplier = matOff; }));

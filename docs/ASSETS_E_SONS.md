@@ -27,12 +27,22 @@ Antes de usar um arquivo: abrir a página, confirmar a licença e anotar autor +
 | Caminhonete de entregas (com calotas) e Fuska | [Meshy](https://www.meshy.ai) (plano pago do Matheus) | Nossos, distribuídos com o jogo (GPL v3) | `Assets/Meshy/Vehicles/` |
 | Barraca de vendedor (toldo recolorível), churrasquinho, caminhão dos bombeiros e viatura da polícia | [Meshy](https://www.meshy.ai) (plano pago do Matheus) | Nossos, distribuídos com o jogo (GPL v3) | `Assets/Meshy/Props/` |
 | Seis moradores (NPCs) com esqueleto e 4 animações | [Meshy](https://www.meshy.ai) (plano pago do Matheus) | Nossos, distribuídos com o jogo (GPL v3) | `Assets/Meshy/Characters/npc_*` |
+| Moto de entregas 125 cc e paleteira | [Meshy](https://www.meshy.ai) (plano pago do Matheus) | Nossos, distribuídos com o jogo (GPL v3) | `Assets/Meshy/Props/moto*`, `paleteira*` |
+| Texturas do depósito: caixas, etiquetas, muro, telha do galpão, quadros do escritório, logo e baú do DF Entregas | Desenhadas em código (`Assets/Textures/Depot/depot_textures.py.txt`, PIL) | Nossas (GPL v3) | `Assets/Textures/Depot/` |
 
 Como refazer: desenho em T-pose (`meshy_text_to_image`, nano-banana-pro) → `meshy_image_to_3d` (smart topology
 meshy-t2.5, ~4 mil triângulos, textura meshy-n1) → `meshy_rig` → `meshy_animate` com Idle, Casual Walk, Run 2,
 Chair Sit Idle M/F, Regular Jump e Carry Heavy Object Walk. A máscara de cores (`*_mascara.png`: R camiseta,
 G calça, B pele, A cabelo só na cabeça) e a textura de 512 px saem de um script Python a partir do GLB; no
 `.import` da máscara, `process/fix_alpha_border` precisa ficar **false** (senão ele apaga os outros canais).
+
+## Vozes (Gemini TTS)
+
+As falas da Rádio 96.6 (`Audio/Radio/Ads/`), do carro do ovo (`Audio/Street/`) e do Modo História
+(`Audio/Story/`) foram geradas com o **Gemini 3.8 Flash TTS (Google)**, pelo AI Studio, a partir dos nossos roteiros
+(`docs/radio/*.csv`). Os termos do Gemini dizem que o Google não reivindica a propriedade do conteúdo gerado;
+os áudios levam a marca d'água inaudível SynthID. Vozes e estilos de cada personagem em `docs/radio/VOZES.md`.
+Crédito no jogo: "Vozes geradas com Gemini (Google)". Não são vozes clonadas de ninguém.
 
 ## Onde publicamos os nossos sons e o jogo
 

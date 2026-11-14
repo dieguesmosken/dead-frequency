@@ -296,6 +296,9 @@ public partial class PlayerController : CharacterBody3D
         float speed = new Vector2(Velocity.X, Velocity.Z).Length();
         bool bob = _headBob && State == PlayerState.Walking && IsOnFloor() && speed > 0.5f;
         Vector3 target = _cameraBase;
+        // Sentado num veículo: olhos na altura da cabine (carros baixos ficavam com a câmera acima do teto).
+        if ((State == PlayerState.Driving || State == PlayerState.Riding) && IsInstanceValid(CurrentVehicle))
+            target.Y += CurrentVehicle.EyeOffsetY;
         if (bob)
         {
             _bobTime += (float)delta * speed * 2.1f;
@@ -844,18 +847,74 @@ public partial class PlayerController : CharacterBody3D
         Callable.From(FinishExitVehicle).CallDeferred();
     }
 
+    /// <summary>
+    /// Escolhe onde o jogador desce do veículo (v0.10): tenta a porta e depois o outro lado, atrás, na frente e em cima.
+    /// Em cada ponto confere se a cápsula cabe ali (sem parede, carro ou poste) e procura o chão com um raio para baixo.
+    /// Antes ele aparecia direto no marcador da porta, que podia ficar dentro de um muro ou abaixo do chão
+    /// (carro inclinado ou em rampa) e o jogador caía para baixo do mapa.
+    /// </summary>
+    private Vector3 FindSafeExit(VanController vehicle, Vector3 preferred)
+    {
+        if (!IsInstanceValid(vehicle) || !IsInsideTree() || _collisionShape?.Shape == null)
+            return preferred;
+        PhysicsDirectSpaceState3D space = GetWorld3D().DirectSpaceState;
+        var exclude = new Godot.Collections.Array<Rid> { vehicle.GetRid(), GetRid() };
+        Transform3D car = vehicle.GlobalTransform;
+        // Laterais e frente/trás em coordenadas do carro, achatadas no chão (ignora a inclinação da carroceria).
+        Vector3 right = car.Basis.X; right.Y = 0f; right = right.LengthSquared() > 0.01f ? right.Normalized() : Vector3.Right;
+        Vector3 fwd = car.Basis.Z; fwd.Y = 0f; fwd = fwd.LengthSquared() > 0.01f ? fwd.Normalized() : Vector3.Forward;
+        Vector3 center = car.Origin;
+        float halfWidth = 1.3f, halfLength = 3.2f;
+        Vector3 preferredFlat = new(preferred.X, center.Y, preferred.Z);
+        float side = (preferredFlat - center).Dot(right) >= 0f ? 1f : -1f;
+        Vector3[] candidates =
+        {
+            preferredFlat,
+            center + right * side * (halfWidth + 0.6f),
+            center - right * side * (halfWidth + 0.6f),
+            center - fwd * (halfLength + 0.6f),
+            center + fwd * (halfLength + 0.6f),
+        };
+        Vector3 shapeOffset = _collisionShape.Position;
+        foreach (Vector3 c in candidates)
+        {
+            // Procura o chão de cima para baixo (até 4 m abaixo do carro).
+            var ray = PhysicsRayQueryParameters3D.Create(c + Vector3.Up * 2.5f, c + Vector3.Down * 4f, CollisionMask);
+            ray.Exclude = exclude;
+            Godot.Collections.Dictionary hit = space.IntersectRay(ray);
+            if (hit.Count == 0)
+                continue;
+            Vector3 ground = (Vector3)hit["position"];
+            var q = new PhysicsShapeQueryParameters3D
+            {
+                Shape = _collisionShape.Shape,
+                Transform = new Transform3D(Basis.Identity, ground + Vector3.Up * 0.05f + shapeOffset),
+                CollisionMask = CollisionMask,
+                Exclude = exclude,
+            };
+            if (space.IntersectShape(q, 1).Count > 0)
+                continue; // não cabe (muro, poste, outro carro)
+            return ground + Vector3.Up * 0.05f;
+        }
+        // Nenhum lugar livre: sai por cima do carro.
+        return center + Vector3.Up * 2.6f;
+    }
+
     private void FinishExitVehicle()
     {
         Node newParent = IsInstanceValid(_returnParent) ? _returnParent : GetTree().CurrentScene;
         Reparent(newParent, true);
 
+        VanController vehicle = CurrentVehicle;
         if (_exitMarker != null && IsInstanceValid(_exitMarker))
         {
-            GlobalPosition = _exitMarker.GlobalPosition;
+            GlobalPosition = FindSafeExit(vehicle, _exitMarker.GlobalPosition);
             Rotation = new Vector3(0f, _exitMarker.GlobalRotation.Y, 0f);
         }
         else
         {
+            if (IsInstanceValid(vehicle))
+                GlobalPosition = FindSafeExit(vehicle, GlobalPosition);
             Rotation = new Vector3(0f, GlobalRotation.Y, 0f);
         }
 

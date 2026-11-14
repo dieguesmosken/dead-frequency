@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Gerar dados do site (changelog e fotos)
         run: python3 site/build.py
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

@@ -33,6 +33,12 @@ public partial class VanController : VehicleBody3D
     [Export] public float SteerSpeed { get; set; } = 2.5f;
     /// <summary>Acima dessa velocidade (m/s) o esterço máximo cai pela metade.</summary>
     [Export] public float SteerFalloffSpeed { get; set; } = 25f;
+    /// <summary>Quanto do esterço sobra na velocidade de SteerFalloffSpeed (0,35 = 35%). Menos esterço rápido = menos capotagem.</summary>
+    [Export] public float SteerAtSpeed { get; set; } = 0.35f;
+    /// <summary>Estabilizador (barra estabilizadora "de jogo"): torque que puxa a carroceria de volta para o nível nas curvas.</summary>
+    [Export] public float AntiRoll { get; set; } = 2.2f;
+    /// <summary>Velocidade máxima de rolagem/arfagem (rad/s): segura a carroceria quando passa de lombada ou bate de lado.</summary>
+    [Export] public float MaxTiltRate { get; set; } = 1.6f;
     /// <summary>Quantas vezes o volante gira mais que as rodas (visual).</summary>
     [Export] public float SteeringWheelRatio { get; set; } = 5f;
 
@@ -49,6 +55,25 @@ public partial class VanController : VehicleBody3D
     [Export] public string NetId { get; set; } = "van";
     /// <summary>"van" monta o acabamento da van (VanDetails); "moto"/"truck" usam o modelo próprio.</summary>
     [Export] public string Kind { get; set; } = "van";
+    /// <summary>Ajuste da altura dos olhos em primeira pessoa, sentado (a cabeça do jogador fica 1,6 m acima do banco;
+    /// nos carros baixos isso passava do teto). Definido pela VehicleFactory.</summary>
+    public float EyeOffsetY { get; set; }
+
+    /// <summary>Piloto automático (Modo História, ChapterTransitionZone): segue reto mantendo a velocidade.</summary>
+    public bool AutoDrive { get; private set; }
+    private float _autoDriveSpeed;
+
+    /// <summary>Liga/desliga o piloto automático. speedMs = velocidade alvo em m/s; o volante fica reto.</summary>
+    public void SetAutoDrive(bool on, float speedMs)
+    {
+        AutoDrive = on;
+        _autoDriveSpeed = Mathf.Max(0f, speedMs);
+        if (on)
+            Sleeping = false;
+        // A viagem não pode morrer no meio: se o motor estiver desligado, dá a partida.
+        if (on && Engine != null && !Engine.Running && !Engine.Cranking)
+            Engine.Start(false);
+    }
     [Export] public string DisplayName { get; set; } = "van";
 
     public const string GroupName = "vehicles";
@@ -481,15 +506,20 @@ public partial class VanController : VehicleBody3D
         float steerInput = 0f;
         bool handbrake = false;
 
-        if (HasDriver && Driver.InputEnabled)
+        // Velocidade no eixo da van: positiva indo para frente.
+        float forwardSpeed = LinearVelocity.Dot(GlobalBasis.Z);
+
+        if (AutoDrive && HasDriver)
+        {
+            // Acelera até a velocidade alvo e mantém; acima dela, solta (o freio-motor segura).
+            throttle = Mathf.Clamp((_autoDriveSpeed - forwardSpeed) * 0.4f, -0.6f, 0.8f);
+        }
+        else if (HasDriver && Driver.InputEnabled)
         {
             throttle = Input.GetAxis("move_back", "move_forward");
             steerInput = Input.GetAxis("move_right", "move_left"); // esterço positivo = esquerda
             handbrake = Input.IsActionPressed("jump");
         }
-
-        // Velocidade no eixo da van: positiva indo para frente.
-        float forwardSpeed = LinearVelocity.Dot(GlobalBasis.Z);
 
         float engine = 0f;
         float brake;
@@ -530,13 +560,14 @@ public partial class VanController : VehicleBody3D
         Brake = brake;
 
         // Menos esterço em alta velocidade evita capotar.
-        float falloff = Mathf.Lerp(1f, 0.5f, Mathf.Clamp(Mathf.Abs(forwardSpeed) / SteerFalloffSpeed, 0f, 1f));
+        float falloff = Mathf.Lerp(1f, SteerAtSpeed, Mathf.Clamp(Mathf.Abs(forwardSpeed) / SteerFalloffSpeed, 0f, 1f));
         float targetSteer = steerInput * Mathf.DegToRad(MaxSteerDegrees) * falloff;
         Steering = Mathf.MoveToward(Steering, targetSteer, SteerSpeed * dt);
 
         UpdateEngineSound(dt, throttle, forwardSpeed);
         UpdateSkid(dt, handbrake && HasDriver ? 1f : 0f);
         DetectCrash(dt);
+        Stabilize(dt);
 
         if (_steeringWheel != null)
         {
@@ -577,6 +608,77 @@ public partial class VanController : VehicleBody3D
         _crash.PitchScale = (float)GD.RandRange(0.9, 1.1);
         _crash.Play();
         _crashCooldown = heavy ? 0.6 : 0.3;
+    }
+
+    private float _flippedTime;
+
+    /// <summary>
+    /// Ajuda de jogo contra capotagem (v0.10):
+    ///  - com as rodas no chão, um torque puxa a carroceria de volta para o nível (como barra estabilizadora);
+    ///  - limita a velocidade de rolagem/arfagem, para lombada e batida de lado não virarem cambalhota;
+    ///  - se mesmo assim virar e ficar parado, desvira sozinho depois de uns segundos.
+    /// </summary>
+    private void Stabilize(float dt)
+    {
+        Basis basis = GlobalBasis.Orthonormalized();
+        Vector3 up = basis.Y;
+        float upright = up.Dot(Vector3.Up);
+        bool grounded = false;
+        foreach (Node n in GetChildren())
+            if (n is VehicleWheel3D w && w.IsInContact())
+            {
+                grounded = true;
+                break;
+            }
+
+        if (grounded && upright > 0.2f && AntiRoll > 0f)
+        {
+            // Eixo e tamanho da inclinação: cross(up do carro, up do mundo).
+            Vector3 axis = up.Cross(Vector3.Up);
+            // Só rolagem (eixo da frente) e um pouco de arfagem: não briga com a direção.
+            Vector3 forward = basis.Z;
+            float roll = axis.Dot(forward);
+            float pitch = axis.Dot(basis.X);
+            Vector3 torque = (forward * roll + basis.X * pitch * 0.4f) * AntiRoll * Mass * 9.8f;
+            ApplyTorque(torque);
+        }
+
+        // Limite de rolagem/arfagem (no referencial do carro: X = arfagem, Z = rolagem).
+        Vector3 local = basis.Inverse() * AngularVelocity;
+        if (Mathf.Abs(local.X) > MaxTiltRate || Mathf.Abs(local.Z) > MaxTiltRate)
+        {
+            local.X = Mathf.Clamp(local.X, -MaxTiltRate, MaxTiltRate);
+            local.Z = Mathf.Clamp(local.Z, -MaxTiltRate, MaxTiltRate);
+            AngularVelocity = basis * local;
+        }
+
+        // Virou (de lado ou de rodas para cima) e parou: desvira depois de 2,5 s.
+        if (upright < 0.35f && LinearVelocity.Length() < 3f)
+        {
+            _flippedTime += dt;
+            if (_flippedTime > 2.5f)
+                RightUp();
+        }
+        else
+        {
+            _flippedTime = 0f;
+        }
+    }
+
+    /// <summary>Põe o veículo de pé de novo no mesmo lugar (um pouco acima do chão), mantendo a direção.</summary>
+    public void RightUp()
+    {
+        _flippedTime = 0f;
+        Vector3 forward = GlobalBasis.Z;
+        forward.Y = 0f;
+        if (forward.LengthSquared() < 0.01f)
+            forward = Vector3.Forward;
+        Basis basis = Basis.LookingAt(-forward.Normalized(), Vector3.Up);
+        LinearVelocity = Vector3.Zero;
+        AngularVelocity = Vector3.Zero;
+        GlobalTransform = new Transform3D(basis, GlobalPosition + Vector3.Up * 1.2f);
+        if (HasDriver)
+            GameHud.Toast(this, "O carro virou... e foi desvirado.", UiStyle.Warning, 3.0);
     }
 
     /// <summary>Se a física explodir (NaN/infinito), volta para a última posição boa em vez de travar o jogo.</summary>

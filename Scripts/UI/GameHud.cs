@@ -527,7 +527,7 @@ public partial class GameHud : CanvasLayer
         float half = hasTarget ? 4f : 2f;
         Place(_crosshair, 0.5f, 0.5f, 0.5f, 0.5f, -half, -half, half, half);
         GameSettings gs = GameSettings.Instance;
-        _crosshair.Visible = (gs?.ShowCrosshair ?? true) && (Player.State == PlayerState.Walking || hasTarget);
+        _crosshair.Visible = ((gs?.ShowCrosshair ?? true) && (Player.State == PlayerState.Walking || hasTarget)) || (gs?.CenterDot ?? false);
         _fps.Visible = gs?.ShowFps ?? false;
         if (_fps.Visible)
             _fps.Text = $"{Engine.GetFramesPerSecond()} FPS";
@@ -609,6 +609,7 @@ public partial class GameHud : CanvasLayer
                       $"Posição X {p.X:0.0}  Y {p.Y:0.0}  Z {p.Z:0.0}  ·  olhando {facing} ({yaw:0}°)\n" +
                       where +
                       _debugStats + "\n" +
+                      (StoryManager.Instance is { Active: true } story ? $"História: capítulo {story.CurrentChapter} · meta {story.GoalProgress}/{story.Chapter.Goal} · liberado {(story.CanAdvance ? "sim" : "não")} · quebradas {story.BrokenThisChapter}\n" : "") +
                       $"Draw calls {Performance.GetMonitor(Performance.Monitor.RenderTotalDrawCallsInFrame):0} · objetos {Performance.GetMonitor(Performance.Monitor.RenderTotalObjectsInFrame):0} · nós {Performance.GetMonitor(Performance.Monitor.ObjectNodeCount):0}\n" +
                       $"Estado: {Player.State}" + (Player.CurrentVehicle != null ? $" ({Player.CurrentVehicle.DisplayName} {Player.CurrentVehicle.SpeedKmh:0} km/h)" : "") + "\n" +
                       $"Mirando: {Player.DebugLookingAt}\n" +
