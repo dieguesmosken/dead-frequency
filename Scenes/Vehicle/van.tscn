@@ -154,7 +154,7 @@ collision_layer = 16
 collision_mask = 11
 mass = 1400.0
 center_of_mass_mode = 1
-center_of_mass = Vector3(0, 0.3, 0.2)
+center_of_mass = Vector3(0, 0.15, 0.2)
 script = ExtResource("1_van")
 
 [node name="ChassisShape" type="CollisionShape3D" parent="."]
@@ -278,7 +278,7 @@ mesh = SubResource("Mesh_steer")
 
 [node name="WheelFL" type="VehicleWheel3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.85, 0.5, 1.5)
-wheel_roll_influence = 0.1
+wheel_roll_influence = 0.05
 wheel_radius = 0.38
 wheel_rest_length = 0.15
 wheel_friction_slip = 2.6
@@ -295,7 +295,7 @@ mesh = SubResource("Mesh_wheel")
 
 [node name="WheelFR" type="VehicleWheel3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.85, 0.5, 1.5)
-wheel_roll_influence = 0.1
+wheel_roll_influence = 0.05
 wheel_radius = 0.38
 wheel_rest_length = 0.15
 wheel_friction_slip = 2.6
@@ -312,7 +312,7 @@ mesh = SubResource("Mesh_wheel")
 
 [node name="WheelRL" type="VehicleWheel3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.85, 0.5, -1.5)
-wheel_roll_influence = 0.1
+wheel_roll_influence = 0.05
 wheel_radius = 0.38
 wheel_rest_length = 0.15
 wheel_friction_slip = 2.6
@@ -329,7 +329,7 @@ mesh = SubResource("Mesh_wheel")
 
 [node name="WheelRR" type="VehicleWheel3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.85, 0.5, -1.5)
-wheel_roll_influence = 0.1
+wheel_roll_influence = 0.05
 wheel_radius = 0.38
 wheel_rest_length = 0.15
 wheel_friction_slip = 2.6

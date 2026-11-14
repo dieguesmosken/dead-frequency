@@ -527,7 +527,7 @@ public partial class GameHud : CanvasLayer
         float half = hasTarget ? 4f : 2f;
         Place(_crosshair, 0.5f, 0.5f, 0.5f, 0.5f, -half, -half, half, half);
         GameSettings gs = GameSettings.Instance;
-        _crosshair.Visible = (gs?.ShowCrosshair ?? true) && (Player.State == PlayerState.Walking || hasTarget);
+        _crosshair.Visible = ((gs?.ShowCrosshair ?? true) && (Player.State == PlayerState.Walking || hasTarget)) || (gs?.CenterDot ?? false);
         _fps.Visible = gs?.ShowFps ?? false;
         if (_fps.Visible)
             _fps.Text = $"{Engine.GetFramesPerSecond()} FPS";
