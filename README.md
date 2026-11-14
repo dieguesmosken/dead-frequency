@@ -25,7 +25,7 @@ ganhe um apartamento no Edifício Sintonia e ajude a cidade da zona morta a func
 os amigos online. Tem física nas caixas, ciclo de dia e noite, rádio com músicas originais, itens,
 lojas paródia, personagens e bichos animados e multiplayer.
 
-**Versão atual:** v0.9.6 (alpha) · veja o [CHANGELOG](CHANGELOG.md) (ou com fotos, no [site](https://www.teuzin.com.br/dead-frequency/#novidades)) · roteiro em [ROADMAP](ROADMAP.md)
+**Versão atual:** v0.10.0 (alpha) · veja o [CHANGELOG](CHANGELOG.md) (ou com fotos, no [site](https://www.teuzin.com.br/dead-frequency/#novidades)) · roteiro em [ROADMAP](ROADMAP.md)
 
 ## Fotos
 
