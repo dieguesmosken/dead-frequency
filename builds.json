@@ -2,6 +2,67 @@
   "descricao": "Histórico completo das builds do Dead Frequency (gerado pelos workflows).",
   "builds": [
     {
+      "tag": "v0.10.0.10-pre",
+      "canal": "interna",
+      "versao": "0.10.0",
+      "build": 10,
+      "titulo": "v0.10.0.10-pre — Internal",
+      "data": "2026-11-14T12:47:08Z",
+      "commit": "5d9395d2d6a91683d695c66c07bb65552cca7a56",
+      "pr": {
+        "numero": 61,
+        "titulo": "CodeRabbit: sem marca de falha nos PRs com auto-merge",
+        "branch": "chore/coderabbit-status",
+        "url": "https://github.com/dieguesmosken/dead-frequency/pull/61"
+      },
+      "notas": "![Dead Frequency](https://raw.githubusercontent.com/dieguesmosken/dead-frequency/Internal/site/assets/shots/hero.jpg)\n\n## v0.10.0 — Modo História\n*13/11/2026*\n\n- Modo História (Iniciar turno > Modo História): a campanha \"Dead Frequency\" conta como o vale tenta salvar a Rádio 96.6, cujo sinal piora porque as válvulas da Repetidora Landell, lá na serra, estão no fim.\n- Capítulos I e II jogáveis: Primeiro Turno na cidade, com a Dona Lurdes da DF Entregas, e Asfalto e Barro no rancho, com o Seu Tonho do Agro-Tudão. Cada capítulo tem meta no canto da tela e limite de caixas quebradas; meta cumprida libera a viagem de caminhonete no piloto automático até o rancho. O progresso fica salvo e dá para continuar ou recomeçar.\n- Os locutores falam de verdade: Seu Waldir, Kátia, Toninho, a Dona Lurdes e os comunicados da prefeitura têm voz. A 96.6 agora faz intervalo depois de cada música, com comerciais das lojas, eventos, avisos da cidade e vinhetas, igual para todo mundo no online.\n- Carro de som: uma Kombi amarela roda devagar pela cidade anunciando as lojas. De vez em quando aparece o carro do ovo, com o alto-falante chamando a freguesia.\n- Direção: os carros não capotam mais à toa nas curvas e se desviram sozinhos se ficarem de lado. Sair do carro encostado no muro não joga mais você para dentro da parede ou para baixo do chão.\n- Opções contra enjoo (Opções > Jogo > Conforto): reduzir movimento, câmera estável no carro, vinheta nas bordas em alta velocidade e ponto fixo no meio da tela.\n- Primeira pessoa dentro dos carros com painel, volante e teto, sem a imagem cortada em cima; os vidros somem por dentro.\n- Central de entregas renovada: moto de entregas e baú térmico com o logo da DF Entregas, paleteira, caixas com textura e etiquetas FRÁGIL, muro rebocado, galpão de telha e quadros de verdade no escritório. Cabelo dos moradores corrigido.\n- Mais leve: a cidade junta os objetos parados em poucas malhas (até três vezes menos trabalho para a placa de vídeo), o que ajuda em PC fraco e no celular.\n\n### Fotos desta versão\n\n<p><img src=\"https://raw.githubusercontent.com/dieguesmosken/dead-frequency/Internal/site/assets/shots/v0.10.0/historia_waldir.jpg\" width=\"32%\" alt=\"Modo História: o Seu Waldir pede ajuda pela 96.6 quando a meta do capítulo I é cumprida\" title=\"Modo História: o Seu Waldir pede ajuda pela 96.6 quando a meta do capítulo I é cumprida\"> <img src=\"https://raw.githubusercontent.com/dieguesmosken/dead-frequency/Internal/site/assets/shots/v0.10.0/historia_estrada.jpg\" width=\"32%\" alt=\"Capítulo I concluído: a caminhonete pega a estrada do rancho pela saída leste\" title=\"Capítulo I concluído: a caminhonete pega a estrada do rancho pela saída leste\"> <img src=\"https://raw.githubusercontent.com/dieguesmosken/dead-frequency/Internal/site/assets/shots/v0.10.0/historia_rancho.jpg\" width=\"32%\" alt=\"Capítulo II, Asfalto e Barro: entregas no rancho para o Seu Tonho\" title=\"Capítulo II, Asfalto e Barro: entregas no rancho para o Seu Tonho\"> <img src=\"https://raw.githubusercontent.com/dieguesmosken/dead-frequency/Internal/site/assets/shots/v0.10.0/carro_de_som.jpg\" width=\"32%\" alt=\"Carro de som da Kombi amarela anunciando as lojas da cidade\" title=\"Carro de som da Kombi amarela anunciando as lojas da cidade\"> <img src=\"https://raw.githubusercontent.com/dieguesmosken/dead-frequency/Internal/site/assets/shots/v0.10.0/central.jpg\" width=\"32%\" alt=\"Central da DF Entregas com galpão de telha, muro rebocado e a caminhonete\" title=\"Central da DF Entregas com galpão de telha, muro rebocado e a caminhonete\"> <img src=\"https://raw.githubusercontent.com/dieguesmosken/dead-frequency/Internal/site/assets/shots/v0.10.0/paleteira.jpg\" width=\"32%\" alt=\"Paleteira nova e caixas com etiquetas no galpão\" title=\"Paleteira nova e caixas com etiquetas no galpão\"> <img src=\"https://raw.githubusercontent.com/dieguesmosken/dead-frequency/Internal/site/assets/shots/v0.10.0/caixas.jpg\" width=\"32%\" alt=\"Caixas com textura e etiquetas FRÁGIL coladas\" title=\"Caixas com textura e etiquetas FRÁGIL coladas\"></p>\n\n### Baixar\n\n| | Arquivo |\n|---|---|\n| **Recomendado (Windows)** — instala e atualiza sozinho | [DeadFrequencyLauncher-windows.exe](https://github.com/dieguesmosken/dead-frequency/releases/download/v0.10.0.10-pre/DeadFrequencyLauncher-windows.exe) |\n| Launcher Linux (`chmod +x` e abrir) | [DeadFrequencyLauncher-linux](https://github.com/dieguesmosken/dead-frequency/releases/download/v0.10.0.10-pre/DeadFrequencyLauncher-linux) |\n| Jogo completo Windows (extraia e abra `DeadFrequency.exe`) | [DeadFrequency-v0.10.0-windows.zip](https://github.com/dieguesmosken/dead-frequency/releases/download/v0.10.0.10-pre/DeadFrequency-v0.10.0-windows.zip) |\n| Jogo completo Linux (extraia e rode `./DeadFrequency.x86_64`) | [DeadFrequency-v0.10.0-linux.zip](https://github.com/dieguesmosken/dead-frequency/releases/download/v0.10.0.10-pre/DeadFrequency-v0.10.0-linux.zip) |\n\n### Verificar o download\n\n- Confira o SHA-256 com o [SHA256SUMS.txt](https://github.com/dieguesmosken/dead-frequency/releases/download/v0.10.0.10-pre/SHA256SUMS.txt) (no Windows: `certutil -hashfile ARQUIVO SHA256`).\n- A partir da v0.9.5, os arquivos têm atestado de build do GitHub (prova que saíram do GitHub Actions deste repositório): `gh attestation verify ARQUIVO --repo dieguesmosken/dead-frequency`.\n\n🌐 Site: https://www.teuzin.com.br/dead-frequency/ · 📜 [Histórico completo](https://www.teuzin.com.br/dead-frequency/#novidades) · 💚 [Apoie o projeto (Pix)](https://www.teuzin.com.br/dead-frequency/#apoie)\n",
+      "url": "https://github.com/dieguesmosken/dead-frequency/releases/tag/v0.10.0.10-pre",
+      "downloads": [
+        {
+          "nome": "DeadFrequency-v0.10.0.10-pre-android.apk",
+          "url": "https://github.com/dieguesmosken/dead-frequency/releases/download/v0.10.0.10-pre/DeadFrequency-v0.10.0.10-pre-android.apk",
+          "tamanho": 141912735
+        },
+        {
+          "nome": "DeadFrequency-v0.10.0.10-pre-linux.zip",
+          "url": "https://github.com/dieguesmosken/dead-frequency/releases/download/v0.10.0.10-pre/DeadFrequency-v0.10.0.10-pre-linux.zip",
+          "tamanho": 101351000
+        },
+        {
+          "nome": "DeadFrequency-v0.10.0.10-pre-windows.zip",
+          "url": "https://github.com/dieguesmosken/dead-frequency/releases/download/v0.10.0.10-pre/DeadFrequency-v0.10.0.10-pre-windows.zip",
+          "tamanho": 110918702
+        },
+        {
+          "nome": "DeadFrequencyLauncher-linux",
+          "url": "https://github.com/dieguesmosken/dead-frequency/releases/download/v0.10.0.10-pre/DeadFrequencyLauncher-linux",
+          "tamanho": 73690552
+        },
+        {
+          "nome": "DeadFrequencyLauncher-windows.exe",
+          "url": "https://github.com/dieguesmosken/dead-frequency/releases/download/v0.10.0.10-pre/DeadFrequencyLauncher-windows.exe",
+          "tamanho": 109439624
+        },
+        {
+          "nome": "launcher-version.txt",
+          "url": "https://github.com/dieguesmosken/dead-frequency/releases/download/v0.10.0.10-pre/launcher-version.txt",
+          "tamanho": 2
+        },
+        {
+          "nome": "SHA256SUMS.txt",
+          "url": "https://github.com/dieguesmosken/dead-frequency/releases/download/v0.10.0.10-pre/SHA256SUMS.txt",
+          "tamanho": 600
+        }
+      ],
+      "estado": "publicada",
+      "historico": [
+        {
+          "quando": "2026-11-14T12:47:08Z",
+          "evento": "publicada"
+        }
+      ]
+    },
+    {
       "tag": "v0.10.0.9-pre",
       "canal": "interna",
       "versao": "0.10.0",
@@ -283,13 +344,18 @@
           "tamanho": 510
         }
       ],
-      "estado": "publicada",
+      "estado": "removida",
       "historico": [
         {
           "quando": "2026-11-14T12:19:55Z",
           "evento": "publicada"
+        },
+        {
+          "quando": "2026-11-14T12:47:11Z",
+          "evento": "removida da página de Releases (limpeza: ficam as 5 internas mais novas; tag mantida)"
         }
-      ]
+      ],
+      "removida_em": "2026-11-14T12:47:11Z"
     },
     {
       "tag": "v0.10.0.4-pre",
@@ -3566,5 +3632,5 @@
       ]
     }
   ],
-  "atualizado": "2026-11-14T12:44:11Z"
+  "atualizado": "2026-11-14T12:47:11Z"
 }
