@@ -88,11 +88,17 @@ public partial class Cyclist : Node3D
     /// <summary>Tamanho do quadro do Meshy (largura, altura, comprimento) e altura do fundo dele.</summary>
     public static Vector3 FrameSize = new(0.55f, 0.95f, 1.6f);
     public static float FrameLift = 0.2f;
+    public static float BikeScale = 0.76f;
+    public static Vector3 RiderPos = new(0f, 0.15f, -0.24f);
+    public static float RiderScale = 0.95f;
 
     private void BuildBicycle()
     {
-        var bike = new Node3D { Name = "Bicicleta" };
-        AddChild(bike);
+        // A bicicleta inteira (rodas + quadro) em escala de adulto: aro ~26" (raio 0,34 m), 1,25 m de comprimento.
+        var root = new Node3D { Name = "Bicicleta" };
+        AddChild(root);
+        var bike = new Node3D { Name = "Geometria", Scale = Vector3.One * BikeScale };
+        root.AddChild(bike);
 
         var tire = new StandardMaterial3D { AlbedoColor = new Color(0.055f, 0.06f, 0.06f), Roughness = 0.9f };
         var frame = new StandardMaterial3D { AlbedoColor = new Color(0.12f, 0.32f, 0.19f), Roughness = 0.75f };
@@ -134,9 +140,9 @@ public partial class Cyclist : Node3D
             new Color(0.12f, 0.14f, 0.17f),
             new Color(0.68f, 0.47f, 0.33f));
         _rider.Name = "Ciclista";
-        _rider.Position = new Vector3(0f, 0.42f, -0.02f);
-        _rider.Scale = Vector3.One * 0.72f;
-        bike.AddChild(_rider);
+        _rider.Position = RiderPos;
+        _rider.Scale = Vector3.One * RiderScale;
+        root.AddChild(_rider);
         _rider.SetSeated(true); // sentado no selim em vez de "andando" em cima da bicicleta
 
         _bell = new AudioStreamPlayer3D
@@ -209,7 +215,7 @@ public partial class Cyclist : Node3D
         double time = Time.GetUnixTimeFromSystem();
         Place(time, false);
         float dt = (float)delta;
-        float spin = Mathf.PosMod((float)(time * Speed / 0.42 % Mathf.Tau), Mathf.Tau);
+        float spin = Mathf.PosMod((float)(time * Speed / (0.45 * BikeScale) % Mathf.Tau), Mathf.Tau);
         foreach (Node3D wheel in _wheels)
             wheel.Rotation = new Vector3(spin, 0f, 0f);
         _rider.Animate(dt, 1.8f);
