@@ -273,3 +273,9 @@ jobs:
           gh release create "$TAG" DeadFrequency-${TAG}-windows.zip DeadFrequency-${TAG}-linux.zip DeadFrequencyLauncher-windows.exe DeadFrequencyLauncher-linux launcher-version.txt $APK SHA256SUMS.txt --title "$TAG — Internal" --notes-file notes.md --target "$GITHUB_SHA" --prerelease
         env:
           GH_TOKEN: ${{ github.token }}
+
+      - name: Histórico das builds (branch historico + limpeza das internas antigas)
+        if: steps.ver.outputs.exists == 'false'
+        run: bash tools/builds/update_history.sh internal "${{ steps.ver.outputs.tag }}"
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -208,3 +208,9 @@ jobs:
             --title "v$VER — ${{ steps.ver.outputs.title }}" --notes-file notes.md --target "$GITHUB_SHA"
         env:
           GH_TOKEN: ${{ github.token }}
+
+      - name: Histórico das builds (branch historico)
+        if: steps.ver.outputs.exists == 'false'
+        run: bash tools/builds/update_history.sh release "v${{ steps.ver.outputs.version }}"
+        env:
+          GH_TOKEN: ${{ github.token }}

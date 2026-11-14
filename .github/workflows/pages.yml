@@ -10,6 +10,10 @@ on:
       - "Scripts/Core/GameVersion.cs"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
+  # Depois de cada build (interna ou release) o histórico muda: republica a página de versões.
+  workflow_run:
+    workflows: ["Internal — Pré-release", "Build e Release"]
+    types: [completed]
 
 permissions:
   contents: read
@@ -28,6 +32,11 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: main
+      - name: Histórico completo das builds (branch historico)
+        run: |
+          git fetch -q origin historico && git show FETCH_HEAD:builds.json > site/data/builds.json || echo "sem histórico ainda"
       - name: Gerar dados do site (changelog e fotos)
         run: python3 site/build.py
       - uses: actions/configure-pages@v6
