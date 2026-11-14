@@ -131,6 +131,24 @@ streaming por chunks) estar na Internal.
 | **Online entre PC e celular** | Mesmo servidor e protocolo (WebSocket): sem mudança no `server/`. Testar sala com PC e celular juntos. |
 | 🚧 **Distribuição** | O prerelease da Internal (`vX.Y.Z.N-pre`) traz o `DeadFrequency-…-android.apk`. **Atualizador no próprio jogo** (`AppUpdater`): no celular o menu confere o GitHub, mostra "Nova versão", baixa o APK com progresso e abre o instalador do Android (se não abrir, usa o navegador). Quem tem build da Internal recebe os `-pre`; quem tem o público, só os públicos. O CI grava o build exato em `application/config/version` (`GameVersion.Build`). Instalar por cima precisa da chave do Matheus (segredos `ANDROID_KEYSTORE_*`); com chave de debug, desinstale antes. Link no site e Play Store ficam para depois. |
 
+### v0.10.1 — Correções de interface, modelos e animações
+Versão de correção aberta também para ajustes pedidos antes e tarefas em andamento (ideias do documento "Roadmap Dead Frequency", 14/11/2026).
+| Ideia | Como funciona no jogo |
+|---|---|
+| **Tecla H esconde o quadro lateral** | O quadro de entregas/profissão (e a faixa do Modo História) ocupa espaço; H alterna mostrar/esconder. |
+| **Locutor: E toca os comerciais gravados** | Na mesa de som, ler o comercial no ar também toca o áudio gravado da 96.6. |
+| **Idle respirando** | Jogador e NPCs parados respiram em vez de ficar virando a cabeça. |
+| **Animações nos veículos** | Ajustar a pose do personagem pilotando a moto e dirigindo o táxi (a moto continua a mesma). |
+| **Falas de rua com voz** | NPCs da calçada falam de verdade (umas três falas por NPC), só quando o jogador está perto. |
+| **Telas de carregamento** | Loading do Modo História e do offline mais bonito, no tema CRT verde. |
+| **Ciclista, empilhadeira, carro do ovo, Kombi e carros de cenário** | Modelos novos (Meshy) no estilo atual. |
+| **Painel da van** | Monitor CRT mais legível. |
+| **Orelhão da Telefóbica** | Textura com texto e detalhes, em vez de verde liso. |
+| **Rádio 96.6 por dentro** | Rework do interior: cabine do locutor, sala de gravação, mesa de som, fitas e discos interativos, sala de servidores/escritório e, se couber, sala de câmeras. Muros da rádio com textura. |
+| **Calçadas** | Calçadas que faltam em volta da DF Entregas; corrigir a calçada estilo Copacabana que não aparece. |
+| **Janelas nas quinas** | Janelas dos prédios não podem ficar cortadas ao meio nas quinas. |
+| **Caixa d'água municipal** | Modelo novo e escada para subir e ver a cidade de cima. |
+
 ### v0.10.x — Praça Central
 | Ideia | Como funciona no jogo |
 |---|---|
@@ -156,9 +174,20 @@ streaming por chunks) estar na Internal.
 | **Duno Mille (com escada)** | Hatch quadrado; com a escada de fibra no teto, ignora o limite de velocidade e anda mais rápido que a viatura. |
 | **Maré-Azar 20V** | Sedã esportivo com temperatura escondida: acelerador no talo na estrada de terra → fumaça preta e motor morto (som pronto). |
 
+### Fases extras (pós-campanha ou v0.13+)
+- **Águas Turvas:** margens do rio principal com mangue e mata fechada, pontes de madeira precárias e uma serraria antiga abandonada, acessadas por barco. Barcos de madeira e chatões para carga pesada, ligados ao sistema de veículos e entregas: combustível, correnteza e trechos estreitos (o "vilão" continua sendo o tempo e o equipamento velho).
+- **Vila do Olaria:** comunidade isolada que depende de suprimentos da cidade; entregas de equipamento de rádio e peças frágeis para restaurar a comunicação da vila e o sinal da 96.6, ligadas à história da rede de rádio do vale.
+
+### Divulgação (shorts)
+- Clima e nostalgia PS1: dia virando noite com neblina, chuva no para-brisa, locuções da 96.6.
+- Perrengues de entrega: carga frágil na estrada de barro, painel da caminhonete (fusíveis, temperatura, CRT) contra o relógio.
+- A vida em Sintonia: caramelo seguindo o espetinho, carro do ovo, capivaras e guarás.
+- Devlog rápido: antes e depois de mecânicas e teste do online PC + celular.
+
 ### Infraestrutura (em paralelo)
 | Tarefa | Detalhe |
 |---|---|
+| **Site oficial (sem prioridade)** | Revisar design e responsividade no celular e gerar uma capa nova com o visual atual. |
 | **Launcher menor** | Hoje o launcher leva o motor Godot inteiro dentro do .exe (~105 MB descompactado), por isso é maior que o zip do jogo (que é compactado). Dá para cortar para ~25–40 MB compilando um "template" do Godot só com o que o launcher usa (sem 3D e física) no CI. |
 | **Atualização incremental** | Em vez de baixar o zip inteiro a cada versão: publicar um manifesto com o hash de cada arquivo e o launcher baixar só o que mudou. O maior arquivo é o `.pck` (todos os assets); separar em um `.pck` base (modelos, sons, texturas — muda pouco) e um de patch (código e cenas) deixa a maioria das atualizações com poucos MB. |
 | **Arte gerada** | Texturas/sprites de muros e fachadas com o SpriteCook e um modelo de jogador novo com o Meshy, quando os conectores estiverem ligados na conversa (hoje não estão). |

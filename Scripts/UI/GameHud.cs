@@ -342,6 +342,15 @@ public partial class GameHud : CanvasLayer
             return;
         }
 
+        if (key.Keycode == Key.H && !_chatPanel.Visible && !ModalScreen.AnyOpen
+            && !_debugAuthPanel.Visible && !_debugToolsPanel.Visible)
+        {
+            SidePanelsHidden = !SidePanelsHidden;
+            ShowToast(SidePanelsHidden ? "Quadro escondido · [H] mostra de novo" : "Quadro visível · [H] esconde", UiStyle.PhosphorDim, 1.8);
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+
         // F3 controla exclusivamente o overlay público.
         if (key.Keycode == Key.F3)
         {
@@ -675,14 +684,14 @@ public partial class GameHud : CanvasLayer
             parts.Add(Player.NightVisionOn ? "VISÃO NOTURNA [N]" : "[N] visão noturna");
         if (inv?.IsEquipped(ItemCatalog.Gloves) == true)
             parts.Add($"LUVAS · até {Player.MaxCarryWeightKg:0} kg");
-        parts.Add("[Roda] alternar câmera   [Ctrl + Roda] ajustar FOV   [I] inventário");
+        parts.Add("[Roda] alternar câmera   [Ctrl + Roda] ajustar FOV   [I] inventário   [H] quadro");
         _status.Text = string.Join("   ", parts);
     }
 
     private void UpdateJobPanel()
     {
-        _jobPanel.Visible = Delivery != null;
-        if (Delivery == null)
+        _jobPanel.Visible = Delivery != null && !SidePanelsHidden;
+        if (Delivery == null || SidePanelsHidden)
             return;
 
         NetClient net = NetClient.Instance;
@@ -815,6 +824,9 @@ public partial class GameHud : CanvasLayer
         if (_mobileRoot != null && IsInstanceValid(_mobileRoot))
             _mobileRoot.Size = GetViewport().GetVisibleRect().Size / MobileHudScale;
     }
+
+    /// <summary>Quadro lateral (entregas/profissão e faixa do Modo História) escondido pela tecla H.</summary>
+    public static bool SidePanelsHidden { get; private set; }
 
     public static void Toast(Node from, string text, Color? color = null, double seconds = 3.0)
     {

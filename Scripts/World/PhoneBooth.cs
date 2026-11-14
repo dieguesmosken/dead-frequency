@@ -202,7 +202,8 @@ public partial class PhoneBooth : Area3D, IInteractable
 
     private static StandardMaterial3D OuterMaterial(PhoneBrand brand, string color)
     {
-        string key = $"{BrandName(brand).ToLowerInvariant()}_{color}";
+        // Nome do arquivo sem acento (phone_shell_telefobica_lime.png); BrandName tem "Telefóbica" com acento.
+        string key = $"{brand.ToString().ToLowerInvariant()}_{color}";
         if (Outer.TryGetValue(key, out StandardMaterial3D m))
             return m;
         string path = $"res://Assets/Textures/phone_shell_{key}.png";

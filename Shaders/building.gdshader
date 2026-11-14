@@ -22,6 +22,10 @@ uniform vec3 cold_light : source_color = vec3(0.55, 0.85, 1.0);
 
 varying vec3 world_pos;
 varying vec3 world_normal;
+varying vec3 local_pos;
+varying vec3 local_normal;
+/** Meia largura da caixa (BoxMesh sem subdivisão: os 4 vértices de cada face têm o mesmo |x| e |z|). */
+varying vec2 half_ext;
 
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -30,6 +34,9 @@ float hash(vec2 p) {
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	local_pos = VERTEX;
+	local_normal = NORMAL;
+	half_ext = abs(VERTEX.xz);
 }
 
 void fragment() {
@@ -51,7 +58,13 @@ void fragment() {
 		vec3 tex = textureGrad(wall_atlas, (tile + fract(full)) * 0.5, dFdx(full) * 0.5, dFdy(full) * 0.5).rgb;
 		col = kind == 1.0 ? mix(col * tex * 1.8, tex, 0.75) : col * tex * 1.8;
 		col += grain * 0.5;
-		vec2 cell = vec2(u / window_spacing, world_pos.y / floor_height);
+		// Janelas: número inteiro por face e centradas, para nenhuma ficar cortada na quina (v0.10.1).
+		bool along_z = abs(local_normal.x) > 0.5;
+		float half_w = along_z ? half_ext.y : half_ext.x;
+		float lu = along_z ? local_pos.z : local_pos.x;
+		float n = max(1.0, floor(2.0 * half_w / window_spacing));
+		float spacing = 2.0 * half_w / n;
+		vec2 cell = vec2((lu + half_w) / spacing, world_pos.y / floor_height);
 		vec2 f = fract(cell);
 		vec2 id = floor(cell);
 		// Faixa entre andares.

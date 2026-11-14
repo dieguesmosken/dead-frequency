@@ -1,6 +1,8 @@
 // Scripts/Jobs/LocutorJob.cs
 // Locutor da 96.6: fique na mesa de som da rádio. Quando a luz NO AR piscar, aperte E para ler
 // o comercial (tem uns segundos). R$ 20 por comercial; se perder, vai silêncio no ar.
+// Os comerciais com áudio gravado (AnnouncerCar.Ads, os mesmos da 96.6) tocam depois da vinheta;
+// os outros são só texto.
 using Godot;
 
 namespace DeadFrequency;
@@ -27,6 +29,8 @@ public partial class LocutorJob : JobBase
     private Phase _phase;
     private double _timer = 8.0;
     private string _ad = "";
+    private string _adAudio;
+    private AudioStreamPlayer3D _voice;
     private Node3D _console;
     private OmniLight3D _light;
     private Label3D _sign;
@@ -62,6 +66,9 @@ public partial class LocutorJob : JobBase
         if (ResourceLoader.Exists(RadioStation.JinglePath))
             _jingle.Stream = GD.Load<AudioStream>(RadioStation.JinglePath);
         _console.AddChild(_jingle);
+        _voice = new AudioStreamPlayer3D { Bus = AudioManager.SfxBus, UnitSize = 6f };
+        _console.AddChild(_voice);
+        _jingle.Finished += PlayAdVoice;
         ActionArea.Create(_console, new Vector3(0f, 0.9f, 0f), new Vector3(2.4f, 0.6f, 1.2f),
             _ => _phase == Phase.OnAir ? $"[E] LER NO AR: \"{_ad}\"" : $"Próximo intervalo comercial em {_timer:0} s",
             _ => Read(),
@@ -91,7 +98,7 @@ public partial class LocutorJob : JobBase
             {
                 _phase = Phase.OnAir;
                 _timer = Window;
-                _ad = Ads[Rng.RandiRange(0, Ads.Length - 1)];
+                PickAd();
                 if (PlayerPos.DistanceTo(_console.GlobalPosition) < 25f)
                     GameHud.Toast(this, "NO AR! Aperte E na mesa de som para ler o comercial.", Purple, 3.0);
             }
@@ -117,8 +124,43 @@ public partial class LocutorJob : JobBase
             return;
         _phase = Phase.Waiting;
         _timer = Rng.RandfRange(15f, 25f);
-        _jingle?.Play();
+        if (_jingle?.Stream != null)
+            _jingle.Play();
+        else
+            PlayAdVoice();
         M.Earn(1, "Comercial lido no ar");
+    }
+
+    /// <summary>Prefere um comercial gravado; se nenhum áudio existir, usa os textos antigos.</summary>
+    private void PickAd()
+    {
+        _adAudio = null;
+        var recorded = new System.Collections.Generic.List<(string Id, string Text)>();
+        foreach (var a in AnnouncerCar.Ads)
+            if (ResourceLoader.Exists(AnnouncerCar.RadioAdsFolder + a.Id + ".ogg"))
+                recorded.Add(a);
+        if (recorded.Count > 0)
+        {
+            var pick = recorded[Rng.RandiRange(0, recorded.Count - 1)];
+            _ad = pick.Text;
+            _adAudio = AnnouncerCar.RadioAdsFolder + pick.Id + ".ogg";
+            return;
+        }
+        _ad = Ads[Rng.RandiRange(0, Ads.Length - 1)];
+    }
+
+    private void PlayAdVoice()
+    {
+        if (_voice == null || _adAudio == null || !ResourceLoader.Exists(_adAudio))
+            return;
+        if (GD.Load<AudioStream>(_adAudio) is AudioStream stream)
+        {
+            if (stream is AudioStreamOggVorbis ogg)
+                ogg.Loop = false;
+            _voice.Stream = stream;
+            _voice.Play();
+        }
+        _adAudio = null;
     }
 
     public override bool TryGetTarget(out Vector3 position, out string label)
