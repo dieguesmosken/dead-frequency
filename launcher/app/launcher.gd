@@ -4,10 +4,13 @@
 # se houver versão nova, baixa sozinho (ou pergunta, se as automáticas estiverem desligadas).
 # Barra de progresso no download e na instalação, botão JOGAR e engrenagem com as configurações.
 # Configurações em user://launcher.cfg; a versão instalada fica em <pasta>/version.txt.
+# Canal de atualização: estável (releases públicos da main) ou pré-release (builds vX.Y.Z.N-pre da Internal,
+# instáveis e não testados; a pessoa confirma um aviso antes de ligar).
 extends Control
 
 const REPO := "dieguesmosken/dead-frequency"
 const API := "https://api.github.com/repos/%s/releases/latest" % REPO
+const API_ALL := "https://api.github.com/repos/%s/releases?per_page=20" % REPO
 const RELEASES := "https://github.com/%s/releases" % REPO
 const CFG := "user://launcher.cfg"
 
@@ -21,6 +24,8 @@ const BG := Color(0.03, 0.06, 0.05)
 var cfg := ConfigFile.new()
 var install_dir := ""
 var auto_update := true
+## Recebe as pré-releases da Internal (instáveis).
+var prerelease := false
 var installed := ""
 var latest := ""
 var asset_url := ""
@@ -237,7 +242,7 @@ func _set_status(text: String, color := Color(0.75, 0.82, 0.8)) -> void:
 
 func _refresh_version() -> void:
 	installed = _read_installed()
-	version_label.text = installed if installed != "" else "não instalado"
+	version_label.text = (installed + ("  (pré-release)" if installed.ends_with("-pre") else "")) if installed != "" else "não instalado"
 	play.disabled = not _game_exists() or downloading or installing
 
 
@@ -288,6 +293,7 @@ func _load_cfg() -> void:
 	cfg.load(CFG)
 	install_dir = cfg.get_value("launcher", "install_dir", "")
 	auto_update = cfg.get_value("launcher", "auto_update", true)
+	prerelease = cfg.get_value("launcher", "prerelease", false)
 	_refresh_version()
 
 
@@ -295,6 +301,7 @@ func _save_cfg(save_auto := false) -> void:
 	cfg.set_value("launcher", "install_dir", install_dir)
 	if save_auto or cfg.has_section_key("launcher", "auto_update"):
 		cfg.set_value("launcher", "auto_update", auto_update)
+	cfg.set_value("launcher", "prerelease", prerelease)
 	cfg.save(CFG)
 
 
@@ -434,6 +441,19 @@ func _toggle_settings() -> void:
 		auto_update = v
 		_save_cfg(true))
 	dialog_box.add_child(auto)
+	var pre := CheckButton.new()
+	pre.text = "Receber pré-releases (instável)"
+	pre.button_pressed = prerelease
+	pre.add_theme_font_size_override("font_size", 16)
+	pre.add_theme_color_override("font_color", AMBER)
+	pre.toggled.connect(func(v):
+		if v:
+			_ask_prerelease()
+		else:
+			_set_prerelease(false))
+	dialog_box.add_child(pre)
+	if prerelease:
+		dialog_box.add_child(_label("⚠ Canal de pré-release ligado: builds de teste da Internal.", 13, AMBER))
 	var row1 := HBoxContainer.new()
 	row1.add_theme_constant_override("separation", 8)
 	var change := _button("Trocar pasta", 15, false)
@@ -466,13 +486,46 @@ func _toggle_settings() -> void:
 	_dialog_buttons([site, close])
 
 
+func _ask_prerelease() -> void:
+	settings_open = false
+	_open_dialog("⚠ Pré-releases: instável e não testado",
+		"As pré-releases são builds automáticas de cada mudança em desenvolvimento (canal Internal). "
+		+ "Elas NÃO foram testadas: podem travar, perder o save, quebrar o online ou nem abrir. "
+		+ "Faça backup do seu save antes. Para voltar, desligue esta opção: o launcher reinstala a versão estável.")
+	var no := _button("Cancelar", 16, false)
+	no.pressed.connect(func():
+		_close_dialog()
+		_toggle_settings())
+	var yes := _button("Entendi, quero testar", 16)
+	yes.add_theme_color_override("font_color", AMBER)
+	yes.pressed.connect(func():
+		_close_dialog()
+		_set_prerelease(true))
+	_dialog_buttons([no, yes])
+
+
+func _set_prerelease(value: bool) -> void:
+	prerelease = value
+	_save_cfg(true)
+	_close_dialog()
+	if value:
+		_set_status("Canal de pré-release ligado (instável).", AMBER)
+		_check()
+	elif installed.ends_with("-pre"):
+		# Estava numa pré-release: volta para a estável mais nova.
+		_set_status("Voltando para a versão estável...", AMBER)
+		_check(true)
+	else:
+		_set_status("Canal estável.", GREEN)
+
+
 # ================================================================ GitHub
 
 func _check(force_download := false) -> void:
 	_refresh_version()
 	_set_status("Procurando atualizações...")
 	bar.value = 0
-	var err := http_api.request(API, ["User-Agent: DeadFrequencyLauncher", "Accept: application/vnd.github+json"])
+	var err := http_api.request(API_ALL if prerelease else API, ["User-Agent: DeadFrequencyLauncher", "Accept: application/vnd.github+json"])
 	if err != OK:
 		_offline("Não deu para procurar atualizações (%s)." % error_string(err))
 	set_meta("force", force_download)
@@ -491,6 +544,8 @@ func _on_api(result: int, code: int, _headers: PackedStringArray, body: PackedBy
 		_offline("Sem conexão com o GitHub.")
 		return
 	var data = JSON.parse_string(body.get_string_from_utf8())
+	if typeof(data) == TYPE_ARRAY:
+		data = _pick_release(data)
 	if typeof(data) != TYPE_DICTIONARY:
 		_offline("Resposta estranha do GitHub.")
 		return
@@ -524,10 +579,22 @@ func _on_api(result: int, code: int, _headers: PackedStringArray, body: PackedBy
 	_refresh_version()
 
 
+## Canal de pré-release: a release mais nova da lista (pré ou estável), sem rascunhos.
+func _pick_release(list: Array):
+	var best = null
+	for r in list:
+		if typeof(r) != TYPE_DICTIONARY or r.get("draft", false):
+			continue
+		if best == null or _compare(str(r.get("tag_name", "")), str(best.get("tag_name", ""))) > 0:
+			best = r
+	return best
+
+
+## Compara vX.Y.Z[.N-pre]: a estável conta como build 0, então v0.10.0.5-pre > v0.10.0 e v0.10.1 > v0.10.0.9-pre.
 func _compare(a: String, b: String) -> int:
-	var x := a.trim_prefix("v").split(".")
-	var y := b.trim_prefix("v").split(".")
-	for i in 3:
+	var x := a.trim_prefix("v").trim_suffix("-pre").split(".")
+	var y := b.trim_prefix("v").trim_suffix("-pre").split(".")
+	for i in 4:
 		var xi := int(x[i]) if i < x.size() else 0
 		var yi := int(y[i]) if i < y.size() else 0
 		if xi != yi:
