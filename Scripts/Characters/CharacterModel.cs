@@ -295,6 +295,28 @@ public partial class CharacterModel : Node3D
 
     private bool _seated;
     private string _sit;
+    private Vector3 _seatOffset;
+
+    /// <summary>Ajuste do corpo sentado para o banco de cada veículo (VanController.RiderSeatOffset).</summary>
+    public Vector3 SeatOffset
+    {
+        get => _seatOffset;
+        set
+        {
+            if (_seatOffset == value)
+                return;
+            _seatOffset = value;
+            ApplySeatPosition();
+        }
+    }
+
+    private void ApplySeatPosition()
+    {
+        if (GetNodeOrNull<Node3D>("Body") is not Node3D body)
+            return;
+        Vector3 basePos = _straddle ? Vector3.Zero : new(0f, _seated && _sit == null ? -0.45f : (_seated ? 0.05f : 0f), _seated ? 0.1f : 0f);
+        body.Position = basePos + (_seated ? _seatOffset : Vector3.Zero);
+    }
 
     /// <summary>Sentado num banco (motorista/carona): pose de sentado ou, sem ela, o corpo afunda no banco.</summary>
     public void SetSeated(bool seated)
@@ -302,11 +324,36 @@ public partial class CharacterModel : Node3D
         if (_seated == seated)
             return;
         _seated = seated;
-        if (GetNodeOrNull<Node3D>("Body") is Node3D body)
-            body.Position = new Vector3(0f, seated && _sit == null ? -0.45f : (seated ? 0.05f : 0f), seated ? 0.1f : 0f);
-        if (seated && _sit != null)
+        ApplySeatPosition();
+        PlaySeatPose();
+    }
+
+    private bool _straddle;
+
+    /// <summary>
+    /// Montado (moto): em vez da pose de cadeira (que atrapalha o IK dos braços), usa a pose parada com o
+    /// quadril no banco; braços e pernas vêm do IK (manoplas e pedaleiras).
+    /// </summary>
+    public bool Straddle
+    {
+        get => _straddle;
+        set
+        {
+            if (_straddle == value)
+                return;
+            _straddle = value;
+            ApplySeatPosition();
+            PlaySeatPose();
+        }
+    }
+
+    private void PlaySeatPose()
+    {
+        if (_seated && _straddle)
+            Play(_idle, 0.2f);
+        else if (_seated && _sit != null)
             Play(_sit, 0.2f);
-        else if (!seated)
+        else if (!_seated)
             Play(_idle, 0.2f);
     }
 

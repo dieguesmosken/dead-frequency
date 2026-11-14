@@ -18,7 +18,8 @@ public partial class RemotePlayer : Node3D, IInteractable
     private float _targetPitch;
     private bool _hasState;
     private bool _driving;
-    private int _seat; // 0 a pé, 1 motorista, 2 carona
+    private int _seat; // 0 a pé, 1 motorista, 2 carona, 3 escada
+    private VanController _poseVehicle;
     private string _look = "";
     private Color _color;
     private Area3D _interactionArea;
@@ -90,7 +91,8 @@ public partial class RemotePlayer : Node3D, IInteractable
             _model?.QueueFree();
             _model = l.Build();
             AddChild(_model);
-        _model.FootGrounding = true;
+            _model.FootGrounding = true;
+            _poseVehicle = null; // boneco novo: aplica a pose do veículo de novo
             _model.SetEquipment(eq);
         }
 
@@ -134,6 +136,16 @@ public partial class RemotePlayer : Node3D, IInteractable
         // Sentado (motorista ou carona): aparece no banco, sem andar (v0.9.6 — antes sumia).
         // st=3: subindo escada (v0.10.1) — mãos e pés nos degraus pelo IK.
         _model.SetSeated(_seat == 1 || _seat == 2);
+        // Motorista: acha o veículo embaixo dele e copia a pose (mãos no volante/guidão).
+        VanController poseVehicle = _seat == 1 ? (_poseVehicle != null && IsInstanceValid(_poseVehicle) ? _poseVehicle : VanController.Nearest(GlobalPosition)) : null;
+        if (poseVehicle != _poseVehicle)
+        {
+            if (poseVehicle != null)
+                poseVehicle.ApplyRiderPose(_model);
+            else
+                VanController.ClearRiderPose(_model);
+            _poseVehicle = poseVehicle;
+        }
         _model.SetClimbing(_seat == 3, GlobalPosition.Y);
         _model.Animate(dt, _seat != 0 ? 0f : speed);
     }
