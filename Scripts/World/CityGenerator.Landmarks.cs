@@ -290,7 +290,7 @@ public partial class CityGenerator
             }
         }
         // Um em frente ao portão do depósito, para quem acabou de chegar.
-        AddPhoneBooth(booths, new Vector3(8f, 0f, BlockSize * 0.5f - 1.4f), Vector3.Back);
+        AddPhoneBooth(booths, new Vector3(8f, CurbHeight, BlockSize * 0.5f - 1.4f), Vector3.Back);
     }
 
     private void BuildPhoneBoothsForBlock(int bx, int bz)
@@ -301,7 +301,7 @@ public partial class CityGenerator
         if (bx == 0 && bz == 0)
         {
             // Um orelhão em frente ao portão do depósito, para quem acabou de chegar.
-            AddPhoneBooth(booths, new Vector3(8f, 0f, BlockSize * 0.5f - 1.4f), Vector3.Back);
+            AddPhoneBooth(booths, new Vector3(8f, CurbHeight, BlockSize * 0.5f - 1.4f), Vector3.Back);
             return;
         }
 
