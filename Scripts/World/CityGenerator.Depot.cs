@@ -336,6 +336,13 @@ public partial class CityGenerator
         body.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(1.2f, 2.2f, 2.4f) } });
         fork.AddChild(body);
 
+        // v0.10.1: empilhadeira do Meshy com rodas de verdade (o Meshy faz sem rodas).
+        if (MeshyVehicles.HasProp("empilhadeira"))
+        {
+            MeshyVehicles.BuildWheeledProp(fork, "empilhadeira", new Vector3(1.15f, 2.4f, 2.6f), -1, 0.08f, 0.27f, 0.22f, new[] { -0.12f, 0.3f }, 0f);
+            return;
+        }
+
         // Frente (garfos) = -Z.
         AddBox(fork, new Vector3(0f, 0.55f, 0.35f), new Vector3(1.1f, 0.7f, 1.7f), _forkYellow, false); // chassi
         AddBox(fork, new Vector3(0f, 0.6f, 1.25f), new Vector3(1.1f, 0.8f, 0.3f), _darkMetal, false); // contrapeso

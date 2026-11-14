@@ -358,31 +358,68 @@ public partial class CityGenerator
         StandardMaterial3D concrete = Flat(new Color(0.62f, 0.6f, 0.56f), 0.85f);
         StandardMaterial3D tankMat = Flat(new Color(0.88f, 0.86f, 0.8f), 0.6f);
         StandardMaterial3D band = Flat(new Color(0.1f, 0.35f, 0.6f), 0.6f);
-        const float legH = 22f, tankR = 6f, tankH = 7f;
-        // Quatro pilares de concreto com travamentos.
-        foreach (float x in new[] { -3.6f, 3.6f })
-            foreach (float z in new[] { -3.6f, 3.6f })
-                AddBox(plaza, new Vector3(x, legH * 0.5f, z), new Vector3(0.9f, legH, 0.9f), concrete);
-        for (float y = 5f; y < legH; y += 5.5f)
+        bool meshy = MeshyVehicles.HasProp("caixa_dagua");
+        // Modelo do Meshy (v0.10.1): 14 x 30 m, o tanque começa a 60% da altura (18 m).
+        float legH = meshy ? 18f : 22f, tankR = meshy ? 7f : 6f, tankH = meshy ? 12f : 7f;
+        if (meshy)
         {
-            AddBox(plaza, new Vector3(0f, y, -3.6f), new Vector3(7.2f, 0.5f, 0.5f), concrete, false);
-            AddBox(plaza, new Vector3(0f, y, 3.6f), new Vector3(7.2f, 0.5f, 0.5f), concrete, false);
-            AddBox(plaza, new Vector3(-3.6f, y, 0f), new Vector3(0.5f, 0.5f, 7.2f), concrete, false);
-            AddBox(plaza, new Vector3(3.6f, y, 0f), new Vector3(0.5f, 0.5f, 7.2f), concrete, false);
+            MeshyVehicles.BuildProp(plaza, "caixa_dagua", new Vector3(14f, 30f, 14f), -1);
+            // Colisão dos pilares e do tanque (invisível; o desenho é do modelo).
+            foreach (float x in new[] { -3.2f, 3.2f })
+                foreach (float z in new[] { -3.2f, 3.2f })
+                    AddBox(plaza, new Vector3(x, legH * 0.5f, z), new Vector3(0.9f, legH, 0.9f), concrete).Visible = false;
+            AddBox(plaza, new Vector3(0f, legH + tankH * 0.5f, 0f), new Vector3(tankR * 1.6f, tankH, tankR * 1.6f), concrete).Visible = false;
         }
-        // Reservatório, faixa azul, telhado e escada.
-        var cyl = new CylinderMesh { TopRadius = 0.5f, BottomRadius = 0.5f, Height = 1f, RadialSegments = 24 };
-        AddCylinder(plaza, new Vector3(0f, legH + tankH * 0.5f, 0f), tankR, tankH, tankMat, cyl);
-        AddCylinder(plaza, new Vector3(0f, legH + 1.3f, 0f), tankR + 0.05f, 1.2f, band, cyl);
-        plaza.AddChild(new MeshInstance3D
+        else
         {
-            Mesh = new CylinderMesh { TopRadius = 0.4f, BottomRadius = tankR + 0.4f, Height = 2.2f, RadialSegments = 24 },
-            Position = new Vector3(0f, legH + tankH + 1.1f, 0f),
-            MaterialOverride = Flat(new Color(0.35f, 0.38f, 0.42f), 0.5f),
-        });
-        AddBox(plaza, new Vector3(0f, (legH + tankH) * 0.5f, 4.1f), new Vector3(0.6f, legH + tankH, 0.08f), _darkMetal, false);
-        AddBox(plaza, new Vector3(0f, legH - 0.2f, 0f), new Vector3(tankR * 2f + 1.4f, 0.25f, tankR * 2f + 1.4f), _darkMetal, false); // passarela
-        AddBox(plaza, new Vector3(0f, legH + tankH + 2.6f, 0f), new Vector3(0.5f, 0.5f, 0.5f), _redBeacon, false);
+            // Quatro pilares de concreto com travamentos.
+            foreach (float x in new[] { -3.6f, 3.6f })
+                foreach (float z in new[] { -3.6f, 3.6f })
+                    AddBox(plaza, new Vector3(x, legH * 0.5f, z), new Vector3(0.9f, legH, 0.9f), concrete);
+            for (float y = 5f; y < legH; y += 5.5f)
+            {
+                AddBox(plaza, new Vector3(0f, y, -3.6f), new Vector3(7.2f, 0.5f, 0.5f), concrete, false);
+                AddBox(plaza, new Vector3(0f, y, 3.6f), new Vector3(7.2f, 0.5f, 0.5f), concrete, false);
+                AddBox(plaza, new Vector3(-3.6f, y, 0f), new Vector3(0.5f, 0.5f, 7.2f), concrete, false);
+                AddBox(plaza, new Vector3(3.6f, y, 0f), new Vector3(0.5f, 0.5f, 7.2f), concrete, false);
+            }
+            // Reservatório, faixa azul, telhado e escada.
+            var cyl = new CylinderMesh { TopRadius = 0.5f, BottomRadius = 0.5f, Height = 1f, RadialSegments = 24 };
+            AddCylinder(plaza, new Vector3(0f, legH + tankH * 0.5f, 0f), tankR, tankH, tankMat, cyl);
+            AddCylinder(plaza, new Vector3(0f, legH + 1.3f, 0f), tankR + 0.05f, 1.2f, band, cyl);
+            plaza.AddChild(new MeshInstance3D
+            {
+                Mesh = new CylinderMesh { TopRadius = 0.4f, BottomRadius = tankR + 0.4f, Height = 2.2f, RadialSegments = 24 },
+                Position = new Vector3(0f, legH + tankH + 1.1f, 0f),
+                MaterialOverride = Flat(new Color(0.35f, 0.38f, 0.42f), 0.5f),
+            });
+            AddBox(plaza, new Vector3(0f, (legH + tankH) * 0.5f, 4.1f), new Vector3(0.6f, legH + tankH, 0.08f), _darkMetal, false);
+        }
+        // Passarela em volta do tanque (com colisão: dá para andar nela) e guarda-corpo.
+        float walk = meshy ? 14f : tankR * 2f + 2.4f;
+        // No modelo do Meshy a passarela, o guarda-corpo e a escada já vêm desenhados: aqui só a colisão.
+        AddBox(plaza, new Vector3(0f, legH - 0.2f, 0f), new Vector3(walk, 0.25f, walk), _darkMetal).Visible = !meshy;
+        foreach (Vector3 d in new[] { Vector3.Forward, Vector3.Back, Vector3.Left, Vector3.Right })
+        {
+            Vector3 edge = d * (walk * 0.5f) + new Vector3(0f, legH + 0.45f, 0f);
+            Vector3 sz = d.X != 0f ? new Vector3(0.08f, 1.1f, walk) : new Vector3(walk, 1.1f, 0.08f);
+            AddBox(plaza, edge, sz, _darkMetal, true).Visible = false;
+            if (!meshy)
+                AddBox(plaza, edge + new Vector3(0f, 0.5f, 0f), sz with { Y = 0.08f }, _darkMetal, false);
+        }
+        // Escada de marinheiro: [E] sobe até a passarela (vista do vale) e desce de novo.
+        Vector3 foot = new(0f, 1f, meshy ? 4.6f : walk * 0.5f + 0.6f);
+        Vector3 top = new(0f, legH + 0.1f, meshy ? 4.2f : walk * 0.5f - 0.7f);
+        Vector3 bottom = foot + new Vector3(0f, -0.9f, 0.4f);
+        ActionArea.Create(plaza, foot, new Vector3(1.4f, 2f, 1.2f),
+            _ => "[E] subir na caixa d'água",
+            player => player.Teleport(plaza.ToGlobal(top), 0f),
+            player => player.State == PlayerState.Walking && !player.IsHolding);
+        ActionArea.Create(plaza, top + new Vector3(0f, 0.9f, 0f), new Vector3(1.4f, 2f, 1.2f),
+            _ => "[E] descer a escada",
+            player => player.Teleport(plaza.ToGlobal(bottom), Mathf.Pi),
+            player => player.State == PlayerState.Walking && !player.IsHolding);
+        AddBox(plaza, new Vector3(0f, legH + tankH + (meshy ? 0.3f : 2.6f), 0f), new Vector3(0.5f, 0.5f, 0.5f), _redBeacon, false);
         var beacon = new OmniLight3D { Position = plaza.Position + new Vector3(0f, legH + tankH + 3f, 0f), LightColor = new Color(1f, 0.1f, 0.05f), LightEnergy = 2.5f, OmniRange = 14f };
         ActiveLightsRoot.AddChild(beacon);
 
@@ -391,6 +428,7 @@ public partial class CityGenerator
         {
             float a = i * Mathf.Pi * 0.5f;
             var dir = new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a));
+            if (!meshy)
             plaza.AddChild(new Label3D
             {
                 Text = "CAIXA D'ÁGUA MUNICIPAL\nZONA MORTA · 1962",

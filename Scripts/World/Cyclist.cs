@@ -85,6 +85,10 @@ public partial class Cyclist : Node3D
         return (_path[0], Vector3.Right);
     }
 
+    /// <summary>Tamanho do quadro do Meshy (largura, altura, comprimento) e altura do fundo dele.</summary>
+    public static Vector3 FrameSize = new(0.55f, 0.95f, 1.6f);
+    public static float FrameLift = 0.2f;
+
     private void BuildBicycle()
     {
         var bike = new Node3D { Name = "Bicicleta" };
@@ -99,28 +103,41 @@ public partial class Cyclist : Node3D
 
         _wheels = new[] { AddWheel(bike, -0.72f, wheelMesh, hubMesh, tire, metal), AddWheel(bike, 0.72f, wheelMesh, hubMesh, tire, metal) };
 
+        // v0.10.1: quadro do Meshy (feito sem rodas); as rodas daqui continuam girando.
+        bool meshyFrame = MeshyVehicles.HasProp("bicicleta");
+        if (meshyFrame)
+        {
+            var frameNode = new Node3D { Name = "Quadro", Position = new Vector3(0f, FrameLift, 0f) };
+            bike.AddChild(frameNode);
+            MeshyVehicles.BuildProp(frameNode, "bicicleta", FrameSize, -1);
+        }
+
         Vector3 rearAxle = new(0f, 0.45f, 0.72f);
         Vector3 frontAxle = new(0f, 0.45f, -0.72f);
         Vector3 crank = new(0f, 0.43f, 0f);
         Vector3 seat = new(0f, 0.95f, 0.28f);
         Vector3 handlebar = new(0f, 1.02f, -0.56f);
-        AddFrameBeam(bike, rearAxle, crank, tubeMesh, frame);
-        AddFrameBeam(bike, crank, seat, tubeMesh, frame);
-        AddFrameBeam(bike, seat, rearAxle, tubeMesh, frame);
-        AddFrameBeam(bike, seat, handlebar, tubeMesh, frame);
-        AddFrameBeam(bike, crank, frontAxle, tubeMesh, frame);
-        AddFrameBeam(bike, handlebar, frontAxle, tubeMesh, metal);
-        AddFrameBeam(bike, new Vector3(-0.3f, 1.02f, -0.56f), new Vector3(0.3f, 1.02f, -0.56f), tubeMesh, metal);
-        AddFrameBeam(bike, new Vector3(0f, 0.92f, 0.28f), new Vector3(0f, 1f, 0.42f), tubeMesh, metal);
+        if (!meshyFrame)
+        {
+            AddFrameBeam(bike, rearAxle, crank, tubeMesh, frame);
+            AddFrameBeam(bike, crank, seat, tubeMesh, frame);
+            AddFrameBeam(bike, seat, rearAxle, tubeMesh, frame);
+            AddFrameBeam(bike, seat, handlebar, tubeMesh, frame);
+            AddFrameBeam(bike, crank, frontAxle, tubeMesh, frame);
+            AddFrameBeam(bike, handlebar, frontAxle, tubeMesh, metal);
+            AddFrameBeam(bike, new Vector3(-0.3f, 1.02f, -0.56f), new Vector3(0.3f, 1.02f, -0.56f), tubeMesh, metal);
+            AddFrameBeam(bike, new Vector3(0f, 0.92f, 0.28f), new Vector3(0f, 1f, 0.42f), tubeMesh, metal);
+        }
 
         _rider = CharacterModel.Create(
             new Color(0.78f, 0.16f, 0.12f),
             new Color(0.12f, 0.14f, 0.17f),
             new Color(0.68f, 0.47f, 0.33f));
         _rider.Name = "Ciclista";
-        _rider.Position = new Vector3(0f, 0.42f, 0.05f);
+        _rider.Position = new Vector3(0f, 0.42f, -0.02f);
         _rider.Scale = Vector3.One * 0.72f;
         bike.AddChild(_rider);
+        _rider.SetSeated(true); // sentado no selim em vez de "andando" em cima da bicicleta
 
         _bell = new AudioStreamPlayer3D
         {
@@ -134,16 +151,26 @@ public partial class Cyclist : Node3D
         AddChild(_bell);
     }
 
+    private static Mesh TireMesh, SpokeMesh;
+
     private static Node3D AddWheel(Node3D bike, float z, CylinderMesh wheelMesh, CylinderMesh hubMesh, Material tire, Material metal)
     {
         var pivot = new Node3D { Position = new Vector3(0f, 0.45f, z) };
         bike.AddChild(pivot);
+        // Pneu vazado (anel) com raios cruzados: dá para ver a roda girando (v0.10.1).
         pivot.AddChild(new MeshInstance3D
         {
-            Mesh = wheelMesh,
+            Mesh = TireMesh ??= new TorusMesh { InnerRadius = 0.38f, OuterRadius = 0.45f, Rings = 12, RingSegments = 4 },
             Rotation = new Vector3(0f, 0f, Mathf.Pi * 0.5f),
             MaterialOverride = tire,
         });
+        for (int i = 0; i < 4; i++)
+            pivot.AddChild(new MeshInstance3D
+            {
+                Mesh = SpokeMesh ??= new BoxMesh { Size = new Vector3(0.012f, 0.76f, 0.012f) },
+                Rotation = new Vector3(i * Mathf.Pi * 0.25f, 0f, 0f),
+                MaterialOverride = metal,
+            });
         foreach (float side in new[] { -1f, 1f })
         {
             pivot.AddChild(new MeshInstance3D

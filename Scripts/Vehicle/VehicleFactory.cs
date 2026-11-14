@@ -159,9 +159,14 @@ public static class VehicleFactory
         {
             // O CarModels monta com a frente em -Z; o VanController anda para +Z: gira meia volta.
             body.Rotation = new Vector3(0f, Mathf.Pi, 0f);
+        {
+            CarModels.ForDriving = true;
             size = CarModels.Build(body, type, color, Plates.For(netId));
+            CarModels.ForDriving = false;
+        }
         }
         v.AddChild(body);
+        WheelSpin.Attach(body); // rodas giram conforme o carro anda (frente do modelo = -Z do "Model")
         v.AddChild(new CollisionShape3D { Name = "BodyShape", Shape = new BoxShape3D { Size = new Vector3(size.X, size.Y - 0.35f, size.Z) }, Position = new Vector3(0f, size.Y * 0.5f + 0.17f, 0f) });
 
         float wx = size.X * 0.5f - 0.12f, wz = size.Z * 0.31f;

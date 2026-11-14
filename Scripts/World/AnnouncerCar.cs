@@ -136,14 +136,25 @@ public partial class AnnouncerCar : Node3D
         AddChild(_car);
         bool ovo = Kind == CarKind.Ovo;
         // CarModels monta com a frente em -Z, como o ônibus (Basis.LookingAt olha para -Z).
-        Vector3 size = CarModels.Build(_car, ovo ? CarType.Pickup : CarType.Kombi,
-            ovo ? new Color(0.92f, 0.9f, 0.84f) : new Color(0.95f, 0.78f, 0.12f), ovo ? "OVO-0030" : "SOM-0966");
+        // v0.10.1: carroceria do Meshy (já com cornetas / bandejas e placa do ovo) e rodas que giram.
+        string meshy = ovo ? "ovo" : "kombi";
+        bool hasMeshy = MeshyVehicles.HasProp(meshy);
+        Vector3 size = hasMeshy
+            ? (ovo
+                ? MeshyVehicles.BuildWheeledProp(_car, "ovo", new Vector3(1.7f, 1.55f, 4.4f), -1, 0.25f, 0.34f, 0.22f, new[] { -0.32f, 0.3f }, 0.06f)
+                : MeshyVehicles.BuildWheeledProp(_car, "kombi", new Vector3(1.75f, 1.75f, 4.3f), -1, 0.22f, 0.33f, 0.22f, new[] { -0.31f, 0.33f }, 0.08f))
+            : CarModels.Build(_car, ovo ? CarType.Pickup : CarType.Kombi,
+                ovo ? new Color(0.92f, 0.9f, 0.84f) : new Color(0.95f, 0.78f, 0.12f), ovo ? "OVO-0030" : "SOM-0966");
+        WheelSpin.Attach(_car);
         _shape = new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(size.X, size.Y - 0.2f, size.Z) }, Position = new Vector3(0f, size.Y * 0.5f + 0.1f, 0f) };
         _car.AddChild(_shape);
-        if (ovo)
-            BuildEggLoad(size);
-        else
-            BuildSpeakers(size);
+        if (!hasMeshy)
+        {
+            if (ovo)
+                BuildEggLoad(size);
+            else
+                BuildSpeakers(size);
+        }
 
         _balloon = new Label3D
         {
