@@ -31,7 +31,7 @@ public partial class StoryDirector : Node
         if (!sm.IntroSeen(c.Number) && Professions.CurrentLevel == c.Level)
         {
             sm.MarkIntroSeen(c.Number);
-            GetTree().CreateTimer(3.4).Timeout += () => { if (IsInstanceValid(this)) StoryDialog.Play(this, c.Intro); };
+            GetTree().CreateTimer(3.4).Timeout += () => { if (IsInstanceValid(this)) StoryDialog.Play(this, c.Intro, $"story_c{c.Number}_intro"); };
         }
         if (Professions.CurrentLevel == "city" && _city != null)
             Callable.From(BuildCityExit).CallDeferred();
@@ -99,7 +99,7 @@ public partial class StoryDirector : Node
     private void OnChapterReady(int chapter)
     {
         Refresh();
-        StoryDialog.Play(this, StoryChapters.Get(chapter).Outro);
+        StoryDialog.Play(this, StoryChapters.Get(chapter).Outro, $"story_c{chapter}_outro");
         GameHud.Toast(this, StoryManager.Instance?.NextChapterPlayable == true
             ? "Meta do capítulo cumprida! A estrada do rancho está liberada (saída leste)."
             : "Capítulo concluído! O próximo ainda está em construção.", UiStyle.Phosphor, 6.0);
@@ -107,7 +107,7 @@ public partial class StoryDirector : Node
 
     private void OnGoalReset(int chapter)
     {
-        StoryDialog.Play(this, StoryChapters.Get(chapter).TooManyBroken);
+        StoryDialog.Play(this, StoryChapters.Get(chapter).TooManyBroken, $"story_c{chapter}_broken");
         Refresh();
     }
 

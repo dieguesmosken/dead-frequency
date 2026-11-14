@@ -1,7 +1,8 @@
 // Scripts/Story/StoryDialog.cs
 // Falas do Modo História, como transmissão de rádio: caixa no pé da tela com o nome de quem fala e o texto
 // aparecendo letra por letra. Passa sozinho (tempo pelo tamanho do texto) ou com E / clique / toque.
-// Não pausa o jogo e não trava o jogador.
+// Não pausa o jogo e não trava o jogador. Se existir Audio/Story/<prefixo>_<n>.ogg, a fala toca com voz
+// (gerada com o Gemini TTS, ver docs/radio/falas_historia.csv) e a caixa espera o áudio acabar.
 using System.Collections.Generic;
 using Godot;
 
@@ -10,7 +11,9 @@ namespace DeadFrequency;
 public partial class StoryDialog : CanvasLayer
 {
     private static StoryDialog _current;
-    private readonly Queue<StoryChapters.Line> _queue = new();
+    public const string VoiceFolder = "res://Audio/Story/";
+    private readonly Queue<(StoryChapters.Line Line, string Voice)> _queue = new();
+    private AudioStreamPlayer _voice;
     private PanelContainer _panel;
     private Label _speaker;
     private Label _text;
@@ -20,7 +23,8 @@ public partial class StoryDialog : CanvasLayer
     private bool _waiting;
 
     /// <summary>Enfileira falas. Se já houver uma caixa aberta, entram depois das que estão nela.</summary>
-    public static void Play(Node from, IEnumerable<StoryChapters.Line> lines)
+    /// <param name="voicePrefix">Prefixo dos áudios ("story_c1_intro" → story_c1_intro_1.ogg, _2...); null = sem voz.</param>
+    public static void Play(Node from, IEnumerable<StoryChapters.Line> lines, string voicePrefix = null)
     {
         if (from?.GetTree() == null || lines == null)
             return;
@@ -29,8 +33,12 @@ public partial class StoryDialog : CanvasLayer
             _current = new StoryDialog { Name = "StoryDialog", Layer = 55 };
             from.GetTree().Root.AddChild(_current);
         }
+        int n = 0;
         foreach (StoryChapters.Line l in lines)
-            _current._queue.Enqueue(l);
+        {
+            n++;
+            _current._queue.Enqueue((l, voicePrefix == null ? null : $"{VoiceFolder}{voicePrefix}_{n}.ogg"));
+        }
         if (!_current._waiting && _current._full.Length == 0)
             _current.Next();
     }
@@ -53,6 +61,8 @@ public partial class StoryDialog : CanvasLayer
         box.AddChild(_speaker);
         box.AddChild(_text);
         _panel.Visible = false;
+        _voice = new AudioStreamPlayer { Bus = AudioManager.SfxBus, VolumeDb = 0f };
+        AddChild(_voice);
     }
 
     public override void _ExitTree()
@@ -68,7 +78,7 @@ public partial class StoryDialog : CanvasLayer
             QueueFree();
             return;
         }
-        StoryChapters.Line l = _queue.Dequeue();
+        (StoryChapters.Line l, string voice) = _queue.Dequeue();
         _speaker.Text = "📻 " + l.Speaker;
         _full = l.Text;
         _shown = 0f;
@@ -76,6 +86,16 @@ public partial class StoryDialog : CanvasLayer
         _waiting = false;
         _hold = 2.2f + l.Text.Length * 0.045f;
         _panel.Visible = true;
+        _voice.Stop();
+        if (voice != null && ResourceLoader.Exists(voice) && GD.Load<AudioStream>(voice) is AudioStream stream)
+        {
+            if (stream is AudioStreamOggVorbis ogg)
+                ogg.Loop = false;
+            _voice.Stream = stream;
+            _voice.Play();
+            // Espera a voz terminar (mais um respiro) antes de passar sozinha para a próxima fala.
+            _hold = Mathf.Max(1.0f, (float)stream.GetLength() - _full.Length / 45f + 0.6f);
+        }
     }
 
     public override void _Process(double delta)
@@ -112,6 +132,7 @@ public partial class StoryDialog : CanvasLayer
             _shown = _full.Length;
             return;
         }
+        _voice?.Stop();
         _hold = 0f;
     }
 }

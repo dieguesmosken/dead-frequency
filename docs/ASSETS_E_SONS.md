@@ -36,6 +36,14 @@ Chair Sit Idle M/F, Regular Jump e Carry Heavy Object Walk. A máscara de cores 
 G calça, B pele, A cabelo só na cabeça) e a textura de 512 px saem de um script Python a partir do GLB; no
 `.import` da máscara, `process/fix_alpha_border` precisa ficar **false** (senão ele apaga os outros canais).
 
+## Vozes (Gemini TTS)
+
+As falas da Rádio 96.6 (`Audio/Radio/Ads/`), do carro do ovo (`Audio/Street/`) e do Modo História
+(`Audio/Story/`) foram geradas com o **Gemini 3.8 Flash TTS (Google)**, pelo AI Studio, a partir dos nossos roteiros
+(`docs/radio/*.csv`). Os termos do Gemini dizem que o Google não reivindica a propriedade do conteúdo gerado;
+os áudios levam a marca d'água inaudível SynthID. Vozes e estilos de cada personagem em `docs/radio/VOZES.md`.
+Crédito no jogo: "Vozes geradas com Gemini (Google)". Não são vozes clonadas de ninguém.
+
 ## Onde publicamos os nossos sons e o jogo
 
 Os sons gerados por código no projeto (`Audio/*.py.txt`: trilha, efeitos e as músicas da Rádio 96.6)

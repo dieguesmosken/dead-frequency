@@ -5,7 +5,7 @@
 //  - Carro do ovo: evento de vez em quando (alguns minutos a cada tanto), no anel 1, oferecendo ovo.
 // Como o ônibus, a posição vem do relógio do sistema: online todo mundo vê o carro no mesmo lugar, sem rede.
 //
-// Som: os áudios saem do tools/tts/gerar_audios.py (Amazon Polly). Os comerciais usam Audio/Radio/Ads/<id>.ogg
+// Som: vozes geradas com o Gemini TTS (docs/radio/VOZES.md). Os comerciais usam Audio/Radio/Ads/<id>.ogg
 // (os mesmos da 96.6) e o carro do ovo usa Audio/Street/ovo_*.ogg; enquanto não existem, a fala aparece num balão.
 using System.Collections.Generic;
 using Godot;
